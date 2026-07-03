@@ -770,3 +770,17 @@ The most important product bet is this:
 
 > A child will stay because the game feels alive. The child will improve because the coach and game design quietly turn every important mistake into a learning moment.
 
+---
+
+## 24. Gaming features backlog (10 items)
+
+1. Daily win streaks with milestone rewards (3, 7, 14, 30 days).
+2. Weekly streak protection token so one missed day does not reset progress.
+3. Skin collection progression (expand existing skins into unlockable sets and rarity tiers).
+4. Limited-time event skins tied to holidays and seasonal themes.
+5. Wacky mode: random board modifiers each match (fog tiles, slippery pieces, surprise portals).
+6. Wacky mode: power cards earned in-game (one-time buffs like shield, double move preview, chaos swap).
+7. Emote and reaction wheel during matches (kid-safe, moderated preset reactions only).
+8. Victory poses and finishers per skin/theme set.
+9. Daily/weekly missions (play 3 games, solve 2 puzzles, win with no blunders) for soft currency.
+10. Friend challenges with custom rule toggles and shared challenge streaks.
