@@ -6,6 +6,10 @@ CheckRiot is a chess game for kids, parents, and playful adults. The default exp
 
 This README is the product and behavior spec. Technical architecture, code structure, and implementation details can live in separate docs, but this file should stay readable by a founder, parent, designer, developer, and AI coding agent.
 
+Supporting docs:
+- [TECH.md](./TECH.md) — technical architecture and implementation notes
+- [COMPETITORS.md](./COMPETITORS.md) — competitor landscape and adjacent product research
+
 ---
 
 ## 1. Core idea
@@ -716,4 +720,3 @@ It should start as a magical chess battle app that secretly makes you better.
 The most important product bet is this:
 
 > A child will stay because the game feels alive. The child will improve because the coach and game design quietly turn every important mistake into a learning moment.
-
