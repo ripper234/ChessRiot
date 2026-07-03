@@ -434,6 +434,38 @@ After a move or game, the coach can explain:
 
 For children, explanations should use simple language and examples.
 
+### 12.7 Coach appearance (skins)
+
+The coach has a visual identity that the player sees when receiving advice or hints.
+
+At the start, the player picks one of two or three free coach appearances.
+
+Examples of free options:
+
+- A friendly robot with a calm voice.
+- A wise old knight in armour.
+- A cheerful child prodigy.
+
+Each option should have a distinct visual style, name, and tone of voice, but the same underlying coaching logic.
+
+With credits earned through play or purchased, the player can unlock additional coach appearances.
+
+Unlock examples:
+
+- A grandmaster with a dramatic commentary style.
+- A ninja-style coach with quick, sharp tips.
+- A space explorer that frames chess moves as galactic strategy.
+
+Rules for skins:
+
+- Coach skins are purely cosmetic. They do not change coaching quality or advice accuracy.
+- All skins give identical hints, just with different visual styles and phrasing tone.
+- Free options are always available, even without credits.
+- Premium skins do not give a competitive or coaching advantage.
+- The selection screen should clearly show free and paid options, and preview each skin before selection.
+
+The player can change their coach appearance at any time from the settings screen.
+
 ---
 
 ## 13. Points, rewards, and progression
@@ -688,6 +720,32 @@ Given a player earns points
 When they unlock a new power  
 Then that power can be used only in variant modes  
 And normal chess remains standard.
+
+### Test 9: Coach skin selection at first launch
+
+Given a new player sets up their profile  
+When they reach the coach selection screen  
+Then two or three free coach appearances are shown  
+And each option displays a preview of the coach's name, visual style, and tone  
+And the player must choose one before proceeding  
+And the chosen coach is used for all subsequent sessions.
+
+### Test 10: Coach skin unlock with credits
+
+Given a player has enough credits  
+When they open the coach selection screen  
+Then premium coach skins are shown alongside the free ones  
+And premium skins are clearly marked as purchasable  
+And after purchasing, the skin becomes permanently available  
+And the coaching advice content is identical to the free skins.
+
+### Test 11: Coach skin change in settings
+
+Given a player has previously selected a coach skin  
+When they open settings and navigate to coach appearance  
+Then all unlocked skins are shown  
+And the player can switch to any unlocked skin  
+And the change takes effect immediately.
 
 ---
 
