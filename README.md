@@ -142,23 +142,76 @@ Players can choose how their pieces look.
 
 Each player may choose their own set. This means one player can use one theme and the opponent can use another theme.
 
-Example theme directions:
+### 7.1 Skin catalog
 
-- Fantasy warriors.
-- Wizards and monsters.
-- Sci-fi robots.
-- Ancient armies.
-- Silly creatures.
-- Pixel block world inspired themes.
-- Arena-brawler inspired themes.
+Skins are organized into groups. Each group shares a visual language. New skins can be added to a group without changing the overall structure.
 
-Important IP rule:
+#### Gaming-inspired
 
-- Public versions should not use copyrighted brands directly.
+Original art inspired by popular game aesthetics. No copyrighted assets used.
+
+| Skin | Inspiration | Visual feel |
+|---|---|---|
+| Pixel Block World | Minecraft | Blocky voxel characters, earthy palette, pixel explosion captures |
+| Battle Builders | Fortnite (general) | Colorful cartoon soldiers, build-themed board, glider drop entrance |
+| Arena Brawlers | Brawl Stars | Chunky cartoon fighters, bright colors, arena crowd backgrounds |
+| Clan Warriors | Clash of Clans | Medieval cartoon troops, village backdrop, catapult captures |
+
+#### Animals
+
+| Skin | Description |
+|---|---|
+| Wild Animals | Lions, wolves, eagles, and bears as pieces. Savanna and forest board styles. |
+| Ocean Creatures | Sharks, whales, crabs, and dolphins. Underwater board with bubbles and coral. |
+| Jungle Safari | Gorillas, elephants, parrots, and leopards. Dense jungle board. |
+| Pets | Dogs and cats as friendly pawns. Cozy home board. |
+
+#### Historical armies
+
+Each army uses historically themed uniforms and weapons for all six piece types.
+
+| Skin | Army |
+|---|---|
+| Roman Legion | Roman soldiers, centurions, catapults, eagles |
+| Samurai | Feudal Japanese warriors, ninja, shoguns, temple board |
+| British Redcoats | Redcoat infantry, muskets, cannons, colonial fort board |
+| French Imperial | Napoleonic soldiers, hussars, cannons, European castle board |
+| Viking Raiders | Norse warriors, berserkers, longships, fjord board |
+| Egyptian Pharaohs | Pharaohs, priests, sphinxes, pyramid board |
+
+#### Fantasy and mythology
+
+| Skin | Description |
+|---|---|
+| Fantasy Creatures | Dragons, unicorns, wizards, and griffins. Enchanted forest board. |
+| Mythological Gods | Greek, Norse, and Egyptian gods. Temple board with pillars. |
+| Fairy Tale | Princes, witches, giants, and fairies. Storybook illustrated board. |
+| Dark Fantasy | Demons, undead knights, and necromancers. Dark stone dungeon board. |
+
+#### Humor and memes
+
+| Skin | Description |
+|---|---|
+| Internet Memes | Classic meme faces and viral characters as pieces. Meme-panel board. |
+| Emoji Army | All pieces are expressive emoji characters. Bright solid-color board. |
+| Funny Food | Pizza slices, taco knights, donut bishops, burger kings. Kitchen board. |
+
+#### Sci-fi and futuristic
+
+| Skin | Description |
+|---|---|
+| Space Explorers | Astronauts, aliens, rockets, and satellites. Starfield board. |
+| Robots and Mechs | Industrial robots and giant mechs. Circuit-board grid. |
+| Superheroes | Original hero and villain archetypes. City skyline board. |
+
+### 7.2 IP rule
+
+- Public versions must not use copyrighted brand names or character likenesses directly.
 - Internal prototypes may use placeholders or personal inspiration.
 - Public assets should be original, parody-safe, licensed, or clearly non-infringing.
+- Skin names in the catalog above are generic descriptions, not brand names.
 
-The dream experience:
+### 7.3 The dream experience
 
 - A fantasy army can battle a pixel-creature army.
 - Each side feels visually distinct.
