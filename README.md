@@ -70,9 +70,9 @@ The product must work for a child, but should not feel childish in a shallow way
    
    Players choose themes, animation speed, coach intensity, game modes, and sometimes even the rules.
 
-7. **Hebrew-first**
+7. **Native multilingual experience**
    
-   The app should be usable fully in Hebrew. English can come later.
+   The app should feel native and fun in Hebrew and additional languages, with full right-to-left support for Hebrew.
 
 ---
 
@@ -93,13 +93,15 @@ The first experience should get the player into a game quickly.
 
 ## 5. Language and voice
 
-The app is Hebrew-first.
+The app must support multiple interface and tutorial languages from the start, including Hebrew (RTL) and many additional languages.
 
 Behavior requirements:
 
-- All main UI text should be Hebrew.
-- Chess explanations should be in natural Hebrew.
-- Coaching should feel friendly and direct.
+- The interface must be localizable across the full product, not only partial screens.
+- Tutorial and coach content must be localizable, including hints, explanations, and onboarding prompts.
+- Hebrew must be fully supported with right-to-left layout, text direction, and punctuation behavior.
+- Language quality should feel native and fun, not literal or robotic.
+- Coaching should feel friendly and direct in every supported language.
 - Voice is optional, not required.
 - The player can use the app without audio.
 - Voice can help sometimes, especially for younger players or long explanations.
@@ -647,7 +649,7 @@ The first playable MVP should include:
 
 1. Android build.
 2. Normal chess mode.
-3. Hebrew UI basics.
+3. Multi-language UI and tutorial basics, including Hebrew RTL support.
 4. Two local players on one device or simple online play.
 5. Async game support if feasible early.
 6. A few visual themes.
@@ -741,6 +743,14 @@ Given a player earns points
 When they unlock a new power  
 Then that power can be used only in variant modes  
 And normal chess remains standard.
+
+### Test 9: Language switching and Hebrew RTL
+
+Given a player opens language settings  
+When they switch between Hebrew and another supported language  
+Then interface and tutorial text update consistently  
+And Hebrew screens render in right-to-left layout  
+And coach tone remains native and fun in both languages.
 
 ---
 
