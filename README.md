@@ -70,9 +70,9 @@ The product must work for a child, but should not feel childish in a shallow way
    
    Players choose themes, animation speed, coach intensity, game modes, and sometimes even the rules.
 
-7. **Hebrew-first**
+7. **Native multilingual experience**
    
-   The app should be usable fully in Hebrew. English can come later.
+   The app should feel native and fun in Hebrew and additional languages, with full right-to-left support for Hebrew.
 
 ---
 
@@ -93,13 +93,15 @@ The first experience should get the player into a game quickly.
 
 ## 5. Language and voice
 
-The app is Hebrew-first.
+The app must support multiple interface and tutorial languages from the start, including Hebrew (RTL) and many additional languages.
 
 Behavior requirements:
 
-- All main UI text should be Hebrew.
-- Chess explanations should be in natural Hebrew.
-- Coaching should feel friendly and direct.
+- The interface must be localizable across the full product, not only partial screens.
+- Tutorial and coach content must be localizable, including hints, explanations, and onboarding prompts.
+- Hebrew must be fully supported with right-to-left layout, text direction, and punctuation behavior.
+- Language quality should feel native and fun, not literal or robotic.
+- Coaching should feel friendly and direct in every supported language.
 - Voice is optional, not required.
 - The player can use the app without audio.
 - Voice can help sometimes, especially for younger players or long explanations.
@@ -142,23 +144,76 @@ Players can choose how their pieces look.
 
 Each player may choose their own set. This means one player can use one theme and the opponent can use another theme.
 
-Example theme directions:
+### 7.1 Skin catalog
 
-- Fantasy warriors.
-- Wizards and monsters.
-- Sci-fi robots.
-- Ancient armies.
-- Silly creatures.
-- Pixel block world inspired themes.
-- Arena-brawler inspired themes.
+Skins are organized into groups. Each group shares a visual language. New skins can be added to a group without changing the overall structure.
 
-Important IP rule:
+#### Gaming-inspired
 
-- Public versions should not use copyrighted brands directly.
+Original art inspired by popular game aesthetics. No copyrighted assets used.
+
+| Skin | Inspiration | Visual feel |
+|---|---|---|
+| Pixel Block World | Minecraft | Blocky voxel characters, earthy palette, pixel explosion captures |
+| Battle Builders | Fortnite (general) | Colorful cartoon soldiers, build-themed board, glider drop entrance |
+| Arena Brawlers | Brawl Stars | Chunky cartoon fighters, bright colors, arena crowd backgrounds |
+| Clan Warriors | Clash of Clans | Medieval cartoon troops, village backdrop, catapult captures |
+
+#### Animals
+
+| Skin | Description |
+|---|---|
+| Wild Animals | Lions, wolves, eagles, and bears as pieces. Savanna and forest board styles. |
+| Ocean Creatures | Sharks, whales, crabs, and dolphins. Underwater board with bubbles and coral. |
+| Jungle Safari | Gorillas, elephants, parrots, and leopards. Dense jungle board. |
+| Pets | Dogs and cats as friendly pawns. Cozy home board. |
+
+#### Historical armies
+
+Each army uses historically themed uniforms and weapons for all six piece types.
+
+| Skin | Army |
+|---|---|
+| Roman Legion | Roman soldiers, centurions, catapults, eagles |
+| Samurai | Feudal Japanese warriors, ninja, shoguns, temple board |
+| British Redcoats | Redcoat infantry, muskets, cannons, colonial fort board |
+| French Imperial | Napoleonic soldiers, hussars, cannons, European castle board |
+| Viking Raiders | Norse warriors, berserkers, longships, fjord board |
+| Egyptian Pharaohs | Pharaohs, priests, sphinxes, pyramid board |
+
+#### Fantasy and mythology
+
+| Skin | Description |
+|---|---|
+| Fantasy Creatures | Dragons, unicorns, wizards, and griffins. Enchanted forest board. |
+| Mythological Gods | Greek, Norse, and Egyptian gods. Temple board with pillars. |
+| Fairy Tale | Princes, witches, giants, and fairies. Storybook illustrated board. |
+| Dark Fantasy | Demons, undead knights, and necromancers. Dark stone dungeon board. |
+
+#### Humor and memes
+
+| Skin | Description |
+|---|---|
+| Internet Memes | Classic meme faces and viral characters as pieces. Meme-panel board. |
+| Emoji Army | All pieces are expressive emoji characters. Bright solid-color board. |
+| Funny Food | Pizza slices, taco knights, donut bishops, burger kings. Kitchen board. |
+
+#### Sci-fi and futuristic
+
+| Skin | Description |
+|---|---|
+| Space Explorers | Astronauts, aliens, rockets, and satellites. Starfield board. |
+| Robots and Mechs | Industrial robots and giant mechs. Circuit-board grid. |
+| Superheroes | Original hero and villain archetypes. City skyline board. |
+
+### 7.2 IP rule
+
+- Public versions must not use copyrighted brand names or character likenesses directly.
 - Internal prototypes may use placeholders or personal inspiration.
 - Public assets should be original, parody-safe, licensed, or clearly non-infringing.
+- Skin names in the catalog above are generic descriptions, not brand names.
 
-The dream experience:
+### 7.3 The dream experience
 
 - A fantasy army can battle a pixel-creature army.
 - Each side feels visually distinct.
@@ -595,7 +650,7 @@ The first playable MVP should include:
 
 1. Android build.
 2. Normal chess mode.
-3. Hebrew UI basics.
+3. Multi-language UI and tutorial basics, including Hebrew RTL support.
 4. Two local players on one device or simple online play.
 5. Async game support if feasible early.
 6. A few visual themes.
@@ -698,6 +753,14 @@ Then all pieces temporarily show their standard chess identity
 And when the player releases the control  
 Then the board returns to themed pieces.
 
+### Test 10: Language switching and Hebrew RTL
+
+Given a player opens language settings  
+When they switch between Hebrew and another supported language  
+Then interface and tutorial text update consistently  
+And Hebrew screens render in right-to-left layout  
+And coach tone remains native and fun in both languages.
+
 ---
 
 ## 22. Open decisions
@@ -726,3 +789,17 @@ The most important product bet is this:
 
 > A child will stay because the game feels alive. The child will improve because the coach and game design quietly turn every important mistake into a learning moment.
 
+---
+
+## 24. Gaming features backlog (10 items)
+
+1. Daily win streaks with milestone rewards (3, 7, 14, 30 days).
+2. Weekly streak protection token so one missed day does not reset progress.
+3. Skin collection progression (expand existing skins into unlockable sets and rarity tiers).
+4. Limited-time event skins tied to holidays and seasonal themes.
+5. Wacky mode: random board modifiers each match (fog tiles, slippery pieces, surprise portals).
+6. Wacky mode: power cards earned in-game (one-time buffs like shield, double move preview, chaos swap).
+7. Emote and reaction wheel during matches (kid-safe, moderated preset reactions only).
+8. Victory poses and finishers per skin/theme set.
+9. Daily/weekly missions (play 3 games, solve 2 puzzles, win with no blunders) for soft currency.
+10. Friend challenges with custom rule toggles and shared challenge streaks.
