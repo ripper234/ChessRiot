@@ -151,6 +151,7 @@ Example theme directions:
 - Silly creatures.
 - Pixel block world inspired themes.
 - Arena-brawler inspired themes.
+- Battle royale inspired themes.
 
 Important IP rule:
 
