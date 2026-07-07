@@ -222,6 +222,7 @@ Each army uses historically themed uniforms and weapons for all six piece types.
 - Each side feels visually distinct.
 - Pieces are still readable as chess pieces.
 - Theme should never make the board confusing.
+- Player can temporarily reveal the standard chess piece behind every themed piece with one press (mouse or keyboard) and release to return to themed view.
 
 ---
 
@@ -747,7 +748,15 @@ When they unlock a new power
 Then that power can be used only in variant modes  
 And normal chess remains standard.
 
-### Test 9: Language switching and Hebrew RTL
+### Test 9: Temporary real-piece reveal
+
+Given both players use themed piece sets  
+When a player holds the reveal control (mouse or keyboard)  
+Then all pieces temporarily show their standard chess identity  
+And when the player releases the control  
+Then the board returns to themed pieces.
+
+### Test 10: Language switching and Hebrew RTL
 
 Given a player opens language settings  
 When they switch between Hebrew and another supported language  
