@@ -1,3 +1,6 @@
+<img width="1536" height="1024" alt="3330e4b7-7a7f-4b8d-be1b-12b577aa85b6" src="https://github.com/user-attachments/assets/6291cf6a-838c-4f5a-a0d5-aad6806c8d04" />
+
+
 # CheckRiot
 
 **A playful, AI-assisted chess game that helps kids learn, battle, and invent wild new rules.**
