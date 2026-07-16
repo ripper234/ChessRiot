@@ -797,3 +797,15 @@ The most important product bet is this:
 8. Victory poses and finishers per skin/theme set.
 9. Daily/weekly missions (play 3 games, solve 2 puzzles, win with no blunders) for soft currency.
 10. Friend challenges with custom rule toggles and shared challenge streaks.
+
+---
+
+## Local environment
+
+The repo includes `.env.example` as the safe template for local configuration. Copy it to `.env.local` when development starts, then fill in provider-specific values for the selected app stack.
+
+```bash
+cp .env.example .env.local
+```
+
+Never commit real secrets, production credentials, or personal OAuth keys. Local `.env` files are ignored by Git.
