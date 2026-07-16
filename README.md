@@ -30,4 +30,17 @@ The larger vision includes coaching, animated captures, skins, powers, variants,
 
 ## Development status
 
-This repository is currently in documentation/planning stage. Do not write product code until the MVP decisions in `docs/IMPLEMENTATION_PLAN.md` are approved.
+Milestone 1 implementation has started with a Next.js/TypeScript app shell, Google OAuth through NextAuth, Prisma persistence, and required unique username onboarding. Later MVP flows (friends, games, chess rules, notifications) remain unimplemented backlog milestones until their phases begin.
+
+## Local development
+
+1. Copy `.env.example` to `.env.local` and fill in a ChessRiot-owned Postgres `DATABASE_URL`, `NEXTAUTH_SECRET`, and Google OAuth credentials.
+2. Run `npm install`.
+3. Run `npx prisma migrate dev` after the target database is selected.
+4. Run `npm run dev` and open `http://localhost:3000`.
+
+## Checks
+
+- `npm run lint`
+- `npm run typecheck`
+- `npm test`
