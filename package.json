@@ -7,7 +7,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@prisma/client": "latest",
+    "@prisma/client": "6.19.0",
     "next": "latest",
     "next-auth": "latest",
     "react": "latest",
@@ -22,7 +22,7 @@
     "eslint": "latest",
     "eslint-config-next": "latest",
     "jsdom": "latest",
-    "prisma": "latest",
+    "prisma": "6.19.0",
     "typescript": "latest",
     "vitest": "latest"
   }
