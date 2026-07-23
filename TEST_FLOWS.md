@@ -25,3 +25,11 @@
 
 - Reload and close/reopen the browser.
 - Restart the local Worker runtime against the same D1 data and verify the completed game remains.
+
+## Interface and sound
+
+- Verify desktop and mobile layouts use the approved ChessRiot identity and keep the full board readable.
+- Play one distinct cue for a move, capture, check, win, loss, draw, and invalid action.
+- Do not play on first load, refresh, join-only state changes, repeated polls, or an out-of-order snapshot.
+- Persist mute state and verify turning sound back on plays one short confirmation cue.
+- Recover from an initial game or invitation network failure with the on-screen retry action.

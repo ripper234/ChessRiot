@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import type { GameSnapshot } from "@/lib/game-types";
 import {
+  canUseGameStorage,
   generateSecret,
   generateUuid,
   inviteKey,
@@ -13,6 +14,7 @@ import {
   rememberGame,
   type RecentGame,
 } from "@/lib/client-storage";
+import { APP_VERSION } from "@/lib/version";
 import { Brand } from "./Brand";
 
 interface PendingCreate {
@@ -30,7 +32,11 @@ export function CreateGame() {
   const pending = useRef<PendingCreate | null>(null);
 
   useEffect(() => {
-    setName(localStorage.getItem("chessriot:displayName") ?? "");
+    try {
+      setName(localStorage.getItem("chessriot:displayName") ?? "");
+    } catch {
+      setName("");
+    }
     setRecent(readRecentGames());
   }, []);
 
@@ -38,6 +44,10 @@ export function CreateGame() {
     event.preventDefault();
     const cleanName = name.trim();
     if (!cleanName) return;
+    if (!canUseGameStorage()) {
+      setError("Allow browser storage to keep your private game seat.");
+      return;
+    }
     setBusy(true);
     setError("");
     pending.current ??= {
@@ -73,14 +83,14 @@ export function CreateGame() {
 
   return (
     <main className="home-shell">
-      <header className="topbar"><Brand /><span className="top-tag">ASYNC • 2 PLAYERS</span></header>
+      <header className="topbar"><Brand /><span className="top-tag">ASYNC&nbsp;&nbsp;//&nbsp;&nbsp;2 PLAYERS</span></header>
       <section className="hero-grid">
         <div className="hero-copy">
-          <p className="eyebrow"><span /> YOUR MOVE. YOUR TIME.</p>
-          <h1>CHESS,<br /><em>TURNED UP.</em></h1>
+          <p className="eyebrow"><span /> REAL CHESS. TOTAL PLAY.</p>
+          <h1>MOVE BOLDLY.<br /><em>WIN BRIGHTLY.</em></h1>
           <p className="hero-text">Start a game, send one link, and keep playing whenever you both have time.</p>
           <div className="feature-row" aria-label="Game features">
-            <span>♜ LEGAL CHESS</span><span>▣ SAVES EVERY MOVE</span><span>⌁ PHONE READY</span>
+            <span>♜ LEGAL CHESS</span><span>◇ SAVES EVERY MOVE</span><span>⌁ PHONE READY</span>
           </div>
         </div>
         <form className="voxel-card create-card" onSubmit={createGame}>
@@ -122,7 +132,7 @@ export function CreateGame() {
           </div>
         </section>
       ) : null}
-      <footer>CHESSRIOT v0.1 <span>•</span> MADE FOR FAMILY RIVALS</footer>
+      <footer>CHESSRIOT v{APP_VERSION} <span>•</span> MADE FOR FAMILY RIVALS</footer>
     </main>
   );
 }

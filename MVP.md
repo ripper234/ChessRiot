@@ -8,7 +8,8 @@
 - Standard legal rules and complete endings
 - Durable game state and move history
 - Turn enforcement and stale-write protection
-- Mobile-friendly blocky interface
+- Mobile-friendly branded arcade interface
+- Optional in-browser game sounds with a persistent mute preference
 
 ## Excluded
 

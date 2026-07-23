@@ -1,4 +1,4 @@
-# ChessRiot v0.1 specification
+# ChessRiot v0.1.x specification
 
 This file and `MVP.md` are the source of truth for the current milestone.
 
@@ -26,7 +26,9 @@ This file and `MVP.md` are the source of truth for the current milestone.
 
 ## Interface
 
-- One original blocky visual identity.
+- One original neon arcade identity using the ChessRiot navy, cyan, gold, purple, pink, and teal brand system.
 - Tap a piece, then a legal destination.
 - Board rotates for Black while submitted coordinates remain absolute chess squares.
 - The interface shows turn, check, outcome, players, and move history.
+- Synthesized move, capture, check, result, and invalid-action sounds are on by default and can be muted.
+- Initial loads, refreshes, repeated polling responses, and join-only version changes do not replay move sounds.

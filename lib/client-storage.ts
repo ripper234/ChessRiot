@@ -1,6 +1,7 @@
 import type { GameSnapshot } from "./game-types";
 
 const RECENT_KEY = "chessriot:recent";
+const STORAGE_TEST_KEY = "chessriot:storage-test";
 
 export function generateSecret(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
@@ -23,6 +24,16 @@ export function playerKey(gameId: string): string {
 
 export function inviteKey(gameId: string): string {
   return `chessriot:invite:${gameId}`;
+}
+
+export function canUseGameStorage(): boolean {
+  try {
+    localStorage.setItem(STORAGE_TEST_KEY, "ok");
+    localStorage.removeItem(STORAGE_TEST_KEY);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export interface RecentGame {
@@ -58,5 +69,9 @@ export function rememberGame(game: GameSnapshot): void {
     updatedAt: game.updatedAt,
   };
   const games = [next, ...readRecentGames().filter((item) => item.id !== game.id)].slice(0, 8);
-  localStorage.setItem(RECENT_KEY, JSON.stringify(games));
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(games));
+  } catch {
+    // Recent games are a convenience. Losing this index must not break gameplay.
+  }
 }

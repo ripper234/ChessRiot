@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useRef, useState } from "react";
-import { generateSecret, playerKey, rememberGame } from "@/lib/client-storage";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { canUseGameStorage, generateSecret, playerKey, rememberGame } from "@/lib/client-storage";
 import type { GameSnapshot } from "@/lib/game-types";
 import { Brand } from "./Brand";
 
@@ -11,7 +11,8 @@ type InviteState =
   | { kind: "loading" }
   | { kind: "waiting"; gameId: string; creatorName: string }
   | { kind: "claimed"; gameId?: string }
-  | { kind: "missing" };
+  | { kind: "missing" }
+  | { kind: "error" };
 
 export function JoinGame({ inviteToken }: { inviteToken: string }) {
   const router = useRouter();
@@ -21,16 +22,12 @@ export function JoinGame({ inviteToken }: { inviteToken: string }) {
   const [error, setError] = useState("");
   const playerToken = useRef<string | null>(null);
 
-  useEffect(() => {
-    setName(localStorage.getItem("chessriot:displayName") ?? "");
-    let cancelled = false;
-    void fetch(`/api/invitations/${inviteToken}`, { cache: "no-store" }).then(async (response) => {
-      const data = (await response.json()) as {
-        state?: string;
-        gameId?: string;
-        creatorName?: string;
-      };
-      if (cancelled) return;
+  const loadInvite = useCallback(async (cancelled: () => boolean = () => false) => {
+    setInvite({ kind: "loading" });
+    try {
+      const response = await fetch(`/api/invitations/${inviteToken}`, { cache: "no-store" });
+      const data = (await response.json()) as { state?: string; gameId?: string; creatorName?: string };
+      if (cancelled()) return;
       if (data.gameId && localStorage.getItem(playerKey(data.gameId))) {
         router.replace(`/g/${data.gameId}`);
         return;
@@ -39,18 +36,34 @@ export function JoinGame({ inviteToken }: { inviteToken: string }) {
         setInvite({ kind: "waiting", gameId: data.gameId, creatorName: data.creatorName });
       } else if (response.status === 410) {
         setInvite({ kind: "claimed", gameId: data.gameId });
-      } else {
+      } else if (response.status === 404) {
         setInvite({ kind: "missing" });
+      } else {
+        setInvite({ kind: "error" });
       }
-    }).catch(() => {
-      if (!cancelled) setInvite({ kind: "missing" });
-    });
-    return () => { cancelled = true; };
+    } catch {
+      if (!cancelled()) setInvite({ kind: "error" });
+    }
   }, [inviteToken, router]);
+
+  useEffect(() => {
+    try {
+      setName(localStorage.getItem("chessriot:displayName") ?? "");
+    } catch {
+      setName("");
+    }
+    let cancelled = false;
+    void loadInvite(() => cancelled);
+    return () => { cancelled = true; };
+  }, [loadInvite]);
 
   async function join(event: FormEvent) {
     event.preventDefault();
     if (invite.kind !== "waiting" || !name.trim()) return;
+    if (!canUseGameStorage()) {
+      setError("Allow browser storage to keep your private game seat.");
+      return;
+    }
     setBusy(true);
     setError("");
     playerToken.current ??= generateSecret();
@@ -60,7 +73,14 @@ export function JoinGame({ inviteToken }: { inviteToken: string }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ displayName: name.trim(), playerToken: playerToken.current }),
       });
-      const data = (await response.json()) as { game?: GameSnapshot; error?: { message?: string } };
+      const data = (await response.json()) as {
+        game?: GameSnapshot;
+        error?: { code?: string; message?: string };
+      };
+      if (response.status === 409 && data.error?.code === "invite_claimed") {
+        setInvite({ kind: "claimed", gameId: invite.gameId });
+        return;
+      }
       if (!response.ok || !data.game) throw new Error(data.error?.message ?? "Could not join this game");
       localStorage.setItem("chessriot:displayName", name.trim());
       localStorage.setItem(playerKey(data.game.id), playerToken.current);
@@ -100,7 +120,7 @@ export function JoinGame({ inviteToken }: { inviteToken: string }) {
             <button className="primary-button" disabled={busy || !name.trim()}>
               {busy ? "CLAIMING SEAT…" : "JOIN AS BLACK  →"}
             </button>
-            <p className="fine-print">This invitation claims one seat and works once.</p>
+            <p className="fine-print">Submitting this invitation claims one seat and works once.</p>
           </form>
         ) : null}
         {invite.kind === "claimed" ? (
@@ -113,6 +133,13 @@ export function JoinGame({ inviteToken }: { inviteToken: string }) {
           <div className="voxel-card state-card">
             <span className="big-glyph">?</span><h1>INVITATION NOT FOUND</h1>
             <p>Ask the game creator for a fresh link.</p><Link className="secondary-button" href="/">GO HOME</Link>
+          </div>
+        ) : null}
+        {invite.kind === "error" ? (
+          <div className="voxel-card state-card">
+            <span className="big-glyph">↻</span><h1>CONNECTION INTERRUPTED</h1>
+            <p>The arena could not load yet. Check your connection and try again.</p>
+            <button className="secondary-button" type="button" onClick={() => void loadInvite()}>TRY AGAIN</button>
           </div>
         ) : null}
       </section>

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ChessRiot | Blocky async chess",
-  description: "Play a bold, blocky chess game with someone you know.",
+  title: "ChessRiot | Real chess. Total play.",
+  description: "Play bold asynchronous chess with someone you know.",
   referrer: "no-referrer",
   other: { "codex-preview": "development" },
 };

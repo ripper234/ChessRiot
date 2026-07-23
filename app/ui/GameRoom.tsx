@@ -2,8 +2,16 @@
 
 import { Chess, type Move, type PieceSymbol, type Square } from "chess.js";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { generateUuid, inviteKey, playerKey, rememberGame } from "@/lib/client-storage";
+import {
+  classifyGameSound,
+  playGameSound,
+  readSoundPreference,
+  unlockGameSounds,
+  writeSoundPreference,
+} from "@/lib/game-sounds";
+import { shouldAcceptGameSnapshot } from "@/lib/game-snapshots";
 import type { GameSnapshot, Promotion } from "@/lib/game-types";
 import { Brand } from "./Brand";
 
@@ -11,8 +19,12 @@ const PIECES: Record<"w" | "b", Record<PieceSymbol, string>> = {
   w: { p: "♙", n: "♘", b: "♗", r: "♖", q: "♕", k: "♔" },
   b: { p: "♟", n: "♞", b: "♝", r: "♜", q: "♛", k: "♚" },
 };
+const PIECE_NAMES: Record<PieceSymbol, string> = {
+  p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king",
+};
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
 const RANKS = ["8", "7", "6", "5", "4", "3", "2", "1"];
+const CONNECTION_MESSAGE = "Connection interrupted. We’ll keep trying.";
 
 function apiMessage(data: unknown, fallback: string): string {
   if (
@@ -44,12 +56,31 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [promotionMove, setPromotionMove] = useState<{ from: Square; to: Square } | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [access, setAccess] = useState<"loading" | "ready" | "missing" | "denied">("loading");
+  const [access, setAccess] = useState<"loading" | "ready" | "missing" | "denied" | "error">("loading");
   const [inviteUrl, setInviteUrl] = useState("");
   const [shared, setShared] = useState(false);
+  const [soundOn, setSoundOn] = useState(true);
+  const latestVersion = useRef(-1);
+  const previousGame = useRef<GameSnapshot | null>(null);
+
+  const acceptGame = useCallback((nextGame: GameSnapshot) => {
+    if (!shouldAcceptGameSnapshot(latestVersion.current, nextGame.version)) return false;
+    latestVersion.current = nextGame.version;
+    setGame(nextGame);
+    rememberGame(nextGame);
+    setAccess("ready");
+    setMessage((current) => current === CONNECTION_MESSAGE ? "" : current);
+    return true;
+  }, []);
 
   const loadGame = useCallback(async (sinceVersion?: number) => {
-    const token = localStorage.getItem(playerKey(gameId));
+    let token: string | null = null;
+    try {
+      token = localStorage.getItem(playerKey(gameId));
+    } catch {
+      setAccess("missing");
+      return;
+    }
     if (!token) {
       setAccess("missing");
       return;
@@ -60,29 +91,38 @@ export function GameRoom({ gameId }: { gameId: string }) {
         headers: { authorization: `Bearer ${token}` },
         cache: "no-store",
       });
-      if (response.status === 204) return;
-      const data = (await response.json()) as { game?: GameSnapshot };
-      if (!response.ok || !data.game) {
-        setAccess(response.status === 404 ? "denied" : "missing");
+      if (response.status === 204) {
+        setMessage((current) => current === CONNECTION_MESSAGE ? "" : current);
         return;
       }
-      setGame(data.game);
-      rememberGame(data.game);
-      setAccess("ready");
+      const data = (await response.json()) as { game?: GameSnapshot };
+      if (!response.ok || !data.game) {
+        if (response.status === 404) setAccess("denied");
+        else if (latestVersion.current < 0) setAccess("error");
+        else setMessage(CONNECTION_MESSAGE);
+        return;
+      }
+      acceptGame(data.game);
     } catch {
-      setMessage("Connection lost. We’ll keep trying.");
+      if (latestVersion.current < 0) setAccess("error");
+      else setMessage(CONNECTION_MESSAGE);
     }
-  }, [gameId]);
+  }, [acceptGame, gameId]);
 
   useEffect(() => {
-    setInviteUrl(localStorage.getItem(inviteKey(gameId)) ?? "");
+    try {
+      setInviteUrl(localStorage.getItem(inviteKey(gameId)) ?? "");
+    } catch {
+      setInviteUrl("");
+    }
+    setSoundOn(readSoundPreference());
     void loadGame();
   }, [gameId, loadGame]);
 
   useEffect(() => {
     if (!game || game.status === "completed") return;
     const refresh = () => {
-      if (document.visibilityState === "visible") void loadGame(game.version);
+      if (document.visibilityState === "visible") void loadGame(latestVersion.current);
     };
     const timer = window.setInterval(refresh, 3_000);
     window.addEventListener("focus", refresh);
@@ -97,9 +137,43 @@ export function GameRoom({ gameId }: { gameId: string }) {
   }, [game, loadGame]);
 
   useEffect(() => {
+    if (!game) return;
+    const previous = previousGame.current;
+    previousGame.current = game;
+    const markerKey = `chessriot:sound:last-ply:${gameId}`;
+    if (!previous) {
+      try {
+        sessionStorage.setItem(markerKey, String(game.plyCount));
+      } catch {
+        // The in-memory previous snapshot still prevents replay in this view.
+      }
+      return;
+    }
+    const sound = classifyGameSound(previous, game);
+    if (!sound || !soundOn) return;
+    try {
+      const lastPlayedPly = Number(sessionStorage.getItem(markerKey) ?? "-1");
+      if (lastPlayedPly >= game.plyCount) return;
+      sessionStorage.setItem(markerKey, String(game.plyCount));
+    } catch {
+      // Continue with in-memory deduplication when session storage is blocked.
+    }
+    playGameSound(sound);
+  }, [game, gameId, soundOn]);
+
+  useEffect(() => {
     setSelected(null);
     setPromotionMove(null);
   }, [game?.version]);
+
+  useEffect(() => {
+    if (!promotionMove) return;
+    const cancelOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPromotionMove(null);
+    };
+    window.addEventListener("keydown", cancelOnEscape);
+    return () => window.removeEventListener("keydown", cancelOnEscape);
+  }, [promotionMove]);
 
   const chess = useMemo(() => game ? new Chess(game.fen) : null, [game]);
   const legalMoves = useMemo<Move[]>(() => {
@@ -111,15 +185,30 @@ export function GameRoom({ gameId }: { gameId: string }) {
     if (!game || game.you.color === "w") {
       return RANKS.flatMap((rank) => FILES.map((file) => `${file}${rank}` as Square));
     }
-    return [...RANKS].reverse().flatMap((rank) => [...FILES].reverse().map((file) => `${file}${rank}` as Square));
+    return [...RANKS].reverse().flatMap((rank) =>
+      [...FILES].reverse().map((file) => `${file}${rank}` as Square),
+    );
   }, [game]);
 
   const canMove = Boolean(game && game.status === "active" && game.turn === game.you.color && !busy);
   const lastMove = game?.moves.at(-1);
 
+  function playInvalidSound() {
+    if (!soundOn) return;
+    void unlockGameSounds().then((unlocked) => {
+      if (unlocked) playGameSound("invalid");
+    });
+  }
+
   async function sendMove(from: Square, to: Square, promotion?: Promotion) {
     if (!game || !canMove) return;
-    const token = localStorage.getItem(playerKey(gameId));
+    let token: string | null = null;
+    try {
+      token = localStorage.getItem(playerKey(gameId));
+    } catch {
+      setAccess("missing");
+      return;
+    }
     if (!token) return setAccess("missing");
     setBusy(true);
     setMessage("");
@@ -135,15 +224,18 @@ export function GameRoom({ gameId }: { gameId: string }) {
           requestId: generateUuid(),
         }),
       });
-      const data = (await response.json()) as { game?: GameSnapshot; error?: { message?: string } };
-      if (data.game) {
-        setGame(data.game);
-        rememberGame(data.game);
+      const data = (await response.json()) as {
+        game?: GameSnapshot;
+        error?: { code?: string; message?: string };
+      };
+      if (data.game) acceptGame(data.game);
+      if (!response.ok) {
+        setMessage(apiMessage(data, "That move did not work"));
+        if (data.error?.code !== "stale_position") playInvalidSound();
       }
-      if (!response.ok) setMessage(apiMessage(data, "That move did not work"));
     } catch {
       setMessage("Could not send the move. Refreshing the board…");
-      await loadGame();
+      await loadGame(latestVersion.current);
     } finally {
       setBusy(false);
       setSelected(null);
@@ -152,7 +244,12 @@ export function GameRoom({ gameId }: { gameId: string }) {
   }
 
   function tapSquare(square: Square) {
-    if (!chess || !canMove) return;
+    if (soundOn) void unlockGameSounds();
+    if (!chess || !game) return;
+    if (!canMove) {
+      if (game.status === "active") playInvalidSound();
+      return;
+    }
     const targetMoves = selected ? legalMoves.filter((move) => move.to === square) : [];
     if (selected && targetMoves.length > 0) {
       if (targetMoves.some((move) => Boolean(move.promotion))) {
@@ -163,32 +260,75 @@ export function GameRoom({ gameId }: { gameId: string }) {
       return;
     }
     const piece = chess.get(square);
-    setSelected(piece?.color === game?.you.color ? square : null);
+    if (piece?.color === game.you.color) {
+      setSelected(square);
+      setMessage("");
+    } else if (selected) {
+      setMessage("Choose one of the highlighted squares.");
+      playInvalidSound();
+    } else {
+      setSelected(null);
+    }
   }
 
   async function shareInvite() {
     if (!inviteUrl) return;
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: "ChessRiot challenge", text: "Your move. Join my ChessRiot game!", url: inviteUrl });
-      } else {
-        await navigator.clipboard.writeText(inviteUrl);
-      }
+    const markShared = () => {
       setShared(true);
       window.setTimeout(() => setShared(false), 2_000);
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: "ChessRiot challenge",
+          text: "Your move. Join my ChessRiot game!",
+          url: inviteUrl,
+        });
+        markShared();
+        return;
+      }
+    } catch (caught) {
+      if (caught instanceof DOMException && caught.name === "AbortError") return;
+    }
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      markShared();
     } catch {
       setMessage("Select and copy the invitation link below.");
     }
   }
 
+  async function toggleSound() {
+    const next = !soundOn;
+    setSoundOn(next);
+    writeSoundPreference(next);
+    if (next && await unlockGameSounds()) playGameSound("move");
+  }
+
   if (access === "loading") {
     return <main className="game-shell"><header className="topbar"><Brand /></header><div className="loading-block">ASSEMBLING BOARD…</div></main>;
   }
-  if (access === "missing" || access === "denied") {
+  if (access === "error") {
     return (
       <main className="join-shell"><header className="topbar"><Brand /></header><section className="join-stage">
-        <div className="voxel-card state-card"><span className="big-glyph">⌁</span><h1>PRIVATE KEY NOT FOUND</h1>
-          <p>This browser does not have a seat in this game. Open your original invitation on the same device.</p>
+        <div className="voxel-card state-card"><span className="big-glyph">↻</span><h1>CONNECTION INTERRUPTED</h1>
+          <p>The arena could not load yet. Check your connection and try again.</p>
+          <button className="secondary-button" type="button" onClick={() => {
+            setAccess("loading");
+            void loadGame();
+          }}>TRY AGAIN</button>
+        </div>
+      </section></main>
+    );
+  }
+  if (access === "missing" || access === "denied") {
+    const denied = access === "denied";
+    return (
+      <main className="join-shell"><header className="topbar"><Brand /></header><section className="join-stage">
+        <div className="voxel-card state-card"><span className="big-glyph">⌁</span><h1>{denied ? "GAME NOT AVAILABLE" : "PRIVATE KEY NOT FOUND"}</h1>
+          <p>{denied
+            ? "This seat cannot access that game. Return to one of your games or use the original invitation."
+            : "This browser does not have a seat in this game. Open your original invitation on the same device."}</p>
           <Link className="secondary-button" href="/">GO HOME</Link>
         </div>
       </section></main>
@@ -206,25 +346,44 @@ export function GameRoom({ gameId }: { gameId: string }) {
 
   return (
     <main className="game-shell">
-      <header className="topbar game-topbar"><Brand /><Link href="/" className="home-link">ALL GAMES</Link></header>
+      <header className="topbar game-topbar">
+        <Brand />
+        <div className="topbar-actions">
+          <button
+            className="sound-toggle"
+            type="button"
+            aria-pressed={soundOn}
+            aria-label={soundOn ? "Mute game sounds" : "Turn on game sounds"}
+            onClick={() => void toggleSound()}
+          >
+            <span aria-hidden="true">{soundOn ? "◖))" : "◖×"}</span>
+            <b>{soundOn ? "SOUND ON" : "MUTED"}</b>
+          </button>
+          <Link href="/" className="home-link">HOME</Link>
+        </div>
+      </header>
       <section className="game-layout">
         <div className="board-column">
           <div className="match-banner">
-            <div><span className="status-lamp" data-active={game.turn !== game.you.color ? "true" : "false"} />
+            <div><span className="status-lamp" data-active={game.status === "active" && game.turn !== game.you.color ? "true" : "false"} />
               <small>{opponent ?? "PLAYER 2"}</small><strong>{opponent ?? "Waiting…"}</strong>
             </div>
             <div className="versus">VS</div>
             <div className="you-player"><small>YOU • {game.you.color === "w" ? "WHITE" : "BLACK"}</small><strong>{game.you.name}</strong>
-              <span className="status-lamp" data-active={game.turn === game.you.color ? "true" : "false"} /></div>
+              <span className="status-lamp" data-active={game.status === "active" && game.turn === game.you.color ? "true" : "false"} /></div>
           </div>
 
-          <div className={`turn-panel ${game.turn === game.you.color ? "mine" : "theirs"} ${game.status}`}>
+          <div
+            className={`turn-panel ${game.turn === game.you.color ? "mine" : "theirs"} ${game.status}`}
+            role="status"
+            aria-live="polite"
+          >
             <span>{game.status === "completed" ? "⚑" : game.check ? "!" : "◆"}</span>
             <div><small>{game.check && game.status !== "completed" ? "CHECK" : "MATCH STATUS"}</small><strong>{statusText}</strong></div>
             {busy ? <b>LOCKING MOVE…</b> : null}
           </div>
 
-          <div className="board-wrap" aria-busy={busy}>
+          <div className="board-wrap" aria-busy={busy} data-interactive={canMove ? "true" : "false"}>
             <div className="chessboard" role="grid" aria-label="Chess board">
               {squares.map((square, index) => {
                 const piece = chess.get(square);
@@ -240,7 +399,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
                   <button
                     type="button"
                     role="gridcell"
-                    aria-label={`${square}${piece ? ` ${piece.color === "w" ? "white" : "black"} ${piece.type}` : ""}`}
+                    aria-label={`${square}${piece ? ` ${piece.color === "w" ? "white" : "black"} ${PIECE_NAMES[piece.type]}` : " empty"}`}
+                    aria-disabled={!canMove}
                     className={`square ${(FILES.indexOf(file) + Number(rank)) % 2 === 0 ? "dark-square" : "light-square"}${isSelected ? " selected" : ""}${isLast ? " last-move" : ""}${legal ? capture ? " capture-target" : " legal-target" : ""}`}
                     key={square}
                     onClick={() => tapSquare(square)}
@@ -261,7 +421,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
           {game.status === "waiting" ? (
             <section className="side-card invite-card">
               <span className="side-icon">⌁</span><h2>INVITE PLAYER 2</h2>
-              <p>Send this private link. The first person to open it claims Black.</p>
+              <p>Send this private link. The first person to submit it claims Black.</p>
               {inviteUrl ? <><button className="primary-button" onClick={() => void shareInvite()}>{shared ? "LINK READY ✓" : "SHARE INVITATION"}</button>
                 <input className="invite-field" value={inviteUrl} readOnly onFocus={(event) => event.currentTarget.select()} aria-label="Invitation link" /></> :
                 <p className="form-error">The invitation link is no longer stored on this device.</p>}
@@ -285,7 +445,12 @@ export function GameRoom({ gameId }: { gameId: string }) {
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Choose promotion piece">
           <div className="promotion-card"><p>PROMOTE YOUR PAWN</p><div>
             {(["q", "r", "b", "n"] as Promotion[]).map((piece) => (
-              <button key={piece} onClick={() => void sendMove(promotionMove.from, promotionMove.to, piece)}>
+              <button
+                key={piece}
+                aria-label={`Promote to ${PIECE_NAMES[piece]}`}
+                autoFocus={piece === "q"}
+                onClick={() => void sendMove(promotionMove.from, promotionMove.to, piece)}
+              >
                 {PIECES[game.you.color][piece]}
               </button>
             ))}
