@@ -28,6 +28,7 @@ const ENVIRONMENTS = [
   },
 ];
 
+const CONTROL_VERSION = "0.1.2";
 const AVAILABLE_VERSIONS = ["0.1.0", "0.1.1"];
 
 function normalizeVersion(version) {
@@ -90,6 +91,7 @@ async function statusResponse(env) {
     {
       environments,
       availableVersions: AVAILABLE_VERSIONS,
+      controlVersion: CONTROL_VERSION,
       checkedAt: new Date().toISOString(),
       sourceUrl: "https://github.com/ripper234/ChessRiot",
     },
@@ -172,25 +174,44 @@ const page = `<!doctype html>
         display: block;
         margin-top: 6px;
         color: var(--cyan);
-        font: 700 8px/1 var(--mono);
-        letter-spacing: 2.5px;
+        font: 700 10px/1 var(--mono);
+        letter-spacing: 1.8px;
       }
-      .source-link {
-        min-height: 40px;
+      .github-ribbon {
+        min-height: 44px;
         display: inline-flex;
         align-items: center;
-        border-bottom: 1px solid var(--cyan);
-        color: #dce9fa;
-        font: 700 10px/1 var(--mono);
-        letter-spacing: 1px;
+        gap: 10px;
+        padding: 0 15px 0 12px;
+        border: 1px solid rgba(255,255,255,.3);
+        border-radius: 999px;
+        color: #fff;
+        background: linear-gradient(135deg,#24292f,#10141b);
+        box-shadow: 0 7px 24px rgba(0,0,0,.3);
+        font: 800 12px/1 var(--mono);
+        letter-spacing: .35px;
         text-decoration: none;
+        transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
       }
-      main { width: min(1180px,100%); margin: 0 auto; padding: 58px clamp(18px,5vw,54px) 80px; }
-      .hero { display: flex; align-items: end; justify-content: space-between; gap: 28px; margin-bottom: 34px; }
-      .eyebrow { margin: 0 0 11px; color: var(--cyan); font: 800 9px/1 var(--mono); letter-spacing: 2px; }
-      h1 { margin: 0; font: italic clamp(48px,7vw,82px)/.86 var(--display); letter-spacing: -1px; text-transform: uppercase; }
+      .github-ribbon:hover {
+        border-color: var(--cyan);
+        box-shadow: 0 8px 30px rgba(0,229,255,.18);
+        transform: translateY(-1px);
+      }
+      .github-ribbon svg { width: 23px; height: 23px; flex: 0 0 auto; fill: currentColor; }
+      .github-ribbon small {
+        display: block;
+        margin-top: 4px;
+        color: #aeb8c5;
+        font: 650 9px/1 var(--mono);
+        letter-spacing: .2px;
+      }
+      main { width: min(1180px,100%); margin: 0 auto; padding: 38px clamp(18px,5vw,54px) 70px; }
+      .hero { display: flex; align-items: end; justify-content: space-between; gap: 28px; margin-bottom: 25px; }
+      .eyebrow { margin: 0 0 10px; color: var(--cyan); font: 800 11px/1 var(--mono); letter-spacing: 1.6px; }
+      h1 { margin: 0; font: italic clamp(43px,6vw,66px)/.88 var(--display); letter-spacing: -.5px; text-transform: uppercase; }
       h1 em { color: var(--gold); font-style: inherit; }
-      .subtitle { max-width: 610px; margin: 20px 0 0; color: #c3cde0; line-height: 1.55; }
+      .subtitle { max-width: 610px; margin: 15px 0 0; color: #c3cde0; font-size: 15px; line-height: 1.5; }
       .refresh {
         min-height: 44px;
         padding: 0 18px;
@@ -217,13 +238,35 @@ const page = `<!doctype html>
       .card[data-accent="purple"] { --accent: var(--purple); }
       .card-head { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
       .card h2 { margin: 11px 0 3px; font: italic 29px/1 var(--display); letter-spacing: .6px; text-transform: uppercase; }
-      .access { color: var(--muted); font: 700 8px/1 var(--mono); letter-spacing: 1px; }
+      .access { color: var(--muted); font: 700 11px/1.25 var(--mono); letter-spacing: .35px; }
+      .deployment-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+        color: #aebbd0;
+        font: 800 10px/1 var(--mono);
+        letter-spacing: .5px;
+        white-space: nowrap;
+      }
       .lamp { width: 13px; height: 13px; margin-top: 10px; border: 1px solid #4a5670; background: #29344a; transform: rotate(45deg); }
+      .deployment-status .lamp { margin: 0; }
       .lamp.ok { border-color: var(--green); background: var(--green); box-shadow: 0 0 14px rgba(23,224,194,.75); }
-      .version-label { margin: 31px 0 5px; color: var(--muted); font: 700 8px/1 var(--mono); letter-spacing: 1.4px; }
+      .lamp.mismatch { border-color: var(--gold); background: var(--gold); box-shadow: 0 0 14px rgba(255,196,0,.6); }
+      .deployment-status.ok { color: var(--green); }
+      .deployment-status.mismatch { color: var(--gold); }
+      .deployment-status.down { color: #ff8cab; }
+      .version-label { margin: 28px 0 5px; color: var(--muted); font: 700 11px/1 var(--mono); letter-spacing: 1px; }
       .version { margin: 0; color: var(--accent); font: italic 42px/1 var(--display); letter-spacing: .5px; }
-      .expected { min-height: 19px; margin: 7px 0 23px; color: #b7c3d8; font-size: 11px; }
+      .expected { min-height: 20px; margin: 7px 0 20px; color: #b7c3d8; font-size: 13px; }
       .expected.mismatch { color: #ff8cab; }
+      .release-label {
+        display: block;
+        margin: 0 0 7px;
+        color: var(--muted);
+        font: 750 11px/1 var(--mono);
+        letter-spacing: .7px;
+      }
       .card-actions { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
       select {
         min-width: 0;
@@ -240,14 +283,15 @@ const page = `<!doctype html>
         color: var(--gold);
         background: rgba(255,196,0,.06);
         cursor: pointer;
-        font: 800 9px/1 var(--mono);
-        letter-spacing: .4px;
+        font: 800 11px/1 var(--mono);
+        letter-spacing: .25px;
       }
+      .prepare:disabled { cursor: not-allowed; opacity: .5; }
       .open-env {
         display: inline-block;
         margin-top: 18px;
         color: var(--cyan);
-        font: 750 10px/1 var(--mono);
+        font: 750 12px/1 var(--mono);
         text-decoration: none;
       }
       .open-env[aria-disabled="true"] { pointer-events: none; color: #65728a; }
@@ -264,7 +308,7 @@ const page = `<!doctype html>
         line-height: 1.55;
       }
       .notice b { color: var(--gold); }
-      .checked { margin: 18px 0 0; color: var(--muted); font: 700 8px/1 var(--mono); letter-spacing: .8px; text-align: right; }
+      .checked { margin: 18px 0 0; color: var(--muted); font: 700 11px/1 var(--mono); letter-spacing: .45px; text-align: right; }
       dialog {
         width: min(560px,calc(100% - 30px));
         padding: 0;
@@ -281,6 +325,7 @@ const page = `<!doctype html>
       .modal-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 9px; margin-top: 20px; }
       .modal button, .modal a { min-height: 42px; display: inline-flex; align-items: center; padding: 0 15px; border: 1px solid #45536d; color: var(--text); background: transparent; cursor: pointer; font-weight: 750; text-decoration: none; }
       .modal .copy { border-color: var(--cyan); color: var(--cyan); }
+      .copy-status { min-height: 18px; margin: 10px 0 0; color: var(--green); font: 700 11px/1.4 var(--mono); text-align: right; }
       button:focus-visible, a:focus-visible, select:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
       @media (max-width: 860px) {
         .grid { grid-template-columns: 1fr; }
@@ -292,8 +337,9 @@ const page = `<!doctype html>
         .mark { width: 36px; height: 36px; font-size: 23px; }
         .brand strong { font-size: 24px; }
         .brand small { display: none; }
-        .source-link { font-size: 8px; }
-        main { padding-top: 37px; }
+        .github-ribbon { width: 44px; padding: 0; justify-content: center; }
+        .github-ribbon span { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+        main { padding-top: 30px; }
         .card-actions { grid-template-columns: 1fr; }
       }
     </style>
@@ -301,30 +347,34 @@ const page = `<!doctype html>
   <body>
     <header class="topbar">
       <div class="brand"><span class="mark">♞</span><span><strong>ChessRiot Control</strong><small>ENVIRONMENTS // RELEASES // RECOVERY</small></span></div>
-      <a class="source-link" href="https://github.com/ripper234/ChessRiot" target="_blank" rel="noreferrer">VIEW ALL SOURCE ↗</a>
+      <a class="github-ribbon" href="https://github.com/ripper234/ChessRiot" target="_blank" rel="noopener noreferrer" aria-label="View ChessRiot source on GitHub">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7a11.5 11.5 0 0 0-3.64 22.4c.58.1.79-.25.79-.56v-2.23c-3.22.7-3.9-1.37-3.9-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.16.08 1.78 1.2 1.78 1.2 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.74-1.55-2.57-.29-5.27-1.29-5.27-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.16 1.18a10.98 10.98 0 0 1 5.76 0c2.2-1.49 3.16-1.18 3.16-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.09 0 4.42-2.71 5.39-5.29 5.68.42.36.79 1.07.79 2.16v3.2c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg>
+        <span>View on GitHub<small>Source + history ↗</small></span>
+      </a>
     </header>
     <main>
       <section class="hero">
         <div>
-          <p class="eyebrow">DEPLOYMENT CONTROL PLANE</p>
+          <p class="eyebrow">CONTROL v${CONTROL_VERSION} // DEPLOYMENT OVERVIEW</p>
           <h1>SHIP CALMLY.<br><em>ROLL BACK SAFELY.</em></h1>
           <p class="subtitle">Three isolated environments, immutable releases, and one clear view of what is running where.</p>
         </div>
         <button class="refresh" id="refresh" type="button">REFRESH STATUS</button>
       </section>
       <section class="grid" id="grid" aria-live="polite"></section>
-      <aside class="notice"><b>!</b><span><b>Code rollback only.</b> Game data and runtime configuration stay in their environment. Until a trusted CI controller is added, rollback execution remains protected inside ChatGPT. This page prepares the exact request without exposing deployment credentials.</span></aside>
+      <aside class="notice"><b>!</b><span><b>Code releases only.</b> Game data and runtime configuration stay in their environment. Until a trusted CI controller is added, release changes remain protected inside ChatGPT. This page creates the exact request without exposing deployment credentials.</span></aside>
       <p class="checked" id="checked">Checking deployments…</p>
     </main>
-    <dialog id="rollback-dialog">
+    <dialog id="rollback-dialog" aria-labelledby="dialog-title" aria-describedby="dialog-description">
       <div class="modal">
-        <h2>Prepare rollback</h2>
-        <p>Copy this request, open ChatGPT, and paste it into the ChessRiot project.</p>
+        <h2 id="dialog-title">Create release request</h2>
+        <p id="dialog-description">Copy this exact request, then paste it into the ChessRiot project in ChatGPT.</p>
         <div class="command" id="command"></div>
+        <p class="copy-status" id="copy-status" role="status" aria-live="polite"></p>
         <div class="modal-actions">
           <button id="cancel" type="button">Cancel</button>
           <button class="copy" id="copy" type="button">Copy request</button>
-          <a id="open-chatgpt" href="https://chatgpt.com" target="_blank" rel="noreferrer">Open ChatGPT ↗</a>
+          <a id="open-chatgpt" href="https://chatgpt.com" target="_blank" rel="noopener noreferrer">Open ChatGPT ↗</a>
         </div>
       </div>
     </dialog>
@@ -335,7 +385,23 @@ const page = `<!doctype html>
       const dialog = document.querySelector("#rollback-dialog");
       const command = document.querySelector("#command");
       const copy = document.querySelector("#copy");
+      const copyStatus = document.querySelector("#copy-status");
       let status = null;
+
+      function compareVersions(a, b) {
+        const left = a.split(".").map(Number);
+        const right = b.split(".").map(Number);
+        for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+          const difference = (left[index] || 0) - (right[index] || 0);
+          if (difference) return difference;
+        }
+        return 0;
+      }
+
+      function releaseVerb(current, target) {
+        if (!current) return "Deploy";
+        return compareVersions(target, current) < 0 ? "Rollback" : "Promote";
+      }
 
       function card(item, versions) {
         const article = document.createElement("article");
@@ -346,16 +412,17 @@ const page = `<!doctype html>
         article.innerHTML = \`
           <div class="card-head">
             <div><h2></h2><span class="access"></span></div>
-            <span class="lamp" aria-label="Deployment status"></span>
+            <span class="deployment-status"><span class="lamp"></span><span class="status-text"></span></span>
           </div>
           <p class="version-label">ACTIVE RELEASE</p>
           <p class="version"></p>
           <p class="expected"></p>
+          <label class="release-label">CHANGE TO RELEASE</label>
           <div class="card-actions">
-            <select aria-label="Rollback target"></select>
-            <button class="prepare" type="button">PREPARE ROLLBACK</button>
+            <select aria-label="Release target"></select>
+            <button class="prepare" type="button">CREATE REQUEST</button>
           </div>
-          <a class="open-env" target="_blank" rel="noreferrer">OPEN ENVIRONMENT ↗</a>
+          <a class="open-env" target="_blank" rel="noopener noreferrer">OPEN ENVIRONMENT ↗</a>
         \`;
         article.querySelector("h2").textContent = item.name;
         article.querySelector(".access").textContent = item.access + " // isolated data";
@@ -365,25 +432,49 @@ const page = `<!doctype html>
           ? "Matches target v" + item.expectedVersion
           : item.message + " · target v" + item.expectedVersion;
         if (!matches) expected.classList.add("mismatch");
-        if (item.healthy) article.querySelector(".lamp").classList.add("ok");
+        const deploymentStatus = article.querySelector(".deployment-status");
+        const lamp = article.querySelector(".lamp");
+        const statusText = article.querySelector(".status-text");
+        if (!item.healthy) {
+          deploymentStatus.classList.add("down");
+          statusText.textContent = "UNAVAILABLE";
+        } else if (!matches) {
+          deploymentStatus.classList.add("mismatch");
+          lamp.classList.add("mismatch");
+          statusText.textContent = "TARGET MISMATCH";
+        } else {
+          deploymentStatus.classList.add("ok");
+          lamp.classList.add("ok");
+          statusText.textContent = "HEALTHY";
+        }
+        deploymentStatus.setAttribute("aria-label", statusText.textContent.toLowerCase());
 
         const select = article.querySelector("select");
-        versions.forEach((version) => {
+        const targetVersions = versions.filter((version) => version !== item.version);
+        targetVersions.forEach((version) => {
           const option = document.createElement("option");
           option.value = version;
-          option.textContent = "v" + version;
-          if (version === item.version) option.disabled = true;
+          option.textContent = "v" + version + " · " + releaseVerb(item.version, version).toLowerCase();
           select.append(option);
         });
-        const fallback = versions.find((version) => version !== item.version);
-        if (fallback) select.value = fallback;
+        const prepare = article.querySelector(".prepare");
+        if (!targetVersions.length) {
+          const option = document.createElement("option");
+          option.textContent = "No other release";
+          select.append(option);
+          select.disabled = true;
+          prepare.disabled = true;
+        }
 
-        article.querySelector(".prepare").addEventListener("click", () => {
+        prepare.addEventListener("click", () => {
           const target = select.value;
+          const verb = releaseVerb(item.version, target);
+          const current = item.version ? " from v" + item.version : "";
           command.textContent =
-            "Rollback ChessRiot " + item.name.toLowerCase() + " to v" + target +
+            verb + " ChessRiot " + item.name.toLowerCase() + current + " to v" + target +
             ". Deploy the saved Sites version matching that semantic release, verify the deployment, and report the resulting URL. Do not change game data or runtime configuration.";
           copy.textContent = "Copy request";
+          copyStatus.textContent = "";
           dialog.showModal();
         });
         const link = article.querySelector(".open-env");
@@ -423,10 +514,14 @@ const page = `<!doctype html>
           textarea.remove();
         }
         copy.textContent = "Copied";
+        copyStatus.textContent = "Request copied to clipboard.";
       }
 
       refresh.addEventListener("click", loadStatus);
       document.querySelector("#cancel").addEventListener("click", () => dialog.close());
+      dialog.addEventListener("click", (event) => {
+        if (event.target === dialog) dialog.close();
+      });
       copy.addEventListener("click", copyRequest);
       loadStatus();
     </script>
