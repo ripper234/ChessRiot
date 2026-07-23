@@ -4,7 +4,6 @@ const ENVIRONMENTS = [
     name: "Production",
     expectedVersion: "0.1.0",
     urlKey: "PROD_URL",
-    tokenKey: "PROD_BYPASS_TOKEN",
     access: "Public",
     accent: "gold",
   },
@@ -13,7 +12,6 @@ const ENVIRONMENTS = [
     name: "Staging",
     expectedVersion: "0.1.1",
     urlKey: "STAGING_URL",
-    tokenKey: "STAGING_BYPASS_TOKEN",
     access: "Owner only",
     accent: "cyan",
   },
@@ -22,14 +20,19 @@ const ENVIRONMENTS = [
     name: "Development",
     expectedVersion: "0.1.1",
     urlKey: "DEV_URL",
-    tokenKey: "DEV_BYPASS_TOKEN",
-    access: "Owner only",
+    access: "Public",
     accent: "purple",
   },
 ];
 
-const CONTROL_VERSION = "0.1.2";
+const CONTROL_VERSION = "0.1.3";
 const AVAILABLE_VERSIONS = ["0.1.0", "0.1.1"];
+const STATUS_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+const STATUS_PROBE_TIMEOUT_MS = 15_000;
+const RELEASE_ASSETS = {
+  "0.1.0": "/assets/index-ltKYg5gI.css",
+  "0.1.1": "/assets/index-BIvHkimP.css",
+};
 const initialCards = ENVIRONMENTS.map(
   ({ name, expectedVersion, access, accent }) => `
     <article class="card loading" data-accent="${accent}">
@@ -49,68 +52,17 @@ const initialCards = ENVIRONMENTS.map(
     </article>`,
 ).join("");
 
-function normalizeVersion(version) {
-  if (!version) return null;
-  return version.split(".").length === 2 ? `${version}.0` : version;
-}
-
-async function inspectEnvironment(config, env) {
-  const url = env[config.urlKey];
-  if (!url) {
-    return {
-      ...config,
-      url: null,
-      version: null,
-      healthy: false,
-      message: "URL is not configured",
-    };
-  }
-
-  const headers = { accept: "text/html" };
-  const token = env[config.tokenKey];
-  if (token) headers["OAI-Sites-Authorization"] = `Bearer ${token}`;
-
-  try {
-    const response = await fetch(url, {
-      headers,
-      redirect: "follow",
-      signal: AbortSignal.timeout(6000),
-    });
-    const html = await response.text();
-    const match = html.match(/CHESSRIOT\s+v(0\.\d+(?:\.\d+)?)/i);
-    const version = normalizeVersion(match?.[1] ?? null);
-    return {
-      ...config,
-      url,
-      version,
-      healthy: response.ok && version !== null,
-      message: response.ok
-        ? version
-          ? "Deployment responded"
-          : "Deployment responded without a version marker"
-        : `Deployment returned HTTP ${response.status}`,
-    };
-  } catch {
-    return {
-      ...config,
-      url,
-      version: null,
-      healthy: false,
-      message: "Deployment did not respond",
-    };
-  }
-}
-
-async function statusResponse(env) {
-  const environments = await Promise.all(
-    ENVIRONMENTS.map((config) => inspectEnvironment(config, env)),
-  );
+function statusResponse(env) {
+  const environments = ENVIRONMENTS.map((config) => ({
+    ...config,
+    url: env[config.urlKey] ?? null,
+  }));
   return Response.json(
     {
       environments,
       availableVersions: AVAILABLE_VERSIONS,
+      releaseAssets: RELEASE_ASSETS,
       controlVersion: CONTROL_VERSION,
-      checkedAt: new Date().toISOString(),
       sourceUrl: "https://github.com/ripper234/ChessRiot",
     },
     {
@@ -230,17 +182,31 @@ const page = `<!doctype html>
       h1 { margin: 0; font: italic clamp(43px,6vw,66px)/.88 var(--display); letter-spacing: -.5px; text-transform: uppercase; }
       h1 em { color: var(--gold); font-style: inherit; }
       .subtitle { max-width: 610px; margin: 15px 0 0; color: #c3cde0; font-size: 15px; line-height: 1.5; }
-      .refresh {
-        min-height: 44px;
-        padding: 0 18px;
-        border: 1px solid rgba(0,229,255,.55);
-        color: var(--cyan);
-        background: rgba(0,229,255,.07);
-        cursor: pointer;
-        font-weight: 800;
+      .auto-check {
+        min-width: 230px;
+        display: grid;
+        justify-items: end;
+        gap: 9px;
+        padding: 13px 16px;
+        border: 1px solid rgba(0,229,255,.34);
+        background: rgba(0,229,255,.05);
         clip-path: polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
       }
-      .refresh:disabled { cursor: wait; opacity: .55; }
+      .cadence {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--cyan);
+        font: 800 10px/1 var(--mono);
+        letter-spacing: .8px;
+      }
+      .pulse {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--green);
+        box-shadow: 0 0 11px rgba(23,224,194,.8);
+      }
       .grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 16px; }
       .card {
         position: relative;
@@ -327,7 +293,7 @@ const page = `<!doctype html>
         line-height: 1.55;
       }
       .notice b { color: var(--gold); }
-      .checked { margin: 18px 0 0; color: var(--muted); font: 700 11px/1 var(--mono); letter-spacing: .45px; text-align: right; }
+      .checked { margin: 0; color: #b9c5d8; font: 700 11px/1.35 var(--mono); letter-spacing: .25px; text-align: right; }
       dialog {
         width: min(560px,calc(100% - 30px));
         padding: 0;
@@ -349,7 +315,8 @@ const page = `<!doctype html>
       @media (max-width: 860px) {
         .grid { grid-template-columns: 1fr; }
         .hero { align-items: start; flex-direction: column; }
-        .refresh { align-self: stretch; }
+        .auto-check { width: 100%; justify-items: start; }
+        .checked { text-align: left; }
       }
       @media (max-width: 520px) {
         .topbar { min-height: 62px; padding: 10px 13px; }
@@ -378,11 +345,13 @@ const page = `<!doctype html>
           <h1>SHIP CALMLY.<br><em>ROLL BACK SAFELY.</em></h1>
           <p class="subtitle">Three isolated environments, immutable releases, and one clear view of what is running where.</p>
         </div>
-        <button class="refresh" id="refresh" type="button">REFRESH STATUS</button>
+        <div class="auto-check" aria-live="polite">
+          <span class="cadence"><i class="pulse"></i>AUTO CHECK · 5 MIN</span>
+          <p class="checked" id="checked">Checking deployments…</p>
+        </div>
       </section>
       <section class="grid" id="grid" aria-live="polite" aria-busy="true">${initialCards}</section>
       <aside class="notice"><b>!</b><span><b>Code releases only.</b> Game data and runtime configuration stay in their environment. Until a trusted CI controller is added, release changes remain protected inside ChatGPT. This page creates the exact request without exposing deployment credentials.</span></aside>
-      <p class="checked" id="checked">Checking deployments…</p>
     </main>
     <dialog id="rollback-dialog" aria-labelledby="dialog-title" aria-describedby="dialog-description">
       <div class="modal">
@@ -400,12 +369,15 @@ const page = `<!doctype html>
     <script>
       const grid = document.querySelector("#grid");
       const checked = document.querySelector("#checked");
-      const refresh = document.querySelector("#refresh");
       const dialog = document.querySelector("#rollback-dialog");
       const command = document.querySelector("#command");
       const copy = document.querySelector("#copy");
       const copyStatus = document.querySelector("#copy-status");
+      const refreshIntervalMs = ${STATUS_REFRESH_INTERVAL_MS};
+      const probeTimeoutMs = ${STATUS_PROBE_TIMEOUT_MS};
       let status = null;
+      let lastUpdatedAt = null;
+      let statusRequest = null;
 
       function compareVersions(a, b) {
         const left = a.split(".").map(Number);
@@ -422,11 +394,92 @@ const page = `<!doctype html>
         return compareVersions(target, current) < 0 ? "Rollback" : "Promote";
       }
 
+      function probeStylesheet(url) {
+        return new Promise((resolve) => {
+          const link = document.createElement("link");
+          let settled = false;
+          const finish = (loaded) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeout);
+            link.remove();
+            resolve(loaded);
+          };
+          const timeout = setTimeout(() => finish(false), probeTimeoutMs);
+          link.rel = "stylesheet";
+          link.media = "not all";
+          link.href = url + (url.includes("?") ? "&" : "?") + "control-check=" + Date.now();
+          link.onload = () => finish(true);
+          link.onerror = () => finish(false);
+          document.head.append(link);
+        });
+      }
+
+      async function probeReachability(url) {
+        try {
+          await fetch(url + (url.includes("?") ? "&" : "?") + "control-check=" + Date.now(), {
+            mode: "no-cors",
+            cache: "no-store",
+            credentials: "include",
+            signal: AbortSignal.timeout(probeTimeoutMs),
+          });
+          return true;
+        } catch {
+          return false;
+        }
+      }
+
+      async function inspectEnvironment(item, releaseAssets) {
+        if (!item.url) {
+          return {
+            ...item,
+            version: null,
+            healthy: false,
+            reachable: false,
+            message: "URL is not configured",
+          };
+        }
+        const probes = await Promise.all(
+          Object.entries(releaseAssets).map(async ([version, assetPath]) => {
+            const assetUrl = new URL(assetPath, item.url).toString();
+            return { version, loaded: await probeStylesheet(assetUrl) };
+          }),
+        );
+        const matchingVersions = probes
+          .filter(({ loaded }) => loaded)
+          .map(({ version }) => version)
+          .sort(compareVersions);
+        const version = matchingVersions.at(-1) ?? null;
+        if (version) {
+          return {
+            ...item,
+            version,
+            healthy: true,
+            reachable: true,
+            message: "Deployment responded",
+          };
+        }
+        const reachable = await probeReachability(item.url);
+        return {
+          ...item,
+          version: null,
+          healthy: false,
+          reachable,
+          message: reachable
+            ? "Deployment responded with an unrecognized release"
+            : "Deployment did not respond",
+        };
+      }
+
       function card(item, versions) {
         const article = document.createElement("article");
         article.className = "card";
         article.dataset.accent = item.accent;
-        const liveVersion = item.version ? "v" + item.version : "Unavailable";
+        const liveVersion = item.version
+          ? "v" + item.version
+          : item.reachable
+            ? "Unknown release"
+            : "Unavailable";
         const matches = item.version === item.expectedVersion;
         article.innerHTML = \`
           <div class="card-head">
@@ -454,7 +507,11 @@ const page = `<!doctype html>
         const deploymentStatus = article.querySelector(".deployment-status");
         const lamp = article.querySelector(".lamp");
         const statusText = article.querySelector(".status-text");
-        if (!item.healthy) {
+        if (!item.healthy && item.reachable) {
+          deploymentStatus.classList.add("mismatch");
+          lamp.classList.add("mismatch");
+          statusText.textContent = "RELEASE UNKNOWN";
+        } else if (!item.healthy) {
           deploymentStatus.classList.add("down");
           statusText.textContent = "UNAVAILABLE";
         } else if (!matches) {
@@ -503,22 +560,38 @@ const page = `<!doctype html>
       }
 
       async function loadStatus() {
+        if (statusRequest) return statusRequest;
         grid.setAttribute("aria-busy", "true");
-        refresh.disabled = true;
-        refresh.textContent = "CHECKING…";
+        statusRequest = (async () => {
+          try {
+            const response = await fetch("/api/status", { cache: "no-store" });
+            if (!response.ok) throw new Error("Status check failed");
+            status = await response.json();
+            status.environments = await Promise.all(
+              status.environments.map((item) =>
+                inspectEnvironment(item, status.releaseAssets),
+              ),
+            );
+            grid.replaceChildren(
+              ...status.environments.map((item) =>
+                card(item, status.availableVersions),
+              ),
+            );
+            lastUpdatedAt = new Date();
+            checked.textContent = "Last updated " + lastUpdatedAt.toLocaleString();
+            checked.title = lastUpdatedAt.toISOString();
+          } catch {
+            checked.textContent = lastUpdatedAt
+              ? "Last updated " + lastUpdatedAt.toLocaleString() + " · latest check failed"
+              : "Update failed · retrying automatically";
+          } finally {
+            grid.setAttribute("aria-busy", "false");
+          }
+        })();
         try {
-          const response = await fetch("/api/status", { cache: "no-store" });
-          if (!response.ok) throw new Error("Status check failed");
-          status = await response.json();
-          grid.replaceChildren(...status.environments.map((item) => card(item, status.availableVersions)));
-          checked.textContent = "Last checked " + new Date(status.checkedAt).toLocaleString();
-        } catch {
-          grid.textContent = "Could not load deployment status.";
-          checked.textContent = "Status unavailable";
+          await statusRequest;
         } finally {
-          grid.setAttribute("aria-busy", "false");
-          refresh.disabled = false;
-          refresh.textContent = "REFRESH STATUS";
+          statusRequest = null;
         }
       }
 
@@ -538,13 +611,21 @@ const page = `<!doctype html>
         copyStatus.textContent = "Request copied to clipboard.";
       }
 
-      refresh.addEventListener("click", loadStatus);
       document.querySelector("#cancel").addEventListener("click", () => dialog.close());
       dialog.addEventListener("click", (event) => {
         if (event.target === dialog) dialog.close();
       });
       copy.addEventListener("click", copyRequest);
-      loadStatus();
+      void loadStatus();
+      setInterval(() => void loadStatus(), refreshIntervalMs);
+      document.addEventListener("visibilitychange", () => {
+        if (
+          document.visibilityState === "visible" &&
+          (!lastUpdatedAt || Date.now() - lastUpdatedAt.getTime() >= refreshIntervalMs)
+        ) {
+          void loadStatus();
+        }
+      });
     </script>
   </body>
 </html>`;
@@ -553,7 +634,7 @@ const securityHeaders = {
   "content-type": "text/html; charset=utf-8",
   "cache-control": "no-store",
   "content-security-policy":
-    "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+    "default-src 'none'; style-src 'unsafe-inline' https://chessriot.ripper234.chatgpt.site https://chessriot-staging.ripper234.chatgpt.site https://chessriot-dev.ripper234.chatgpt.site; script-src 'unsafe-inline'; connect-src 'self' https://chessriot.ripper234.chatgpt.site https://chessriot-staging.ripper234.chatgpt.site https://chessriot-dev.ripper234.chatgpt.site; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
   "permissions-policy": "camera=(), microphone=(), geolocation=()",
   "referrer-policy": "no-referrer",
   "x-content-type-options": "nosniff",
