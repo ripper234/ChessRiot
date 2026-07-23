@@ -30,6 +30,24 @@ const ENVIRONMENTS = [
 
 const CONTROL_VERSION = "0.1.2";
 const AVAILABLE_VERSIONS = ["0.1.0", "0.1.1"];
+const initialCards = ENVIRONMENTS.map(
+  ({ name, expectedVersion, access, accent }) => `
+    <article class="card loading" data-accent="${accent}">
+      <div class="card-head">
+        <div><h2>${name}</h2><span class="access">${access} // isolated data</span></div>
+        <span class="deployment-status"><span class="lamp"></span><span>CHECKING</span></span>
+      </div>
+      <p class="version-label">ACTIVE RELEASE</p>
+      <p class="version">…</p>
+      <p class="expected">Target v${expectedVersion}</p>
+      <span class="release-label">CHANGE TO RELEASE</span>
+      <div class="card-actions">
+        <select disabled aria-label="Release target"><option>Checking releases…</option></select>
+        <button class="prepare" type="button" disabled>CREATE REQUEST</button>
+      </div>
+      <span class="open-env" aria-disabled="true">OPEN ENVIRONMENT ↗</span>
+    </article>`,
+).join("");
 
 function normalizeVersion(version) {
   if (!version) return null;
@@ -232,6 +250,7 @@ const page = `<!doctype html>
         background: linear-gradient(145deg,rgba(23,35,58,.97),rgba(8,14,27,.97));
         clip-path: polygon(13px 0,100% 0,100% calc(100% - 13px),calc(100% - 13px) 100%,0 100%,0 13px);
       }
+      .card.loading { opacity: .76; }
       .card::before { position: absolute; top: 0; left: 23px; width: 68px; height: 2px; content: ""; background: var(--accent); box-shadow: 0 0 14px var(--accent); }
       .card[data-accent="gold"] { --accent: var(--gold); }
       .card[data-accent="cyan"] { --accent: var(--cyan); }
@@ -361,7 +380,7 @@ const page = `<!doctype html>
         </div>
         <button class="refresh" id="refresh" type="button">REFRESH STATUS</button>
       </section>
-      <section class="grid" id="grid" aria-live="polite"></section>
+      <section class="grid" id="grid" aria-live="polite" aria-busy="true">${initialCards}</section>
       <aside class="notice"><b>!</b><span><b>Code releases only.</b> Game data and runtime configuration stay in their environment. Until a trusted CI controller is added, release changes remain protected inside ChatGPT. This page creates the exact request without exposing deployment credentials.</span></aside>
       <p class="checked" id="checked">Checking deployments…</p>
     </main>
@@ -484,6 +503,7 @@ const page = `<!doctype html>
       }
 
       async function loadStatus() {
+        grid.setAttribute("aria-busy", "true");
         refresh.disabled = true;
         refresh.textContent = "CHECKING…";
         try {
@@ -496,6 +516,7 @@ const page = `<!doctype html>
           grid.textContent = "Could not load deployment status.";
           checked.textContent = "Status unavailable";
         } finally {
+          grid.setAttribute("aria-busy", "false");
           refresh.disabled = false;
           refresh.textContent = "REFRESH STATUS";
         }
