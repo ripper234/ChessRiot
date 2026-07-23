@@ -1,6 +1,6 @@
 # ChessRiot
 
-ChessRiot v0.1.1 is a mobile-first, asynchronous chess game for two people who already know each other.
+ChessRiot v0.1.2 is a mobile-first, asynchronous chess game for two people who already know each other.
 
 ## What works
 
@@ -8,13 +8,13 @@ ChessRiot v0.1.1 is a mobile-first, asynchronous chess game for two people who a
 - Join from another browser or device without an account.
 - Play complete standard chess with server-authoritative legal move validation.
 - Persist the board, player names, result, and immutable move history in Cloudflare D1.
-- Resume on the same browser using a per-game private player key.
+- Resume on any device using a private per-player game link whose key stays in the URL fragment.
 - Detect check, checkmate, stalemate, castling, en passant, all four promotions, repetition, insufficient material, and the fifty-move rule.
-- Use a single neon arcade identity with optional synthesized move, capture, check, and game-ending sounds.
+- Use one original voxel/block-world identity with optional synthesized move, capture, check, and game-ending sounds.
 
 ## Deliberate v0.1 limits
 
-No AI opponent, notifications, chat, matchmaking, ratings, rewards, themes, payments, or account recovery. If a browser's private player key is cleared, that seat cannot currently be recovered.
+No AI opponent, notifications, chat, matchmaking, ratings, rewards, themes, payments, accounts, or server-side account recovery. A private game link is a bearer credential: anyone who has it can play as that seat, so it must be kept private. A previously copied bare `/g/<id>` URL cannot recover a seat because it contains no credential.
 
 ## Versioning
 

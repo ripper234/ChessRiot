@@ -24,11 +24,20 @@
 ## Persistence
 
 - Reload and close/reopen the browser.
+- Copy White's private game link into a storage-empty browser and verify it restores White.
+- Copy Black's private game link into another storage-empty browser and verify it restores Black.
+- Clear browser storage, reopen each private link, and verify both seats still work.
+- Open a legacy bare game URL on its original browser and verify it upgrades to a `#seat=` private URL.
+- Reject a bare URL on a new browser and malformed, missing, or wrong seat tokens.
+- Do not overwrite a working cached token until a different linked token authenticates successfully.
+- Verify no HTTP request URL or referrer contains the `#seat=` secret.
 - Restart the local Worker runtime against the same D1 data and verify the completed game remains.
 
 ## Interface and sound
 
-- Verify desktop and mobile layouts use the approved ChessRiot identity and keep the full board readable.
+- Verify desktop and mobile layouts use the original voxel/block-world identity and keep the full board readable without horizontal overflow.
+- Verify block depth and shaded-face treatments are coherent across the home, invitation, board, private-link, and error states.
+- Verify runtime text, requests, and assets contain no third-party block-game branding.
 - Play one distinct cue for a move, capture, check, win, loss, draw, and invalid action.
 - Do not play on first load, refresh, join-only state changes, repeated polls, or an out-of-order snapshot.
 - Persist mute state and verify turning sound back on plays one short confirmation cue.

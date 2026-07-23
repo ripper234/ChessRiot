@@ -1,7 +1,9 @@
 import type { GameSnapshot } from "./game-types";
+import { isSecret } from "./validation";
 
 const RECENT_KEY = "chessriot:recent";
 const STORAGE_TEST_KEY = "chessriot:storage-test";
+const SEAT_FRAGMENT_KEY = "seat";
 
 export function generateSecret(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
@@ -24,6 +26,26 @@ export function playerKey(gameId: string): string {
 
 export function inviteKey(gameId: string): string {
   return `chessriot:invite:${gameId}`;
+}
+
+export function readSeatTokenFromHash(hash: string): string | null {
+  if (!hash.startsWith("#")) return null;
+  const value = new URLSearchParams(hash.slice(1)).get(SEAT_FRAGMENT_KEY);
+  return isSecret(value) ? value : null;
+}
+
+export function hasSeatTokenInHash(hash: string): boolean {
+  return hash.startsWith("#") && new URLSearchParams(hash.slice(1)).has(SEAT_FRAGMENT_KEY);
+}
+
+export function privateGamePath(gameId: string, playerToken: string): string {
+  if (!isSecret(playerToken)) throw new Error("Invalid player token");
+  const fragment = new URLSearchParams({ [SEAT_FRAGMENT_KEY]: playerToken });
+  return `/g/${encodeURIComponent(gameId)}#${fragment.toString()}`;
+}
+
+export function privateGameUrl(gameId: string, playerToken: string, origin: string): string {
+  return new URL(privateGamePath(gameId, playerToken), origin).toString();
 }
 
 export function canUseGameStorage(): boolean {

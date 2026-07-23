@@ -71,6 +71,15 @@ try {
   assert.equal(createRetry.status, 200);
   assert.equal((await body(createRetry)).game.id, gameId);
 
+  const waitingInvite = await request(runtime, `/api/invitations/${inviteToken}`);
+  assert.equal(waitingInvite.status, 200);
+  assert.equal((await body(waitingInvite)).state, "waiting");
+
+  const inviteIsNotASeat = await request(runtime, `/api/games/${gameId}`, {
+    headers: { authorization: `Bearer ${inviteToken}` },
+  });
+  assert.equal(inviteIsNotASeat.status, 404);
+
   const joinedResponse = await request(runtime, `/api/invitations/${inviteToken}/join`, {
     method: "POST",
     body: JSON.stringify({ displayName: "Omri", playerToken: blackToken }),
@@ -83,6 +92,10 @@ try {
     body: JSON.stringify({ displayName: "Omri", playerToken: blackToken }),
   });
   assert.equal(joinRetry.status, 200);
+
+  const claimedInvite = await request(runtime, `/api/invitations/${inviteToken}`);
+  assert.equal(claimedInvite.status, 410);
+  assert.deepEqual(await body(claimedInvite), { state: "claimed", gameId });
 
   const inviteReplay = await request(runtime, `/api/invitations/${inviteToken}/join`, {
     method: "POST",

@@ -7,13 +7,14 @@
 - Create, invite, and join
 - Standard legal rules and complete endings
 - Durable game state and move history
+- Reusable private seat links that resume on another device
 - Turn enforcement and stale-write protection
-- Mobile-friendly branded arcade interface
+- Mobile-friendly original voxel/block-world interface
 - Optional in-browser game sounds with a persistent mute preference
 
 ## Excluded
 
-- Accounts and social graph
+- Accounts, social graph, and server-side account recovery
 - Computer opponent or coach
 - Real-time transport and notifications
 - Chat, matchmaking, ratings, points, rewards, and payments

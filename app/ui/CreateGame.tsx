@@ -10,6 +10,7 @@ import {
   generateUuid,
   inviteKey,
   playerKey,
+  privateGamePath,
   readRecentGames,
   rememberGame,
   type RecentGame,
@@ -73,7 +74,7 @@ export function CreateGame() {
       localStorage.setItem(playerKey(data.game.id), pending.current.playerToken);
       localStorage.setItem(inviteKey(data.game.id), data.inviteUrl);
       rememberGame(data.game);
-      router.push(`/g/${data.game.id}`);
+      router.push(privateGamePath(data.game.id, pending.current.playerToken));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not create the game");
     } finally {
@@ -113,7 +114,7 @@ export function CreateGame() {
           <button className="primary-button" disabled={busy || !name.trim()}>
             {busy ? "BUILDING BOARD…" : "CREATE GAME  →"}
           </button>
-          <p className="fine-print">No account. Your browser keeps your private game key.</p>
+          <p className="fine-print">No account. Your private game link works across your devices.</p>
         </form>
       </section>
       {recent.length > 0 ? (

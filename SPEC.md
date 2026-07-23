@@ -5,10 +5,10 @@ This file and `MVP.md` are the source of truth for the current milestone.
 ## Flow
 
 1. White enters a display name and creates a game.
-2. The app stores White's private per-game key locally and shows a one-use invitation URL.
+2. The app opens White's reusable private game URL and shows a separate one-use invitation URL.
 3. Black opens that URL on another device, enters a display name, and claims the second seat.
 4. Both players make legal moves in turn. The server revalidates every move against authoritative history.
-5. The board polls for changes and refreshes on focus. Closing and reopening the same browser restores the seat and game.
+5. The board polls for changes and refreshes on focus. Either player can open their private game URL on any device and restore the correct seat.
 
 ## Rules and persistence
 
@@ -21,12 +21,14 @@ This file and `MVP.md` are the source of truth for the current milestone.
 ## Identity and privacy
 
 - No account is required.
-- Player keys are 256-bit bearer secrets stored per game in browser storage. The server stores SHA-256 hashes only.
+- Player keys are 256-bit bearer secrets carried in a `#seat=` URL fragment and cached per game in browser storage after successful authentication. The server stores SHA-256 hashes only.
+- URL fragments are never sent in HTTP requests or referrers. A private game URL is still a bearer credential, so anyone who has it can play as that seat.
+- Existing same-browser games add the cached key to the URL after authentication so their next copied link is portable. A bare game URL on a new device remains unauthorized.
 - Invitation links are one-use. A third party cannot read a game without one of its player keys.
 
 ## Interface
 
-- One original neon arcade identity using the ChessRiot navy, cyan, gold, purple, pink, and teal brand system.
+- One original voxel/block-world identity using grass, dirt, stone, wood, sand, water, and torch-light colors. It does not copy third-party game branding or assets.
 - Tap a piece, then a legal destination.
 - Board rotates for Black while submitted coordinates remain absolute chess squares.
 - The interface shows turn, check, outcome, players, and move history.

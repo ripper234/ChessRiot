@@ -3,7 +3,16 @@
 import { Chess, type Move, type PieceSymbol, type Square } from "chess.js";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { generateUuid, inviteKey, playerKey, rememberGame } from "@/lib/client-storage";
+import {
+  generateUuid,
+  hasSeatTokenInHash,
+  inviteKey,
+  playerKey,
+  privateGamePath,
+  privateGameUrl,
+  readSeatTokenFromHash,
+  rememberGame,
+} from "@/lib/client-storage";
 import {
   classifyGameSound,
   playGameSound,
@@ -58,10 +67,13 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [message, setMessage] = useState("");
   const [access, setAccess] = useState<"loading" | "ready" | "missing" | "denied" | "error">("loading");
   const [inviteUrl, setInviteUrl] = useState("");
-  const [shared, setShared] = useState(false);
+  const [privateUrl, setPrivateUrl] = useState("");
+  const [inviteShared, setInviteShared] = useState(false);
+  const [privateShared, setPrivateShared] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
   const latestVersion = useRef(-1);
   const previousGame = useRef<GameSnapshot | null>(null);
+  const activeToken = useRef<string | null>(null);
 
   const acceptGame = useCallback((nextGame: GameSnapshot) => {
     if (!shouldAcceptGameSnapshot(latestVersion.current, nextGame.version)) return false;
@@ -74,12 +86,20 @@ export function GameRoom({ gameId }: { gameId: string }) {
   }, []);
 
   const loadGame = useCallback(async (sinceVersion?: number) => {
-    let token: string | null = null;
-    try {
-      token = localStorage.getItem(playerKey(gameId));
-    } catch {
-      setAccess("missing");
+    const hash = window.location.hash;
+    const hashHasSeat = hasSeatTokenInHash(hash);
+    const linkedToken = readSeatTokenFromHash(hash);
+    if (hashHasSeat && !linkedToken) {
+      setAccess("denied");
       return;
+    }
+    let token = linkedToken ?? activeToken.current;
+    if (!token) {
+      try {
+        token = localStorage.getItem(playerKey(gameId));
+      } catch {
+        token = null;
+      }
     }
     if (!token) {
       setAccess("missing");
@@ -102,6 +122,17 @@ export function GameRoom({ gameId }: { gameId: string }) {
         else setMessage(CONNECTION_MESSAGE);
         return;
       }
+      activeToken.current = token;
+      try {
+        localStorage.setItem(playerKey(gameId), token);
+      } catch {
+        // The private link remains authoritative when browser storage is unavailable.
+      }
+      const path = privateGamePath(gameId, token);
+      if (window.location.pathname + window.location.hash !== path) {
+        window.history.replaceState(null, "", path);
+      }
+      setPrivateUrl(privateGameUrl(gameId, token, window.location.origin));
       acceptGame(data.game);
     } catch {
       if (latestVersion.current < 0) setAccess("error");
@@ -202,13 +233,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
 
   async function sendMove(from: Square, to: Square, promotion?: Promotion) {
     if (!game || !canMove) return;
-    let token: string | null = null;
-    try {
-      token = localStorage.getItem(playerKey(gameId));
-    } catch {
-      setAccess("missing");
-      return;
-    }
+    const token = activeToken.current;
     if (!token) return setAccess("missing");
     setBusy(true);
     setMessage("");
@@ -274,8 +299,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
   async function shareInvite() {
     if (!inviteUrl) return;
     const markShared = () => {
-      setShared(true);
-      window.setTimeout(() => setShared(false), 2_000);
+      setInviteShared(true);
+      window.setTimeout(() => setInviteShared(false), 2_000);
     };
     try {
       if (navigator.share) {
@@ -295,6 +320,33 @@ export function GameRoom({ gameId }: { gameId: string }) {
       markShared();
     } catch {
       setMessage("Select and copy the invitation link below.");
+    }
+  }
+
+  async function sharePrivateLink() {
+    if (!privateUrl) return;
+    const markShared = () => {
+      setPrivateShared(true);
+      window.setTimeout(() => setPrivateShared(false), 2_000);
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: "My private ChessRiot game link",
+          text: "My private ChessRiot seat. Keep this link private.",
+          url: privateUrl,
+        });
+        markShared();
+        return;
+      }
+    } catch (caught) {
+      if (caught instanceof DOMException && caught.name === "AbortError") return;
+    }
+    try {
+      await navigator.clipboard.writeText(privateUrl);
+      markShared();
+    } catch {
+      setMessage("Select and copy your private game link below.");
     }
   }
 
@@ -325,10 +377,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
     const denied = access === "denied";
     return (
       <main className="join-shell"><header className="topbar"><Brand /></header><section className="join-stage">
-        <div className="voxel-card state-card"><span className="big-glyph">⌁</span><h1>{denied ? "GAME NOT AVAILABLE" : "PRIVATE KEY NOT FOUND"}</h1>
+        <div className="voxel-card state-card"><span className="big-glyph">⌁</span><h1>{denied ? "PRIVATE LINK INVALID" : "SEAT KEY MISSING"}</h1>
           <p>{denied
-            ? "This seat cannot access that game. Return to one of your games or use the original invitation."
-            : "This browser does not have a seat in this game. Open your original invitation on the same device."}</p>
+            ? "This private link cannot access that seat. Use the exact link created inside your game."
+            : "Open the game on its original device and choose COPY PRIVATE LINK. That new link works on every device."}</p>
           <Link className="secondary-button" href="/">GO HOME</Link>
         </div>
       </section></main>
@@ -422,11 +474,19 @@ export function GameRoom({ gameId }: { gameId: string }) {
             <section className="side-card invite-card">
               <span className="side-icon">⌁</span><h2>INVITE PLAYER 2</h2>
               <p>Send this private link. The first person to submit it claims Black.</p>
-              {inviteUrl ? <><button className="primary-button" onClick={() => void shareInvite()}>{shared ? "LINK READY ✓" : "SHARE INVITATION"}</button>
+              {inviteUrl ? <><button className="primary-button" onClick={() => void shareInvite()}>{inviteShared ? "LINK READY ✓" : "SHARE INVITATION"}</button>
                 <input className="invite-field" value={inviteUrl} readOnly onFocus={(event) => event.currentTarget.select()} aria-label="Invitation link" /></> :
                 <p className="form-error">The invitation link is no longer stored on this device.</p>}
             </section>
           ) : null}
+          <section className="side-card seat-card">
+            <span className="side-icon">▦</span><h2>YOUR PRIVATE GAME LINK</h2>
+            <p>Works on any computer or device. Anyone with this link can play as you, so keep it private.</p>
+            <button className="primary-button" onClick={() => void sharePrivateLink()}>
+              {privateShared ? "PRIVATE LINK READY ✓" : "COPY PRIVATE LINK"}
+            </button>
+            <input className="invite-field" value={privateUrl} readOnly onFocus={(event) => event.currentTarget.select()} aria-label="Your private game link" />
+          </section>
           <section className="side-card moves-card">
             <div className="side-heading"><h2>MOVE LOG</h2><span>{game.plyCount} PLY</span></div>
             {game.moves.length === 0 ? <p className="empty-moves">No moves yet. White opens the riot.</p> : (

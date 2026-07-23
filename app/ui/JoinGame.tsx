@@ -3,7 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { canUseGameStorage, generateSecret, playerKey, rememberGame } from "@/lib/client-storage";
+import {
+  canUseGameStorage,
+  generateSecret,
+  playerKey,
+  privateGamePath,
+  rememberGame,
+} from "@/lib/client-storage";
 import type { GameSnapshot } from "@/lib/game-types";
 import { Brand } from "./Brand";
 
@@ -28,8 +34,9 @@ export function JoinGame({ inviteToken }: { inviteToken: string }) {
       const response = await fetch(`/api/invitations/${inviteToken}`, { cache: "no-store" });
       const data = (await response.json()) as { state?: string; gameId?: string; creatorName?: string };
       if (cancelled()) return;
-      if (data.gameId && localStorage.getItem(playerKey(data.gameId))) {
-        router.replace(`/g/${data.gameId}`);
+      const storedToken = data.gameId ? localStorage.getItem(playerKey(data.gameId)) : null;
+      if (data.gameId && storedToken) {
+        router.replace(privateGamePath(data.gameId, storedToken));
         return;
       }
       if (response.ok && data.gameId && data.creatorName) {
@@ -85,7 +92,7 @@ export function JoinGame({ inviteToken }: { inviteToken: string }) {
       localStorage.setItem("chessriot:displayName", name.trim());
       localStorage.setItem(playerKey(data.game.id), playerToken.current);
       rememberGame(data.game);
-      router.replace(`/g/${data.game.id}`);
+      router.replace(privateGamePath(data.game.id, playerToken.current));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not join this game");
     } finally {
@@ -120,7 +127,7 @@ export function JoinGame({ inviteToken }: { inviteToken: string }) {
             <button className="primary-button" disabled={busy || !name.trim()}>
               {busy ? "CLAIMING SEAT…" : "JOIN AS BLACK  →"}
             </button>
-            <p className="fine-print">Submitting this invitation claims one seat and works once.</p>
+            <p className="fine-print">Claim your seat once, then keep your private game link for any device.</p>
           </form>
         ) : null}
         {invite.kind === "claimed" ? (
