@@ -1,61 +1,32 @@
-# ChessRiot SPEC
+# ChessRiot v0.1 specification
 
-## Source-of-truth note
+This file and `MVP.md` are the source of truth for the current milestone.
 
-This document defines the agreed MVP behavior. The long-term vision remains playful chess with coaching, cosmetics, animations, and variants, but those are backlog features and must not be implemented in MVP milestones unless explicitly requested.
+## Flow
 
-## Product
+1. White enters a display name and creates a game.
+2. The app stores White's private per-game key locally and shows a one-use invitation URL.
+3. Black opens that URL on another device, enters a display name, and claims the second seat.
+4. Both players make legal moves in turn. The server revalidates every move against authoritative history.
+5. The board polls for changes and refreshes on focus. Closing and reopening the same browser restores the seat and game.
 
-ChessRiot is a mobile-first web app for asynchronous chess between known users.
+## Rules and persistence
 
-## Users and identity
+- Standard chess only, implemented with chess.js.
+- D1 stores current FEN, status, version, players, hashed keys, and immutable ordered moves.
+- Every move carries an expected version and idempotency key.
+- A conditional update plus move insert runs atomically. Stale, illegal, wrong-turn, unauthorized, and completed-game moves do not mutate state.
+- Replaying move history is required before validation so repetition remains correct.
 
-- A user signs in with Google.
-- A signed-in user must choose a globally unique username before using the app.
-- The app stores the Google subject identifier and email for identity and lookup.
-- Email lookup is private: one user can search by another user's exact email, but the app should not browse or expose lists of emails.
+## Identity and privacy
 
-## Friends
+- No account is required.
+- Player keys are 256-bit bearer secrets stored per game in browser storage. The server stores SHA-256 hashes only.
+- Invitation links are one-use. A third party cannot read a game without one of its player keys.
 
-- Users can find known players by exact username or exact email.
-- A user can send a friend request.
-- The recipient can accept or decline.
-- A game can be started only between accepted friends.
+## Interface
 
-## Games
-
-- MVP games use standard chess only.
-- No powers, variants, coach, animations, matchmaking, or real-time play are active in MVP.
-- A friend can invite another friend to an asynchronous game.
-- The inviter chooses a turn pace of 1, 3, or 5 days per move.
-- The invited player accepts or declines.
-- White/black assignment is deterministic and stored at game creation. The implementation may use random assignment if both users can see the assignment before the first move.
-
-## Moves
-
-- The server is authoritative for legal move validation.
-- The client may preview legal moves, but the server must revalidate every submitted move.
-- A submitted move must include the game id, acting user id, move notation, and expected position/version.
-- Illegal, wrong-turn, stale-position, or completed-game moves are rejected without changing game state.
-- Legal moves append an immutable move record, update current game state, switch turn, update deadline, and enqueue a notification for the next player.
-
-## Persistence
-
-- The app stores current board state, status, turn, move count, and full move history.
-- A player can close and reopen the app and resume every active game from the authoritative state.
-- Completed games remain visible in game history.
-
-## Notifications
-
-- MVP must notify a player when it becomes their turn.
-- In-app notifications are required.
-- Email notifications are the recommended MVP external notification channel.
-- Web push is deferred unless it is cheaper to implement than email in the selected stack.
-
-## Safety and privacy
-
-- No random matchmaking in MVP.
-- No open chat in MVP.
-- Friend connections require an explicit accept action.
-- Users can only see games and move history for games in which they are a participant.
-- Users can only mutate their own profile, friend requests addressed to them, and games where they are the current player.
+- One original blocky visual identity.
+- Tap a piece, then a legal destination.
+- Board rotates for Black while submitted coordinates remain absolute chess squares.
+- The interface shows turn, check, outcome, players, and move history.

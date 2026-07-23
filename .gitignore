@@ -1,6 +1,10 @@
 node_modules
 .next
-.env*.local
-.env
+dist
+.wrangler
+.sites-runtime
+coverage
+.env*
 *.tsbuildinfo
 .DS_Store
+npm-debug.log*

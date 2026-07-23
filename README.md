@@ -1,46 +1,28 @@
 # ChessRiot
 
-ChessRiot is a mobile-first web app for playful asynchronous chess between people who already know each other.
+ChessRiot v0.1 is a mobile-first, asynchronous chess game for two people who already know each other.
 
-## MVP focus
+## What works
 
-The first implementation is intentionally small:
+- Create a game with a display name and share one private invitation link.
+- Join from another browser or device without an account.
+- Play complete standard chess with server-authoritative legal move validation.
+- Persist the board, player names, result, and immutable move history in Cloudflare D1.
+- Resume on the same browser using a per-game private player key.
+- Detect check, checkmate, stalemate, castling, en passant, all four promotions, repetition, insufficient material, and the fifty-move rule.
 
-- Google login.
-- Required username.
-- Friend lookup and friend requests.
-- Async standard chess between accepted friends.
-- Persistent current game state and full move history.
-- Turn notifications.
-- Node-based app deployable on Vercel.
+## Deliberate v0.1 limits
 
-## Not in the MVP
+No AI opponent, notifications, chat, matchmaking, ratings, rewards, themes, payments, or account recovery. If a browser's private player key is cleared, that seat cannot currently be recovered.
 
-The larger vision includes coaching, animated captures, skins, powers, variants, points, rewards, real-time play, and native apps. These are backlog features and should not be implemented in MVP milestones unless explicitly requested.
+## Stack
 
-## Source-of-truth docs
-
-- `SPEC.md` defines product behavior.
-- `MVP.md` defines first implementation scope.
-- `ARCHITECTURE.md` defines the proposed smallest architecture, database model, trust boundaries, and Supabase evaluation.
-- `TEST_FLOWS.md` defines acceptance tests.
-- `docs/IMPLEMENTATION_PLAN.md` defines sequential implementation milestones.
-- `docs/product-brief.md` gives the short product brief.
-- `docs/adr/` records architecture decisions.
-
-## Development status
-
-Milestone 1 implementation has started with a Next.js/TypeScript app shell, Google OAuth through NextAuth, Prisma persistence, and required unique username onboarding. Later MVP flows (friends, games, chess rules, notifications) remain unimplemented backlog milestones until their phases begin.
-
-## Local development
-
-1. Copy `.env.example` to `.env.local` and fill in a ChessRiot-owned Postgres `DATABASE_URL`, `NEXTAUTH_SECRET`, and Google OAuth credentials.
-2. Run `npm install`.
-3. Run `npx prisma migrate dev` after the target database is selected.
-4. Run `npm run dev` and open `http://localhost:3000`.
+Vinext/React, Cloudflare Workers and D1, TypeScript, and chess.js. The former NextAuth/Prisma shell was removed because authentication and friends are outside this milestone.
 
 ## Checks
 
 - `npm run lint`
 - `npm run typecheck`
 - `npm test`
+- `npm run build`
+- `npm run test:e2e`

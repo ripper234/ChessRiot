@@ -1,3 +1,7 @@
+# Historical long-term technical research
+
+This document predates the deployed v0.1 web milestone. It is retained as background only. `SPEC.md`, `MVP.md`, and the current Vinext/D1 implementation are authoritative for v0.1.
+
 # ChessRiot
 A crazy chess game for kids
 

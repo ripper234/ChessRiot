@@ -1,3 +1,7 @@
+# Historical implementation plan
+
+This plan describes the superseded Google-auth/Vercel milestone. See root `SPEC.md`, `MVP.md`, and `TEST_FLOWS.md` for the implemented v0.1.
+
 # ChessRiot Implementation Plan
 
 This plan prepares implementation without writing product code. Milestones are deliberately small and sequential.
