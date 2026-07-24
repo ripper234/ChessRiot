@@ -1,6 +1,6 @@
 # ChessRiot
 
-ChessRiot v0.3.4 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
+ChessRiot v0.3.5 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
 
 ## What works
 
