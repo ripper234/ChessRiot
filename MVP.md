@@ -3,7 +3,7 @@
 ## Included
 
 - Human versus human asynchronous chess
-- Solo chess against Riot Bot with five difficulty levels
+- Solo chess against Riot Bot with five levels
 - Two separate devices or browsers
 - Create, invite, and join
 - Standard legal rules and complete endings
@@ -14,6 +14,8 @@
 - Pointer and touch drag-and-drop with tap, click, and keyboard fallback
 - Optional in-browser game sounds with a persistent mute preference
 - Privacy-safe per-environment logging and owner control-panel observability
+- Readable player colors, captured pieces, explicit check guidance, resignation,
+  waiting-game cancellation, and separate new games
 
 ## Excluded
 
