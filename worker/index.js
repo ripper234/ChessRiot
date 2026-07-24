@@ -31,7 +31,7 @@ const ENVIRONMENTS = [
   },
 ];
 
-const CONTROL_VERSION = "0.2.0";
+const CONTROL_VERSION = "0.2.1";
 const STATUS_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
 const HEALTH_STATES = new Set([
@@ -62,6 +62,11 @@ const REGISTRY_SCHEMA_SQL = `
   )
 `;
 const RELEASES = [
+  {
+    version: "0.3.3",
+    title: "Unmistakable piece colors",
+    summary: "Solid light and dark voxel pieces make White and Black immediately clear.",
+  },
   {
     version: "0.3.2",
     title: "Laptop viewport polish",
@@ -109,6 +114,15 @@ const RELEASES = [
   },
 ];
 const AVAILABLE_VERSIONS = RELEASES.map((release) => release.version);
+
+function compareSemanticVersions(left, right) {
+  const a = String(left).split(".").map(Number);
+  const b = String(right).split(".").map(Number);
+  for (let index = 0; index < 3; index += 1) {
+    if (a[index] !== b[index]) return a[index] - b[index];
+  }
+  return 0;
+}
 
 function base64Url(bytes) {
   let binary = "";
@@ -182,6 +196,10 @@ function bootstrapRegistry(env) {
   for (const config of ENVIRONMENTS) {
     const configuredVersion = env[config.deployedVersionKey];
     if (SEMVER_PATTERN.test(configuredVersion || "")) {
+      if (fallback[config.key].version !== configuredVersion) {
+        fallback[config.key].deployedAt = null;
+        fallback[config.key].verifiedAt = null;
+      }
       fallback[config.key].version = configuredVersion;
     }
   }
@@ -211,7 +229,7 @@ async function ensureDeploymentRegistry(env, fallback) {
   const now = new Date().toISOString();
   const inserts = ENVIRONMENTS.map((config) =>
     env.DB.prepare(`
-      INSERT OR IGNORE INTO deployment_registry (
+      INSERT INTO deployment_registry (
         environment,
         deployed_version,
         deployed_at,
@@ -219,6 +237,40 @@ async function ensureDeploymentRegistry(env, fallback) {
         health_state,
         updated_at
       ) VALUES (?, ?, ?, ?, 'unknown', ?)
+      ON CONFLICT(environment) DO UPDATE SET
+        deployed_version = excluded.deployed_version,
+        deployed_at = COALESCE(excluded.deployed_at, deployment_registry.deployed_at),
+        verified_at = excluded.verified_at,
+        runtime_version = CASE
+          WHEN deployment_registry.deployed_version <> excluded.deployed_version THEN NULL
+          ELSE deployment_registry.runtime_version
+        END,
+        health_state = CASE
+          WHEN deployment_registry.deployed_version <> excluded.deployed_version THEN 'unknown'
+          ELSE deployment_registry.health_state
+        END,
+        health_status = CASE
+          WHEN deployment_registry.deployed_version <> excluded.deployed_version THEN NULL
+          ELSE deployment_registry.health_status
+        END,
+        database_status = CASE
+          WHEN deployment_registry.deployed_version <> excluded.deployed_version THEN NULL
+          ELSE deployment_registry.database_status
+        END,
+        last_health_at = CASE
+          WHEN deployment_registry.deployed_version <> excluded.deployed_version THEN NULL
+          ELSE deployment_registry.last_health_at
+        END,
+        last_checked_at = CASE
+          WHEN deployment_registry.deployed_version <> excluded.deployed_version THEN NULL
+          ELSE deployment_registry.last_checked_at
+        END,
+        updated_at = excluded.updated_at
+      WHERE excluded.verified_at IS NOT NULL
+        AND (
+          deployment_registry.verified_at IS NULL
+          OR excluded.verified_at > deployment_registry.verified_at
+        )
     `).bind(
       config.key,
       fallback[config.key].version,
@@ -382,6 +434,12 @@ async function observationResponse(request, env) {
 
 async function statusResponse(env) {
   const registry = await deploymentRegistry(env);
+  const deployedVersions = ENVIRONMENTS.map(
+    (config) => registry.environments[config.key].version,
+  );
+  const availableVersions = [...new Set([...AVAILABLE_VERSIONS, ...deployedVersions])]
+    .sort((left, right) => compareSemanticVersions(right, left));
+  const latestVersion = availableVersions[0];
   const environments = await Promise.all(
     ENVIRONMENTS.map(async (config) => ({
       key: config.key,
@@ -406,10 +464,10 @@ async function statusResponse(env) {
   return Response.json(
     {
       environments,
-      availableVersions: AVAILABLE_VERSIONS,
+      availableVersions,
       controlVersion: CONTROL_VERSION,
       releases: RELEASES,
-      latestVersion: RELEASES[0].version,
+      latestVersion,
       registryPersistence: registry.persistence,
       refreshIntervalMs: STATUS_REFRESH_INTERVAL_MS,
       sourceUrl: "https://github.com/ripper234/ChessRiot",
@@ -621,6 +679,7 @@ const clientScript = String.raw`
   const snapshots = new Map();
   let activeEnvironment = "production";
   let lastAttemptAt = null;
+  let lastCompletedAt = null;
   let lastSuccessfulAt = null;
   let refreshIntervalMs = 300000;
   let statusRequest = null;
@@ -955,12 +1014,16 @@ const clientScript = String.raw`
       statusText.textContent = "HEALTHY";
     }
     const expected = article.querySelector(".expected");
-    expected.textContent = runtimeVersion
+    const deploymentMessage = runtimeVersion
       ? (matches
         ? "Runtime confirms deployed v" + deployedVersion
         : "Registry says v" + deployedVersion + " · runtime reports v" + runtimeVersion)
       : "Deployment registry preserved" +
         (item.verifiedAt ? " · verified " + new Date(item.verifiedAt).toLocaleString() : "");
+    expected.textContent = deploymentMessage +
+      (snapshot.lastHealthAt
+        ? " · last live check " + new Date(snapshot.lastHealthAt).toLocaleString()
+        : "");
 
     const metrics = article.querySelector(".metrics");
     const totals = overview && overview.totals;
@@ -996,13 +1059,17 @@ const clientScript = String.raw`
 
     const pipelineRole = article.querySelector(".pipeline-role");
     const promote = article.querySelector(".promote");
-    if (item.key === "development") {
+    if (loading) {
+      pipelineRole.textContent = "Loading the persisted deployment registry.";
+      promote.textContent = "LOADING DEPLOYMENT STATE";
+      promote.disabled = true;
+    } else if (item.key === "development") {
       pipelineRole.textContent = "Every newly verified release deploys here first.";
-      if (deployedVersion === latestVersion) {
-        promote.textContent = "LATEST v" + latestVersion + " DEPLOYED";
+      if (compareVersions(deployedVersion, latestVersion) >= 0) {
+        promote.textContent = "LATEST v" + deployedVersion + " DEPLOYED";
         promote.disabled = true;
       } else {
-        promote.textContent = "PREPARE LATEST v" + latestVersion + " →";
+        promote.textContent = "PREPARE DEPLOY LATEST v" + latestVersion + " →";
         promote.addEventListener("click", function () {
           openRequest(latestVersion, "");
         });
@@ -1019,7 +1086,8 @@ const clientScript = String.raw`
         promote.textContent = "MATCHES " + sourceName.toUpperCase();
         promote.disabled = true;
       } else {
-        promote.textContent = "PROMOTE " + sourceName.toUpperCase() + " v" + sourceVersion + " →";
+        promote.textContent = "PREPARE PROMOTION FROM " +
+          sourceName.toUpperCase() + " v" + sourceVersion + " →";
         promote.addEventListener("click", function () {
           openRequest(sourceVersion, sourceName);
         });
@@ -1035,7 +1103,10 @@ const clientScript = String.raw`
       option.textContent = "v" + candidate + " · " + releaseVerb(deployedVersion, candidate).toLowerCase();
       select.append(option);
     });
-    if (!targets.length) {
+    if (loading) {
+      select.disabled = true;
+      prepare.disabled = true;
+    } else if (!targets.length) {
       const option = document.createElement("option");
       option.textContent = "No other release";
       select.append(option);
@@ -1249,17 +1320,31 @@ const clientScript = String.raw`
         if (!snapshots.has(activeEnvironment) && inspected[0]) activeEnvironment = inspected[0].item.key;
         renderTabs();
         renderEvents();
+        lastCompletedAt = new Date();
         const liveChecks = inspected.filter(function (entry) { return entry.healthFresh; }).length;
-        if (liveChecks > 0) lastSuccessfulAt = lastAttemptAt;
-        checked.textContent = "Last check " + lastAttemptAt.toLocaleString() +
-          " · last live success " +
+        const successfulTimes = inspected
+          .map(function (entry) { return entry.lastHealthAt; })
+          .filter(Boolean)
+          .map(function (value) { return new Date(value); })
+          .filter(function (value) { return !Number.isNaN(value.getTime()); });
+        if (successfulTimes.length) {
+          lastSuccessfulAt = new Date(Math.max.apply(null, successfulTimes.map(function (value) {
+            return value.getTime();
+          })));
+        }
+        checked.textContent = "Last check completed " + lastCompletedAt.toLocaleString() +
+          " · latest successful environment check " +
           (lastSuccessfulAt ? lastSuccessfulAt.toLocaleString() : "none yet") +
           " · " + liveChecks + "/" + inspected.length + " live";
-        checked.title = "Last check: " + lastAttemptAt.toISOString() +
-          (lastSuccessfulAt ? " · Last live success: " + lastSuccessfulAt.toISOString() : "");
+        checked.title = "Last attempt: " + lastAttemptAt.toISOString() +
+          " · Completed: " + lastCompletedAt.toISOString() +
+          (lastSuccessfulAt
+            ? " · Latest successful environment check: " + lastSuccessfulAt.toISOString()
+            : "");
       } catch {
-        checked.textContent = "Last check " + lastAttemptAt.toLocaleString() +
-          " failed · last live success " +
+        lastCompletedAt = new Date();
+        checked.textContent = "Last check failed " + lastCompletedAt.toLocaleString() +
+          " · latest successful environment check " +
           (lastSuccessfulAt ? lastSuccessfulAt.toLocaleString() : "none yet") +
           " · retrying automatically";
       } finally {

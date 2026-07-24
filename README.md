@@ -3,12 +3,13 @@
 Owner-only deployment dashboard for the ChessRiot Development, Staging, and
 Production release pipeline.
 
-The dashboard keeps deployment state in persistent runtime metadata, separate
-from live health. A failed or access-blocked health probe can never turn a
-deployed environment into "not deployed." It checks health when the page opens
-and every five minutes afterward. Short-lived, environment-specific signed
-grants protect telemetry without putting long-lived secrets in page source or
-browser storage.
+The dashboard keeps deployment state and last-known health in its own D1
+registry, separate from each live health probe. Runtime metadata seeds and
+atomically advances that registry after a deployment. A failed or access-blocked
+probe can never turn a deployed environment into "not deployed." It checks
+health when the page opens and every five minutes afterward. Short-lived,
+environment-specific signed grants protect telemetry without putting long-lived
+secrets in page source or browser storage.
 
 The default release path is Development → Staging → Production. Primary actions
 prepare the exact promotion request for the protected ChatGPT deployment
@@ -21,8 +22,8 @@ Required runtime variables:
 - `PROD_URL`
 - `STAGING_URL`
 - `DEV_URL`
-- `PROD_DEPLOYED_VERSION` (fallback: `0.2.2`)
-- `STAGING_DEPLOYED_VERSION` (fallback: `0.2.2`)
+- `PROD_DEPLOYED_VERSION` (fallback: `0.3.2`)
+- `STAGING_DEPLOYED_VERSION` (fallback: `0.3.2`)
 - `DEV_DEPLOYED_VERSION` (fallback: `0.3.2`)
 - `PROD_OPS_READ_SECRET`
 - `STAGING_OPS_READ_SECRET`
