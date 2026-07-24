@@ -1,4 +1,4 @@
-# ChessRiot v0.3.3 specification
+# ChessRiot v0.3.4 specification
 
 ## v0.3 release additions
 
@@ -6,6 +6,11 @@
   conditional Solo bot level, and one primary action.
 - Accepted moves receive a short destination animation; captures also receive a
   brief impact animation. Reduced-motion preferences disable both.
+- In Solo, the client previews a locally legal human move immediately. The
+  server then commits that human ply on its own and returns it before Riot Bot
+  starts searching. A background game read commits the pending bot reply.
+  Rejection or transport failure reconciles the preview against authoritative
+  state.
 - `/changelog` lists every release newest first with a short summary and GitHub
   source link, and is linked from the home and game interfaces.
 - A visible Feedback button opens an in-place form with required title,
@@ -52,7 +57,12 @@ This file and `MVP.md` are the source of truth for the current milestone.
 - D1 stores current FEN, status, version, mode, bot level, players, hashed keys, and immutable ordered moves.
 - Every move carries an expected version and idempotency key.
 - A conditional update plus move insert runs atomically. Stale, illegal, wrong-turn, unauthorized, and completed-game moves do not mutate state.
-- In Solo, the human move and Riot Bot reply are committed in one atomic batch. Riot Bot evaluates from its assigned color, uses bounded server-side search, and always submits a move through the same chess.js rules adapter.
+- In Solo, the human move commits atomically as one ply and returns immediately.
+  The client then requests Riot Bot's pending turn in the background. Riot Bot
+  evaluates from its assigned color, uses bounded server-side search, and
+  commits its own ply through the same chess.js rules adapter. Every
+  authenticated game read also recovers a pending bot turn, so closing or
+  refreshing cannot strand the game.
 - Replaying move history is required before validation so repetition remains correct.
 - Promotion data is accepted only when a pawn reaches its final rank.
 - Threefold repetition and the fifty-move rule are player claims. Fivefold repetition and the seventy-five-move rule end automatically, after checkmate precedence.
