@@ -1,4 +1,4 @@
-# ChessRiot v0.2.0 specification
+# ChessRiot v0.2.1 specification
 
 This file and `MVP.md` are the source of truth for the current milestone.
 
