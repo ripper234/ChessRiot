@@ -1,4 +1,4 @@
-# ChessRiot v0.4.0 specification
+# ChessRiot v0.4.1 specification
 
 ## v0.4 release additions
 

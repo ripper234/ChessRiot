@@ -11,6 +11,19 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.4.1",
+    date: "2026-07-24",
+    title: "Viewport clearance",
+    summary: "Short desktop and landscape layouts keep the board, replay, and controls usable.",
+    changes: [
+      "Kept the complete game board above the utility dock across common desktop heights.",
+      "Preserved usable game and replay board sizes in short landscape viewports with vertical scrolling.",
+      "Added clearance after the final mobile card and compacted replay controls around the board.",
+      "Removed a duplicate checkmate announcement and made invalid deadline text neutral.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.4.1`,
+  },
+  {
     version: "0.4.0",
     date: "2026-07-24",
     title: "A more personal async game",

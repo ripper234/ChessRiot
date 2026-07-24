@@ -1382,7 +1382,7 @@ footer {
   }
 }
 
-@media (min-width: 981px) and (max-height: 900px) {
+@media (min-width: 981px) and (max-height: 1115px) {
   .game-topbar { min-height: 60px; height: 60px; }
   .game-topbar .brand-mark { width: 40px; height: 40px; }
   .game-topbar .brand-name { font-size: 30px; }
@@ -1407,9 +1407,12 @@ footer {
 }
 
 @media (min-width: 621px) and (max-width: 980px) and (max-height: 900px) {
-  .game-layout { padding-top: 8px; }
+  .game-layout {
+    padding-top: 8px;
+    padding-bottom: max(86px, calc(env(safe-area-inset-bottom) + 74px));
+  }
   .board-wrap {
-    width: min(100%,650px,calc(100dvh - 260px));
+    width: min(100%,650px,max(280px,calc(100dvh - 260px)));
     padding: 7px;
     border-width: 4px;
   }
@@ -1730,7 +1733,7 @@ footer {
 .replay-position small { color: var(--muted); font: 800 9px/1 var(--mono); }
 .replay-board-frame {
   /* Reserve room for the header, position summary, and all replay controls. */
-  width: min(100%,430px,calc(100dvh - 330px));
+  width: min(100%,430px,max(240px,calc(100dvh - 330px)));
   margin: 0 auto;
   padding: 7px;
   border: 4px solid var(--theme-frame-border, var(--wood-dark));
@@ -1786,7 +1789,7 @@ footer {
   }
   .replay-position small { grid-column: 1 / -1; }
   .replay-board-frame {
-    width: min(100%,430px,calc(100dvh - 294px));
+    width: min(100%,430px,max(240px,calc(100dvh - 294px)));
     padding: 4px;
     border-width: 3px;
   }
@@ -1800,7 +1803,7 @@ footer {
   .replay-key-help { margin-top: 6px; }
 }
 
-@media (min-width: 981px) and (max-height: 900px) {
+@media (min-width: 981px) and (max-height: 1115px) {
   .turn-deadline {
     min-height: 36px;
     margin-bottom: 4px;
