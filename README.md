@@ -1,6 +1,6 @@
 # ChessRiot
 
-ChessRiot v0.2.2 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
+ChessRiot v0.3.0 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
 
 ## What works
 
@@ -13,10 +13,13 @@ ChessRiot v0.2.2 is a mobile-first chess game for solo play against Riot Bot or 
 - Resume on any device using a private per-player game link whose key stays in the URL fragment.
 - Detect check, checkmate, stalemate, castling, en passant, all four promotions, insufficient material, claimable threefold/50-move draws, and automatic fivefold/75-move draws.
 - Use one original voxel/block-world identity with optional synthesized move, capture, check, and game-ending sounds.
-- Drag and drop pieces with mouse or touch, while tap, click, and keyboard input still work.
+- Drag and drop pieces with mouse or touch, while tap, click, and keyboard input still work. Short move and capture animations make accepted moves visible.
+- Start from one compact new-game screen with no marketing detour.
+- Open a newest-first public changelog from the home screen or any active game.
+- Send a titled feedback item without leaving the current flow; each environment stores its own owner-review pool.
 - Inspect privacy-safe, isolated health and activity data for all three environments in the owner control panel.
 
-## Deliberate v0.2 limits
+## Deliberate v0.3 limits
 
 No AI coach, notifications, chat, matchmaking, ratings, rewards, themes, payments, accounts, or server-side account recovery. A private game link is a bearer credential: anyone who has it can play as that seat, so it must be kept private. A previously copied bare `/g/<id>` URL cannot recover a seat because it contains no credential.
 

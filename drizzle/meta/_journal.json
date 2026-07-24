@@ -22,6 +22,13 @@
       "when": 1784889404863,
       "tag": "0002_pale_orphan",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1784891054438,
+      "tag": "0003_magenta_the_phantom",
+      "breakpoints": true
     }
   ]
 }

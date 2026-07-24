@@ -42,6 +42,16 @@ interface GameCountRow {
   completed: number;
 }
 
+interface FeedbackRow {
+  id: string;
+  title: string;
+  comment: string | null;
+  page: string;
+  app_version: string;
+  status: string;
+  created_at: string;
+}
+
 function safeMetadata(value: string | null): Record<string, unknown> {
   if (!value) return {};
   try {
@@ -68,7 +78,7 @@ export async function POST(request: Request) {
   await ensureSchema();
   const db = getDatabase();
   const since = new Date(Date.now() - 24 * 60 * 60 * 1_000).toISOString();
-  const [counts, breakdown, recent, gameCounts, latencyRows] = await Promise.all([
+  const [counts, breakdown, recent, gameCounts, latencyRows, feedbackRows] = await Promise.all([
     db.prepare(`SELECT
       COUNT(*) AS total,
       SUM(CASE WHEN outcome = 'success' THEN 1 ELSE 0 END) AS successes,
@@ -107,6 +117,11 @@ export async function POST(request: Request) {
       LIMIT 2000`)
       .bind(since)
       .all<{ latency_ms: number }>(),
+    db.prepare(`SELECT id, title, comment, page, app_version, status, created_at
+      FROM feedback
+      ORDER BY created_at DESC
+      LIMIT 100`)
+      .all<FeedbackRow>(),
   ]);
 
   const latencyValues = (latencyRows.results ?? []).map((row) => row.latency_ms);
@@ -155,6 +170,15 @@ export async function POST(request: Request) {
       errorCode: row.error_code,
       latencyMs: row.latency_ms,
       metadata: safeMetadata(row.metadata_json),
+    })),
+    feedback: (feedbackRows.results ?? []).map((row) => ({
+      id: row.id,
+      title: row.title,
+      comment: row.comment,
+      page: row.page,
+      appVersion: row.app_version,
+      status: row.status,
+      createdAt: row.created_at,
     })),
   }), { headers });
 }

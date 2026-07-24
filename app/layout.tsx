@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ClientTelemetry } from "./ui/ClientTelemetry";
+import { FeedbackButton } from "./ui/FeedbackButton";
 
 export const metadata: Metadata = {
   title: "ChessRiot | Real chess. Total play.",
@@ -12,7 +13,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body><ClientTelemetry />{children}</body>
+      <body><ClientTelemetry />{children}<FeedbackButton /></body>
     </html>
   );
 }

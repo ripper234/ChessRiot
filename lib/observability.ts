@@ -142,6 +142,7 @@ function routeEvent(method: string, pathname: string): string | null {
   }
   if (method === "GET" && /^\/api\/games\/[^/]+$/.test(pathname)) return "game.loaded";
   if (method === "POST" && pathname === "/api/telemetry/client") return "client.telemetry";
+  if (method === "POST" && pathname === "/api/feedback") return "feedback.submitted";
   if (method === "GET" && pathname === "/api/health") return "system.health_checked";
   if (method === "GET" && pathname === "/api/ops/observability") {
     return "observability.viewed";

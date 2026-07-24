@@ -18,6 +18,9 @@ isolated hosted environments.
   tests, integration tests, and browser verification before promotion.
 - Promote one tested source state from Development to Staging to Production.
   Keep data and secrets isolated in Sites runtime configuration.
+- Treat a successful Development deployment as part of finishing every changed
+  release, not as a separate optional follow-up. Staging and Production advance
+  only by promoting the exact healthy upstream release.
 - Save and verify a Sites version before deployment. Treat every Sites URL as a
   production deployment surface, even when its product role is Development or
   Staging.

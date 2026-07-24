@@ -99,19 +99,14 @@ export function CreateGame() {
 
   return (
     <main className="home-shell">
-      <header className="topbar"><Brand /><span className="top-tag">SOLO&nbsp;&nbsp;//&nbsp;&nbsp;MULTIPLAYER</span></header>
-      <section className="hero-grid">
-        <div className="hero-copy">
-          <p className="eyebrow"><span /> REAL CHESS. TOTAL PLAY.</p>
-          <h1>MOVE BOLDLY.<br /><em>WIN BRIGHTLY.</em></h1>
-          <p className="hero-text">Challenge Riot Bot now, or send one link and keep playing with a friend whenever you both have time.</p>
-          <div className="feature-row" aria-label="Game features">
-            <span>♜ LEGAL CHESS</span><span>↗ DRAG TO MOVE</span><span>◇ SAVES EVERY MOVE</span>
-          </div>
-        </div>
+      <header className="topbar">
+        <Brand />
+        <Link className="home-link" href="/changelog">WHAT&apos;S NEW</Link>
+      </header>
+      <section className="start-stage">
         <form className="voxel-card create-card" onSubmit={createGame}>
-          <span className="card-kicker">NEW MATCH</span>
-          <h2>Enter the arena</h2>
+          <span className="card-kicker">NEW GAME</span>
+          <h1>Play chess</h1>
           <label htmlFor="display-name">Your display name</label>
           <input
             id="display-name"
@@ -186,14 +181,9 @@ export function CreateGame() {
           {error ? <p className="form-error" role="alert">{error}</p> : null}
           <button className="primary-button" disabled={busy || !name.trim()}>
             {busy
-              ? "BUILDING BOARD…"
-              : mode === "solo" ? "PLAY RIOT BOT  →" : "CREATE MULTIPLAYER GAME  →"}
+              ? "STARTING…"
+              : mode === "solo" ? "PLAY RIOT BOT  →" : "CREATE GAME  →"}
           </button>
-          <p className="fine-print">
-            {mode === "solo"
-              ? "Difficulty starts in the middle. Colors are assigned fairly, and White always moves first."
-              : "No account. Your private game link works across your devices."}
-          </p>
         </form>
       </section>
       {recent.length > 0 ? (
@@ -212,7 +202,10 @@ export function CreateGame() {
           </div>
         </section>
       ) : null}
-      <footer>CHESSRIOT v{APP_VERSION} <span>•</span> MADE FOR FAMILY RIVALS</footer>
+      <footer>
+        CHESSRIOT v{APP_VERSION} <span>•</span> <Link href="/changelog">CHANGELOG</Link>
+        <span>•</span> <a href="https://github.com/ripper234/ChessRiot" target="_blank" rel="noopener noreferrer">GITHUB</a>
+      </footer>
     </main>
   );
 }

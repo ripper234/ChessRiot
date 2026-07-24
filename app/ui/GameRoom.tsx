@@ -3,6 +3,7 @@
 import { Chess, type Move, type PieceSymbol, type Square } from "chess.js";
 import Link from "next/link";
 import {
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
@@ -10,6 +11,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { boardEffects, type BoardEffect } from "@/lib/game-effects";
 import {
   generateUuid,
   hasSeatTokenInHash,
@@ -29,6 +31,7 @@ import {
 } from "@/lib/game-sounds";
 import { shouldAcceptGameSnapshot } from "@/lib/game-snapshots";
 import type { DrawClaim, GameSnapshot, Promotion } from "@/lib/game-types";
+import { APP_VERSION } from "@/lib/version";
 import { Brand } from "./Brand";
 
 const PIECES: Record<"w" | "b", Record<PieceSymbol, string>> = {
@@ -93,8 +96,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [privateShared, setPrivateShared] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
   const [drag, setDrag] = useState<DragState | null>(null);
+  const [effects, setEffects] = useState<BoardEffect[]>([]);
   const latestVersion = useRef(-1);
   const previousGame = useRef<GameSnapshot | null>(null);
+  const previousEffectGame = useRef<GameSnapshot | null>(null);
   const activeToken = useRef<string | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const suppressClick = useRef(false);
@@ -217,6 +222,16 @@ export function GameRoom({ gameId }: { gameId: string }) {
   }, [game, gameId, soundOn]);
 
   useEffect(() => {
+    if (!game) return;
+    const nextEffects = boardEffects(previousEffectGame.current, game);
+    previousEffectGame.current = game;
+    if (!nextEffects.length) return;
+    setEffects(nextEffects);
+    const timer = window.setTimeout(() => setEffects([]), 240);
+    return () => window.clearTimeout(timer);
+  }, [game]);
+
+  useEffect(() => {
     setSelected(null);
     setPromotionMove(null);
     dragRef.current = null;
@@ -249,6 +264,18 @@ export function GameRoom({ gameId }: { gameId: string }) {
 
   const canMove = Boolean(game && game.status === "active" && game.turn === game.you.color && !busy);
   const lastMove = game?.moves.at(-1);
+
+  function effectStyle(effect: BoardEffect): CSSProperties {
+    const fromIndex = squares.indexOf(effect.from as Square);
+    const toIndex = squares.indexOf(effect.to as Square);
+    if (fromIndex < 0 || toIndex < 0) return {};
+    const x = fromIndex % 8 - toIndex % 8;
+    const y = Math.floor(fromIndex / 8) - Math.floor(toIndex / 8);
+    return {
+      "--move-x": `${x * 100}%`,
+      "--move-y": `${y * 100}%`,
+    } as CSSProperties;
+  }
 
   function playInvalidSound() {
     if (!soundOn) return;
@@ -566,6 +593,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
             <b>{soundOn ? "SOUND ON" : "MUTED"}</b>
           </button>
           <Link href="/" className="home-link">HOME</Link>
+          <Link href="/changelog" className="home-link">v{APP_VERSION}</Link>
         </div>
       </header>
       <section className="game-layout">
@@ -616,6 +644,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 const isSelected = selected === square;
                 const isLast = lastMove?.from === square || lastMove?.to === square;
                 const isDragOver = drag?.moved && drag.over === square && legal;
+                const effect = effects.find((candidate) => candidate.to === square);
                 const file = square[0];
                 const rank = square[1];
                 const showRank = index % 8 === 0;
@@ -628,7 +657,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                     aria-disabled={!canMove}
                     aria-selected={isSelected}
                     data-square={square}
-                    className={`square ${(FILES.indexOf(file) + Number(rank)) % 2 === 0 ? "dark-square" : "light-square"}${isSelected ? " selected" : ""}${isLast ? " last-move" : ""}${legal ? capture ? " capture-target" : " legal-target" : ""}${isDragOver ? " drag-over" : ""}`}
+                    className={`square ${(FILES.indexOf(file) + Number(rank)) % 2 === 0 ? "dark-square" : "light-square"}${isSelected ? " selected" : ""}${isLast ? " last-move" : ""}${legal ? capture ? " capture-target" : " legal-target" : ""}${isDragOver ? " drag-over" : ""}${effect?.capture ? " capture-impact" : ""}`}
                     key={square}
                     onClick={() => tapSquare(square)}
                     disabled={busy}
@@ -637,7 +666,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
                     {showFile ? <span className="file-label">{file}</span> : null}
                     {piece ? (
                       <span
-                        className={`piece piece-${piece.color}${drag?.from === square && drag.moved ? " dragging" : ""}`}
+                        className={`piece piece-${piece.color}${drag?.from === square && drag.moved ? " dragging" : ""}${effect ? " piece-arriving" : ""}`}
+                        style={effect ? effectStyle(effect) : undefined}
                         draggable={false}
                         onPointerDown={(event) => startPieceDrag(event, square)}
                         onPointerMove={movePieceDrag}

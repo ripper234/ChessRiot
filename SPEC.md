@@ -1,4 +1,18 @@
-# ChessRiot v0.2.2 specification
+# ChessRiot v0.3.0 specification
+
+## v0.3 release additions
+
+- The home route is a compact start flow: display name, Solo or Multiplayer,
+  conditional Solo difficulty, and one primary action.
+- Accepted moves receive a short destination animation; captures also receive a
+  brief impact animation. Reduced-motion preferences disable both.
+- `/changelog` lists every release newest first with a short summary and GitHub
+  source link, and is linked from the home and game interfaces.
+- A visible Feedback button opens an in-place form with required title,
+  optional comment, and an advanced GitHub contribution link.
+- Feedback is stored per environment and is readable only through the signed,
+  owner-facing operations endpoint. Feedback text is never copied into
+  observability events.
 
 This file and `MVP.md` are the source of truth for the current milestone.
 

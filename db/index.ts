@@ -107,6 +107,19 @@ export async function ensureSchema(): Promise<void> {
               LIMIT -1 OFFSET 20000
             );
           END`),
+        db.prepare(`CREATE TABLE IF NOT EXISTS feedback (
+          id TEXT PRIMARY KEY NOT NULL,
+          request_id TEXT NOT NULL UNIQUE,
+          title TEXT NOT NULL,
+          comment TEXT,
+          page TEXT NOT NULL,
+          environment TEXT NOT NULL,
+          app_version TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'new'
+            CHECK (status IN ('new', 'reviewed', 'closed')),
+          created_at TEXT NOT NULL
+        )`),
+        db.prepare("CREATE INDEX IF NOT EXISTS feedback_created_idx ON feedback (created_at DESC)"),
       ]);
 
       const columns = await db

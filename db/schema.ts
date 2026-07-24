@@ -1,4 +1,5 @@
-import { integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const games = sqliteTable(
   "games",
@@ -92,5 +93,25 @@ export const observabilityEvents = sqliteTable(
   },
   (table) => [
     uniqueIndex("observability_events_id_unique").on(table.id),
+  ],
+);
+
+export const feedback = sqliteTable(
+  "feedback",
+  {
+    id: text("id").primaryKey(),
+    requestId: text("request_id").notNull(),
+    title: text("title").notNull(),
+    comment: text("comment"),
+    page: text("page").notNull(),
+    environment: text("environment").notNull(),
+    appVersion: text("app_version").notNull(),
+    status: text("status").notNull().default("new"),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("feedback_request_unique").on(table.requestId),
+    index("feedback_created_idx").on(table.createdAt),
+    check("feedback_status_check", sql`${table.status} IN ('new', 'reviewed', 'closed')`),
   ],
 );

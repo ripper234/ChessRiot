@@ -10,6 +10,8 @@
 - Prefer small, reviewable milestones over one giant implementation.
 - GitHub is the canonical source. A deployable release must correspond to an immutable Git commit and release branch or tag.
 - Promote the same tested source state through Development, Staging, and Production. Never make environment-specific source edits; isolate only data, access, and runtime configuration.
+- Completing a changed release always includes deploying the exact tested source to Development. Development tracks the newest release automatically; Staging advances only from healthy Development, and Production only from healthy Staging.
+- Keep `lib/changelog.ts` newest first and add one concise entry for every release before deployment.
 - Every new important server action must be covered by the central request observer or emit a typed event through `recordEvent`. Never log names, tokens, token hashes, invitation/private URLs, URL fragments, IP addresses, user agents, FENs, raw bodies, or arbitrary exception messages.
 - Preserve request correlation, environment, app version, bounded retention, and the rule that unchanged three-second polls do not create telemetry.
 - Keep independent research/audit agents read-only. Only one agent edits a checkout at a time.

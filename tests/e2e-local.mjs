@@ -435,6 +435,40 @@ try {
   assert.equal(health.environment, "test");
   assert.equal(health.database, "ok");
 
+  const feedbackTitle = "Make captures feel chunkier";
+  const feedbackComment = "A short burst is enough.";
+  const feedbackRequestId = randomUUID();
+  assert.equal((await request(runtime, "/api/feedback", {
+    method: "POST",
+    body: JSON.stringify({
+      title: "",
+      comment: feedbackComment,
+      page: "/g/private-game?secret=never-store-this",
+      requestId: randomUUID(),
+    }),
+  })).status, 400);
+  const feedbackResponse = await request(runtime, "/api/feedback", {
+    method: "POST",
+    body: JSON.stringify({
+      title: feedbackTitle,
+      comment: feedbackComment,
+      page: "/g/game-id?ignored=yes",
+      requestId: feedbackRequestId,
+    }),
+  });
+  assert.equal(feedbackResponse.status, 201);
+  assert.equal((await body(feedbackResponse)).status, "received");
+  const feedbackRetry = await request(runtime, "/api/feedback", {
+    method: "POST",
+    body: JSON.stringify({
+      title: feedbackTitle,
+      comment: feedbackComment,
+      page: "/g/game-id",
+      requestId: feedbackRequestId,
+    }),
+  });
+  assert.equal(feedbackRetry.status, 200);
+
   const overviewResponse = await request(runtime, "/api/ops/overview", {
     method: "POST",
     headers: { "content-type": "text/plain" },
@@ -446,6 +480,11 @@ try {
   assert.ok(overview.totals.total > 0);
   assert.ok(overview.breakdown.some((row) => row.event_name === "move.submitted"));
   assert.ok(overview.recentEvents.every((event) => !JSON.stringify(event).includes(soloToken)));
+  assert.equal(overview.feedback[0].title, feedbackTitle);
+  assert.equal(overview.feedback[0].comment, feedbackComment);
+  assert.equal(overview.feedback[0].page, "/g/game-id");
+  assert.ok(overview.recentEvents.every((event) => !JSON.stringify(event).includes(feedbackTitle)));
+  assert.ok(overview.recentEvents.every((event) => !JSON.stringify(event).includes(feedbackComment)));
 
   const validGrant = opsGrant();
   const tamperedGrant = validGrant.slice(0, -1) + (validGrant.endsWith("a") ? "b" : "a");
