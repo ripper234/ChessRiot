@@ -11,6 +11,17 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.3.3",
+    date: "2026-07-24",
+    title: "Unmistakable piece colors",
+    summary: "White and Black now use the same solid voxel-piece shapes with clearly contrasting colors.",
+    changes: [
+      "Replaced hollow White glyphs with solid light pieces so the player color cannot look inverted.",
+      "Reduced the bright outline on Black pieces so they read as Black at a glance.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.3.3`,
+  },
+  {
     version: "0.3.2",
     date: "2026-07-24",
     title: "Laptop viewport polish",
