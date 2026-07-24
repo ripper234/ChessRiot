@@ -11,6 +11,18 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.3.5",
+    date: "2026-07-24",
+    title: "Instant move polish",
+    summary: "Immediate solo moves now keep their sound and complete observability trail.",
+    changes: [
+      "Restored one accepted move or capture sound for the human ply.",
+      "Restored game-completion telemetry when Riot Bot delivers the final move.",
+      "Kept race telemetry limited to the move that actually committed.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.3.5`,
+  },
+  {
     version: "0.3.4",
     date: "2026-07-24",
     title: "Instant solo moves",
