@@ -2,11 +2,11 @@
 
 ## Solo happy path
 
-1. Enter a name, choose Solo, and verify difficulty starts at 3, Medium.
-2. Move the difficulty lower and higher, then restore Medium and create the game.
+1. Enter a name, choose Solo, and verify Bot level starts at Level 3, Medium.
+2. Move the level lower and higher, then restore Medium and create the game.
 3. Verify both color assignments: as White, drag e2 to e4 and verify Riot Bot replies; as Black, verify Riot Bot's White opening exists before the board becomes playable.
 4. Verify the human move and bot reply persist together, the move log shows two plies, and the turn returns to White.
-5. Refresh and reopen the private link and verify the same board, difficulty, history, and turn.
+5. Refresh and reopen the private link and verify the same board, level, history, and turn.
 6. Complete a Solo game and verify Riot Bot does not move after checkmate or another terminal result.
 
 ## Two-player happy path
@@ -31,6 +31,9 @@
 - Reject promotion metadata on an ordinary move
 - Check, checkmate, stalemate, insufficient material, claimable threefold/50-move draws, and automatic fivefold/75-move draws
 - Claim an available draw and verify it is idempotent and versioned
+- While in check, reject a non-evasion with check-specific guidance and accept a legal king move, capture, or block.
+- End an active game as a versioned, idempotent resignation with the opponent as winner.
+- Cancel a waiting game with no winner and invalidate its invitation.
 
 ## Persistence
 
@@ -46,7 +49,11 @@
 
 ## Interface and sound
 
-- Verify desktop and mobile layouts use the original voxel/block-world identity and keep the full board readable without horizontal overflow.
+- Verify desktop and mobile layouts use the original voxel/block-world identity and keep the full board readable without browser zoom or horizontal overflow.
+- At 1366×768, verify the player cards, captured strip, status, and complete board fit in the viewport.
+- Verify each player name is paired with the correct readable White/Black label and YOU marker from both seats.
+- Verify captured pawns and pieces appear under the color that lost them, including en passant.
+- Verify the checked king square and CHECK banner are visually prominent without relying on sound.
 - Verify block depth and shaded-face treatments are coherent across the home, invitation, board, private-link, and error states.
 - Verify runtime text, requests, and assets contain no third-party block-game branding.
 - Play one distinct cue for a move, capture, check, win, loss, draw, and invalid action.
