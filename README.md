@@ -1,6 +1,6 @@
 # ChessRiot
 
-ChessRiot v0.2.0 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
+ChessRiot v0.2.1 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
 
 ## What works
 
@@ -21,7 +21,9 @@ No AI coach, notifications, chat, matchmaking, ratings, rewards, themes, payment
 
 ## Versioning
 
-ChessRiot uses SemVer. While the product is pre-1.0, `0.1.x` is for rapid fixes and polish, and `0.y.0` marks a coherent new user capability. Version `1.0.0` means two people can create, join, securely resume, receive turn notifications, and finish asynchronous games without developer help.
+ChessRiot uses SemVer. Every changed deployment gets a new, higher version and the build rejects an unchanged or inconsistent release number. Patch releases are the default; `0.y.0` marks a coherent new user capability. Version `1.0.0` means two people can create, join, securely resume, receive turn notifications, and finish asynchronous games without developer help.
+
+Prepare releases with `npm run release:patch`, `npm run release:minor`, or `npm run release:major`. The version is updated in one place and displayed in the app footer.
 
 ## Stack
 
