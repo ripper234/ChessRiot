@@ -2,7 +2,7 @@ const ENVIRONMENTS = [
   {
     key: "development",
     name: "Development",
-    fallbackVersion: "0.3.2",
+    fallbackVersion: "0.3.3",
     deployedVersionKey: "DEV_DEPLOYED_VERSION",
     urlKey: "DEV_URL",
     secretKey: "DEV_OPS_READ_SECRET",
@@ -12,7 +12,7 @@ const ENVIRONMENTS = [
   {
     key: "staging",
     name: "Staging",
-    fallbackVersion: "0.2.2",
+    fallbackVersion: "0.3.3",
     deployedVersionKey: "STAGING_DEPLOYED_VERSION",
     urlKey: "STAGING_URL",
     secretKey: "STAGING_OPS_READ_SECRET",
@@ -22,7 +22,7 @@ const ENVIRONMENTS = [
   {
     key: "production",
     name: "Production",
-    fallbackVersion: "0.2.2",
+    fallbackVersion: "0.3.3",
     deployedVersionKey: "PROD_DEPLOYED_VERSION",
     urlKey: "PROD_URL",
     secretKey: "PROD_OPS_READ_SECRET",
@@ -31,7 +31,7 @@ const ENVIRONMENTS = [
   },
 ];
 
-const CONTROL_VERSION = "0.2.1";
+const CONTROL_VERSION = "0.2.4";
 const STATUS_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
 const HEALTH_STATES = new Set([
@@ -1382,7 +1382,9 @@ const clientScript = String.raw`
       telemetryState: "unknown",
       loading: true,
     };
-    if (cached) snapshot.loading = false;
+    // Cached health may render immediately, but release actions stay disabled
+    // until the authoritative deployment registry has loaded.
+    snapshot.loading = true;
     snapshots.set(item.key, snapshot);
     grid.append(createCard(snapshot, initialVersions, initialVersions[0]));
   });
