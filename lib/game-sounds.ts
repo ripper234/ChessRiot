@@ -24,11 +24,12 @@ export function writeSoundPreference(enabled: boolean): void {
 }
 
 export function classifyGameSound(previous: GameSnapshot | null, next: GameSnapshot): GameSound | null {
-  if (!previous || next.plyCount <= previous.plyCount) return null;
-  if (next.status === "completed" && next.outcome) {
+  if (!previous || next.version <= previous.version) return null;
+  if (previous.status !== "completed" && next.status === "completed" && next.outcome) {
     if (next.outcome.winner === null) return "draw";
     return next.outcome.winner === next.you.color ? "victory" : "defeat";
   }
+  if (next.plyCount <= previous.plyCount) return null;
   if (next.check) return "check";
   const lastMove = next.moves.at(-1);
   if (!lastMove) return null;
