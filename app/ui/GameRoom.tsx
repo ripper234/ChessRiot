@@ -245,6 +245,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
 
   useEffect(() => {
     if (!game) return;
+    // The preview is visual only. Keep the sound baseline on the last
+    // authoritative snapshot so the accepted human ply plays exactly once.
+    if (optimisticGame) return;
     const previous = previousGame.current;
     previousGame.current = game;
     const markerKey = `chessriot:sound:last-ply:${gameId}`;
@@ -266,7 +269,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       // Continue with in-memory deduplication when session storage is blocked.
     }
     playGameSound(sound);
-  }, [game, gameId, soundOn]);
+  }, [game, gameId, optimisticGame, soundOn]);
 
   useEffect(() => {
     if (!game) return;
