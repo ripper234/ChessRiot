@@ -31,6 +31,7 @@ test("renders the newest-first public changelog", async () => {
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /WHAT.*NEW/);
+  assert.ok(html.indexOf("v0.3.3") < html.indexOf("v0.3.2"));
   assert.ok(html.indexOf("v0.3.2") < html.indexOf("v0.3.1"));
   assert.ok(html.indexOf("v0.3.1") < html.indexOf("v0.3.0"));
   assert.match(html, /github\.com\/ripper234\/ChessRiot/);
