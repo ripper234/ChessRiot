@@ -10,7 +10,20 @@
 - `db/schema.ts` and `drizzle/`: durable game and move schema.
 - `worker/index.ts`: Cloudflare Worker entry and runtime binding handoff.
 
-The server is authoritative. The client submits only a move, expected version, and idempotency key. Each mutation reconstructs the chess engine from immutable history and validates FEN, turn, and ply invariants before the candidate. Multiplayer atomically advances one ply. Solo calculates a legal Riot Bot reply for either color and atomically commits both plies. A White bot opening is committed during create, so refresh or browser closure cannot strand the game between turns.
+The server is authoritative. The client submits only a move, expected version,
+and idempotency key. Each mutation reconstructs the chess engine from immutable
+history and validates FEN, turn, and ply invariants before the candidate. Every
+human move atomically advances one ply and returns immediately. In Solo, the
+client then requests the pending Riot Bot turn in the background. Every
+authenticated game read runs the same pending-turn recovery, so refresh or
+browser closure cannot strand the game. A White bot opening is committed during
+create.
+
+While the human request is in flight, the client renders a display-only legal
+move preview without advancing the accepted server version or local
+persistence. The one-ply authoritative response replaces it, then the bot reply
+arrives as the next version. Rejection or transport failure reconciles the
+preview against the server before rolling it back.
 
 Player authority is game-scoped. The reusable private game URL carries the bearer key in its fragment, which is not sent to the server as part of the HTTP URL. After the key authenticates, the client caches it locally and sends it only in the authorization header. D1 stores only its hash.
 
