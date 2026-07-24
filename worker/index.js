@@ -2,7 +2,7 @@ const ENVIRONMENTS = [
   {
     key: "development",
     name: "Development",
-    fallbackVersion: "0.3.3",
+    fallbackVersion: "0.3.4",
     deployedVersionKey: "DEV_DEPLOYED_VERSION",
     urlKey: "DEV_URL",
     secretKey: "DEV_OPS_READ_SECRET",
@@ -31,7 +31,7 @@ const ENVIRONMENTS = [
   },
 ];
 
-const CONTROL_VERSION = "0.2.4";
+const CONTROL_VERSION = "0.2.5";
 const STATUS_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
 const HEALTH_STATES = new Set([
@@ -62,6 +62,11 @@ const REGISTRY_SCHEMA_SQL = `
   )
 `;
 const RELEASES = [
+  {
+    version: "0.3.4",
+    title: "Instant solo moves",
+    summary: "Your piece moves immediately while Riot Bot thinks in the background.",
+  },
   {
     version: "0.3.3",
     title: "Unmistakable piece colors",
@@ -523,9 +528,14 @@ const page = `<!doctype html>
       .pipeline{display:grid;grid-template-columns:1fr 28px 1fr 28px 1fr 28px 1fr;align-items:center;
         gap:7px;margin:0 0 17px}.pipeline-node{min-width:0;padding:12px 14px;border:1px solid var(--line);
         background:rgba(5,9,20,.58)}.pipeline-node.latest{border-color:rgba(255,196,0,.55)}
-      .pipeline-node span{display:block;color:var(--muted);font:800 8px/1 var(--mono);letter-spacing:.8px}
+      .pipeline-label{display:block;color:var(--muted);font:800 8px/1 var(--mono);letter-spacing:.8px}
       .pipeline-node b{display:block;margin-top:6px;overflow:hidden;color:var(--text);font:italic 21px/1 var(--display);
-        text-overflow:ellipsis;white-space:nowrap}.pipeline-arrow{color:var(--cyan);font:900 18px/1 var(--mono);text-align:center}
+        text-overflow:ellipsis;white-space:nowrap}.pipeline-open{min-height:30px;display:inline-flex;align-items:center;
+        justify-content:center;margin-top:9px;padding:0 9px;border:1px solid rgba(0,229,255,.55);color:var(--cyan);
+        background:rgba(0,229,255,.06);font:850 10px/1 var(--mono);letter-spacing:.5px;text-decoration:none;
+        cursor:pointer}.pipeline-open:hover{border-color:var(--cyan);background:rgba(0,229,255,.13)}
+      .pipeline-open:disabled{border-color:#35425d;color:#718099;background:transparent;cursor:wait}
+      .pipeline-arrow{color:var(--cyan);font:900 18px/1 var(--mono);text-align:center}
       .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.card{position:relative;min-height:455px;
         padding:22px;border:1px solid var(--line);background:linear-gradient(145deg,rgba(23,35,58,.98),rgba(8,14,27,.98));
         clip-path:polygon(13px 0,100% 0,100% calc(100% - 13px),calc(100% - 13px) 100%,0 100%,0 13px)}
@@ -610,7 +620,7 @@ const page = `<!doctype html>
       <section class="hero">
         <div><p class="eyebrow">CONTROL v${CONTROL_VERSION} // LIVE OPERATIONS</p>
           <h1>SEE EVERYTHING.<br><em>SHIP CALMLY.</em></h1>
-          <p class="subtitle">Persistent deployment truth, live health, game activity, latency, and errors. The default path is Development → Staging → Production.</p>
+          <p class="subtitle">Code changes deploy automatically to Development. Staging and Production move only after your explicit promotion click. Health, activity, latency, and errors stay visible throughout.</p>
         </div>
         <div class="auto"><span class="cadence"><i class="pulse"></i>AUTO CHECK · 5 MIN</span>
           <p class="checked" id="checked">Checking environments…</p></div>
@@ -639,7 +649,7 @@ const page = `<!doctype html>
     </main>
     <dialog id="release-dialog" aria-labelledby="dialog-title">
       <div class="modal"><h2 id="dialog-title">Promote with ChatGPT</h2>
-        <p>Protected deployment approval runs in ChatGPT. Copy this exact request there.</p>
+        <p>This is a manual promotion. Nothing deploys until you explicitly approve the request in ChatGPT.</p>
         <div class="command" id="command"></div>
         <div class="modal-actions"><button id="cancel" type="button">Cancel</button>
           <button id="copy" type="button">Copy request</button>
@@ -1064,15 +1074,13 @@ const clientScript = String.raw`
       promote.textContent = "LOADING DEPLOYMENT STATE";
       promote.disabled = true;
     } else if (item.key === "development") {
-      pipelineRole.textContent = "Every newly verified release deploys here first.";
+      pipelineRole.textContent = "Every changed release deploys here automatically. No promotion click is needed.";
       if (compareVersions(deployedVersion, latestVersion) >= 0) {
-        promote.textContent = "LATEST v" + deployedVersion + " DEPLOYED";
+        promote.textContent = "AUTO-DEPLOYED FROM CODE · v" + deployedVersion;
         promote.disabled = true;
       } else {
-        promote.textContent = "PREPARE DEPLOY LATEST v" + latestVersion + " →";
-        promote.addEventListener("click", function () {
-          openRequest(latestVersion, "");
-        });
+        promote.textContent = "WAITING FOR DEV AUTO-DEPLOY · v" + latestVersion;
+        promote.disabled = true;
       }
     } else {
       const sourceKey = item.key === "staging" ? "development" : "staging";
@@ -1080,13 +1088,13 @@ const clientScript = String.raw`
       const sourceVersion = source && source.item.deployedVersion;
       const sourceName = source && source.item.name || (sourceKey === "development" ? "Development" : "Staging");
       pipelineRole.textContent = item.key === "staging"
-        ? "Default action: promote the exact Development release."
-        : "Default action: promote the exact Staging release.";
+        ? "Manual only: your click promotes the exact Development release."
+        : "Manual only: your click promotes the exact Staging release.";
       if (!sourceVersion || sourceVersion === deployedVersion) {
         promote.textContent = "MATCHES " + sourceName.toUpperCase();
         promote.disabled = true;
       } else {
-        promote.textContent = "PREPARE PROMOTION FROM " +
+        promote.textContent = "MANUALLY PROMOTE FROM " +
           sourceName.toUpperCase() + " v" + sourceVersion + " →";
         promote.addEventListener("click", function () {
           openRequest(sourceVersion, sourceName);
@@ -1136,14 +1144,17 @@ const clientScript = String.raw`
       {
         label: "DEVELOPMENT",
         version: snapshots.get("development") && snapshots.get("development").item.deployedVersion,
+        url: snapshots.get("development") && snapshots.get("development").item.url,
       },
       {
         label: "STAGING",
         version: snapshots.get("staging") && snapshots.get("staging").item.deployedVersion,
+        url: snapshots.get("staging") && snapshots.get("staging").item.url,
       },
       {
         label: "PRODUCTION",
         version: snapshots.get("production") && snapshots.get("production").item.deployedVersion,
+        url: snapshots.get("production") && snapshots.get("production").item.url,
       },
     ];
     pipeline.replaceChildren();
@@ -1158,10 +1169,31 @@ const clientScript = String.raw`
       const node = document.createElement("article");
       node.className = "pipeline-node" + (stage.latest ? " latest" : "");
       const label = document.createElement("span");
+      label.className = "pipeline-label";
       label.textContent = stage.label;
       const version = document.createElement("b");
       version.textContent = stage.version ? "v" + stage.version : "Not recorded";
       node.append(label, version);
+      if (!stage.latest) {
+        if (stage.url) {
+          const open = document.createElement("a");
+          open.className = "pipeline-open";
+          open.href = stage.url;
+          open.target = "_blank";
+          open.rel = "noopener noreferrer";
+          open.setAttribute("aria-label", "Open " + stage.label + " environment");
+          open.textContent = "OPEN " + stage.label + " ↗";
+          node.append(open);
+        } else {
+          const connecting = document.createElement("button");
+          connecting.className = "pipeline-open";
+          connecting.type = "button";
+          connecting.disabled = true;
+          connecting.textContent = "CONNECTING…";
+          connecting.setAttribute("aria-label", stage.label + " environment link is loading");
+          node.append(connecting);
+        }
+      }
       pipeline.append(node);
     });
   }
