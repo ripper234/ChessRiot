@@ -48,7 +48,8 @@ assert.match(page, new RegExp(`CONTROL v${packageVersion.replace(/\./g, "\\.")}`
 assert.match(page, /AUTO CHECK · 5 MIN/);
 assert.match(page, /OBSERVABILITY/);
 assert.match(page, /Version history/);
-assert.match(page, /Development → Staging → Production/);
+assert.match(page, /Code changes deploy automatically to Development/);
+assert.match(page, /Staging and Production move only after your explicit promotion click/);
 assert.match(page, /script src="\/control\.js"/);
 assert.doesNotMatch(page, /script-src 'unsafe-inline'/);
 
@@ -79,9 +80,35 @@ assert.match(script, /Deployment state is unaffected/);
 assert.match(script, /lastSuccessfulAt/);
 assert.match(script, /latest successful environment check/);
 assert.match(script, /LOADING DEPLOYMENT STATE/);
-assert.match(script, /PREPARE PROMOTION FROM/);
+assert.match(script, /MANUALLY PROMOTE FROM/);
+assert.match(script, /AUTO-DEPLOYED FROM CODE/);
+assert.match(script, /WAITING FOR DEV AUTO-DEPLOY/);
+assert.match(script, /Manual only: your click promotes/);
+assert.match(script, /pipeline-open/);
+assert.match(script, /OPEN " \+ stage\.label \+ " ↗"/);
+assert.match(script, /if \(!stage\.latest\)/);
+assert.match(script, /open\.href = stage\.url/);
+assert.match(script, /open\.target = "_blank"/);
+assert.match(script, /open\.rel = "noopener noreferrer"/);
+assert.match(script, /"Open " \+ stage\.label \+ " environment"/);
+assert.match(script, /connecting\.disabled = true/);
+assert.match(script, /connecting\.textContent = "CONNECTING…"/);
+assert.doesNotMatch(script, /PREPARE DEPLOY LATEST/);
+assert.doesNotMatch(script, /openRequest\(latestVersion/);
 assert.match(script, /snapshot\.loading = true/);
 assert.doesNotMatch(script, /if \(cached\) snapshot\.loading = false/);
+
+const forbiddenAutomaticPromotion = await workerModule.default.fetch(
+  new Request("https://control.test/api/promote", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ from: "development", to: "staging" }),
+  }),
+  {},
+  {},
+);
+assert.equal(forbiddenAutomaticPromotion.status, 404);
+assert.doesNotMatch(script, /fetch\([^)]*\/api\/(?:promote|deploy)/);
 
 class FakeD1Statement {
   constructor(database, sql, bindings = []) {
@@ -263,7 +290,7 @@ assert.deepEqual(
     },
   ],
 );
-assert.equal(status.releases[0].version, "0.3.3");
+assert.equal(status.releases[0].version, "0.3.4");
 
 const fallbackResponse = await workerModule.default.fetch(
   new Request("https://control.test/api/status"),
@@ -277,7 +304,7 @@ assert.deepEqual(
     deployedVersion,
   })),
   [
-    { key: "development", deployedVersion: "0.3.3" },
+    { key: "development", deployedVersion: "0.3.4" },
     { key: "staging", deployedVersion: "0.3.3" },
     { key: "production", deployedVersion: "0.3.3" },
   ],
@@ -375,7 +402,7 @@ assert.equal(
   persisted.environments[0].lastKnownHealth.lastHealthAt,
   successfulObservation.lastHealthAt,
 );
-assert.equal(persisted.latestVersion, "0.3.3");
+assert.equal(persisted.latestVersion, "0.3.4");
 
 const promotedEnv = {
   ...persistentEnv,
