@@ -100,8 +100,9 @@ export async function playPendingComputerTurn(gameId: string): Promise<void> {
     (changes(results[0]) === 0 && changes(results[1]) === 0)
   );
   if (committed) {
+    const wonCommit = changes(results[0]) === 1;
     await recordEvent({
-      event: changes(results[0]) === 1 ? "bot.move_committed" : "bot.move_raced",
+      event: wonCommit ? "bot.move_committed" : "bot.move_raced",
       outcome: "success",
       requestId,
       subjectId: gameId,
@@ -109,11 +110,23 @@ export async function playPendingComputerTurn(gameId: string): Promise<void> {
       metadata: {
         color: botColor,
         difficulty: game.ai_difficulty,
-        from: candidate.from,
-        to: candidate.to,
+        ...(wonCommit ? { from: candidate.from, to: candidate.to } : {}),
         gameStatus: status,
       },
     });
+    if (wonCommit && outcome.completed) {
+      await recordEvent({
+        event: "game.completed",
+        outcome: "success",
+        requestId,
+        subjectId: gameId,
+        metadata: {
+          mode: "solo",
+          termination: outcome.termination,
+          winner: outcome.winner,
+        },
+      });
+    }
     return;
   }
   throw new Error("Computer move was not stored atomically");
