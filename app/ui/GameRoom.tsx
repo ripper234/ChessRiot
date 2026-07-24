@@ -42,7 +42,8 @@ import { APP_VERSION } from "@/lib/version";
 import { Brand } from "./Brand";
 
 const PIECES: Record<"w" | "b", Record<PieceSymbol, string>> = {
-  w: { p: "♙", n: "♘", b: "♗", r: "♖", q: "♕", k: "♔" },
+  // Filled glyphs let CSS provide unmistakable light and dark piece colors.
+  w: { p: "♟", n: "♞", b: "♝", r: "♜", q: "♛", k: "♚" },
   b: { p: "♟", n: "♞", b: "♝", r: "♜", q: "♛", k: "♚" },
 };
 const PIECE_NAMES: Record<PieceSymbol, string> = {
@@ -682,7 +683,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
         <div className="board-column">
           <div className="match-banner">
             <div className={`player-card white-player${game.you.color === "w" ? " you-player" : ""}`}>
-              <span className="player-piece piece-w" aria-hidden="true">♙</span>
+              <span className="player-piece piece-w" aria-hidden="true">♟</span>
               <div>
                 <small>WHITE{game.you.color === "w" ? " • YOU" : ""}</small>
                 <strong>{game.players.white.name}</strong>
