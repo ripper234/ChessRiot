@@ -11,6 +11,18 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.3.4",
+    date: "2026-07-24",
+    title: "Instant solo moves",
+    summary: "Your piece now moves immediately while Riot Bot thinks in the background.",
+    changes: [
+      "Added a reversible local preview for every legal solo move before the server response arrives.",
+      "Made the human move durable and visible before Riot Bot starts its reply.",
+      "Added background bot-turn recovery so refresh or browser closure cannot strand a solo game.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.3.4`,
+  },
+  {
     version: "0.3.3",
     date: "2026-07-24",
     title: "Unmistakable piece colors",
