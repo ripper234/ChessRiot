@@ -428,12 +428,12 @@ try {
     }),
   });
   assert.equal(soloMoveResponse.status, 200);
-  const soloAfterMove = await body(soloMoveResponse);
-  assert.equal(soloAfterMove.game.version, 2);
-  assert.equal(soloAfterMove.game.plyCount, 2);
-  assert.equal(soloAfterMove.game.turn, "w");
-  assert.equal(soloAfterMove.game.moves[0].color, "w");
-  assert.equal(soloAfterMove.game.moves[1].color, "b");
+  const soloAfterHumanMove = await body(soloMoveResponse);
+  assert.equal(soloAfterHumanMove.game.version, 1);
+  assert.equal(soloAfterHumanMove.game.plyCount, 1);
+  assert.equal(soloAfterHumanMove.game.turn, "b");
+  assert.equal(soloAfterHumanMove.game.moves.length, 1);
+  assert.equal(soloAfterHumanMove.game.moves[0].color, "w");
 
   const soloRetryResponse = await request(runtime, `/api/games/${soloGameId}/moves`, {
     method: "POST",
@@ -446,8 +446,10 @@ try {
     }),
   });
   assert.equal(soloRetryResponse.status, 200);
-  assert.equal((await body(soloRetryResponse)).game.moves.length, 2);
+  assert.equal((await body(soloRetryResponse)).game.moves.length, 1);
 
+  // The human ply is durable before the bot starts. Reopening the game on a
+  // fresh runtime recovers and commits the pending bot turn.
   await runtime.dispose();
   runtime = createRuntime();
   const soloAfterRestart = await body(await request(runtime, `/api/games/${soloGameId}`, {
@@ -495,12 +497,29 @@ try {
     }),
   });
   assert.equal(blackReplyResponse.status, 200);
-  const blackSoloAfterReply = await body(blackReplyResponse);
-  assert.equal(blackSoloAfterReply.game.version, 3);
-  assert.equal(blackSoloAfterReply.game.plyCount, 3);
-  assert.equal(blackSoloAfterReply.game.moves[1].color, "b");
-  assert.equal(blackSoloAfterReply.game.moves[2].color, "w");
-  assert.equal(blackSoloAfterReply.game.turn, "b");
+  const blackSoloAfterHumanReply = await body(blackReplyResponse);
+  assert.equal(blackSoloAfterHumanReply.game.version, 2);
+  assert.equal(blackSoloAfterHumanReply.game.plyCount, 2);
+  assert.equal(blackSoloAfterHumanReply.game.moves[1].color, "b");
+  assert.equal(blackSoloAfterHumanReply.game.turn, "w");
+
+  const concurrentBotReads = await Promise.all([
+    request(runtime, `/api/games/${blackSoloGameId}`, {
+      headers: { authorization: `Bearer ${blackSoloToken}` },
+    }),
+    request(runtime, `/api/games/${blackSoloGameId}`, {
+      headers: { authorization: `Bearer ${blackSoloToken}` },
+    }),
+  ]);
+  assert.deepEqual(concurrentBotReads.map((response) => response.status), [200, 200]);
+  const concurrentBotStates = await Promise.all(concurrentBotReads.map(body));
+  for (const state of concurrentBotStates) {
+    assert.equal(state.game.version, 3);
+    assert.equal(state.game.plyCount, 3);
+    assert.equal(state.game.moves[1].color, "b");
+    assert.equal(state.game.moves[2].color, "w");
+    assert.equal(state.game.turn, "b");
+  }
 
   const repetitionWhite = secret();
   const repetitionBlack = secret();
