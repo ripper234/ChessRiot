@@ -29,6 +29,13 @@ import {
   unlockGameSounds,
   writeSoundPreference,
 } from "@/lib/game-sounds";
+import {
+  capturedPiecesByVictimColor,
+  checkedKingSquare as findCheckedKingSquare,
+  illegalDestinationMessage,
+  isDarkSquare,
+  pieceCannotAnswerCheckMessage,
+} from "@/lib/game-presentation";
 import { shouldAcceptGameSnapshot } from "@/lib/game-snapshots";
 import type { DrawClaim, GameSnapshot, Promotion } from "@/lib/game-types";
 import { APP_VERSION } from "@/lib/version";
@@ -71,6 +78,11 @@ function outcomeText(game: GameSnapshot): string {
     const winner = game.outcome.winner === "w" ? game.players.white.name : game.players.black?.name;
     return `${winner ?? "Winner"} wins by checkmate`;
   }
+  if (game.outcome.reason === "resignation") {
+    const winner = game.outcome.winner === "w" ? game.players.white.name : game.players.black?.name;
+    return `${winner ?? "Winner"} wins by resignation`;
+  }
+  if (game.outcome.reason === "cancelled") return "Game cancelled";
   const labels: Record<string, string> = {
     stalemate: "Draw by stalemate",
     threefold_repetition: "Draw by repetition",
@@ -97,6 +109,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [soundOn, setSoundOn] = useState(true);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [effects, setEffects] = useState<BoardEffect[]>([]);
+  const [confirmEnd, setConfirmEnd] = useState(false);
+  const [ending, setEnding] = useState(false);
   const latestVersion = useRef(-1);
   const previousGame = useRef<GameSnapshot | null>(null);
   const previousEffectGame = useRef<GameSnapshot | null>(null);
@@ -151,6 +165,17 @@ export function GameRoom({ gameId }: { gameId: string }) {
         else setMessage(CONNECTION_MESSAGE);
         return;
       }
+      const seatChanged = activeToken.current !== null && activeToken.current !== token;
+      if (seatChanged) {
+        latestVersion.current = -1;
+        previousGame.current = null;
+        previousEffectGame.current = null;
+        setSelected(null);
+        setPromotionMove(null);
+        setEffects([]);
+        dragRef.current = null;
+        setDrag(null);
+      }
       activeToken.current = token;
       try {
         localStorage.setItem(playerKey(gameId), token);
@@ -177,6 +202,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
     }
     setSoundOn(readSoundPreference());
     void loadGame();
+    const reloadSeat = () => void loadGame();
+    window.addEventListener("hashchange", reloadSeat);
+    return () => window.removeEventListener("hashchange", reloadSeat);
   }, [gameId, loadGame]);
 
   useEffect(() => {
@@ -234,6 +262,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   useEffect(() => {
     setSelected(null);
     setPromotionMove(null);
+    setConfirmEnd(false);
     dragRef.current = null;
     setDrag(null);
   }, [game?.version]);
@@ -252,6 +281,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
     if (!chess || !selected) return [];
     return chess.moves({ square: selected, verbose: true });
   }, [chess, selected]);
+  const lostPieces = useMemo(
+    () => game ? capturedPiecesByVictimColor(game.moves) : { w: [], b: [] },
+    [game],
+  );
+  const checkedKingSquare = useMemo(
+    () => chess ? findCheckedKingSquare(chess) : null,
+    [chess],
+  );
 
   const squares = useMemo(() => {
     if (!game || game.you.color === "w") {
@@ -308,7 +345,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
       };
       if (data.game) acceptGame(data.game);
       if (!response.ok) {
-        setMessage(apiMessage(data, "That move did not work"));
+        setMessage(
+          data.error?.code === "must_answer_check"
+            ? illegalDestinationMessage(true)
+            : apiMessage(data, "That move did not work"),
+        );
         if (data.error?.code !== "stale_position") playInvalidSound();
       }
     } catch {
@@ -359,7 +400,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     const targetMoves = chess.moves({ square: from, verbose: true }).filter((move) => move.to === to);
     if (targetMoves.length === 0) {
       setSelected(from);
-      setMessage("Choose one of the highlighted squares.");
+      setMessage(illegalDestinationMessage(game.check));
       playInvalidSound();
       return;
     }
@@ -388,10 +429,16 @@ export function GameRoom({ gameId }: { gameId: string }) {
     }
     const piece = chess.get(square);
     if (piece?.color === game.you.color) {
+      if (game.check && chess.moves({ square, verbose: true }).length === 0) {
+        setSelected(null);
+        setMessage(pieceCannotAnswerCheckMessage());
+        playInvalidSound();
+        return;
+      }
       setSelected(square);
       setMessage("");
     } else if (selected) {
-      setMessage("Choose one of the highlighted squares.");
+      setMessage(illegalDestinationMessage(game.check));
       playInvalidSound();
     } else {
       setSelected(null);
@@ -463,7 +510,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
     if (target) tryBoardMove(current.from, target);
     else {
       setSelected(current.from);
-      setMessage("Drop the piece on a highlighted square.");
+      setMessage(game?.check
+        ? illegalDestinationMessage(true)
+        : "Drop the piece on a highlighted square.");
       playInvalidSound();
     }
   }
@@ -537,6 +586,38 @@ export function GameRoom({ gameId }: { gameId: string }) {
     if (next && await unlockGameSounds()) playGameSound("move");
   }
 
+  async function endGame() {
+    if (!game || game.status === "completed") return;
+    const token = activeToken.current;
+    if (!token) return setAccess("missing");
+    setEnding(true);
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/games/${gameId}/end`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          expectedVersion: game.version,
+          requestId: generateUuid(),
+        }),
+      });
+      const data = (await response.json()) as {
+        game?: GameSnapshot;
+        error?: { message?: string };
+      };
+      if (data.game) acceptGame(data.game);
+      if (!response.ok) setMessage(apiMessage(data, "Could not end the game"));
+    } catch {
+      setMessage("Could not end the game. Refreshing the board…");
+      await loadGame(latestVersion.current);
+    } finally {
+      setBusy(false);
+      setEnding(false);
+      setConfirmEnd(false);
+    }
+  }
+
   if (access === "loading") {
     return <main className="game-shell"><header className="topbar"><Brand /></header><div className="loading-block">ASSEMBLING BOARD…</div></main>;
   }
@@ -568,13 +649,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
   }
   if (!game || !chess) return null;
 
-  const opponent = game.you.color === "w" ? game.players.black?.name : game.players.white.name;
   const turnName = game.turn === "w" ? game.players.white.name : game.players.black?.name ?? "Black";
   const statusText = game.status === "waiting"
     ? "Waiting for Player 2"
     : game.status === "completed"
       ? outcomeText(game)
-      : game.turn === game.you.color ? "Your turn" : `${turnName}’s turn`;
+      : game.check
+        ? game.turn === game.you.color ? "CHECK! Protect your king" : `${turnName} is in check`
+        : game.turn === game.you.color ? "Your turn" : `${turnName}’s turn`;
   const draggedPiece = drag ? chess.get(drag.from) : null;
 
   return (
@@ -592,29 +674,59 @@ export function GameRoom({ gameId }: { gameId: string }) {
             <span aria-hidden="true">{soundOn ? "◖))" : "◖×"}</span>
             <b>{soundOn ? "SOUND ON" : "MUTED"}</b>
           </button>
-          <Link href="/" className="home-link">HOME</Link>
+          <Link href="/" className="home-link">NEW GAME</Link>
           <Link href="/changelog" className="home-link">v{APP_VERSION}</Link>
         </div>
       </header>
       <section className="game-layout">
         <div className="board-column">
           <div className="match-banner">
-            <div><span className="status-lamp" data-active={game.status === "active" && game.turn !== game.you.color ? "true" : "false"} />
-              <small>{opponent ?? "PLAYER 2"}</small><strong>{opponent ?? "Waiting…"}</strong>
+            <div className={`player-card white-player${game.you.color === "w" ? " you-player" : ""}`}>
+              <span className="player-piece piece-w" aria-hidden="true">♙</span>
+              <div>
+                <small>WHITE{game.you.color === "w" ? " • YOU" : ""}</small>
+                <strong>{game.players.white.name}</strong>
+              </div>
+              <span className="status-lamp" data-active={game.status === "active" && game.turn === "w" ? "true" : "false"} />
             </div>
             <div className="versus">VS</div>
-            <div className="you-player"><small>YOU • {game.you.color === "w" ? "WHITE" : "BLACK"}</small><strong>{game.you.name}</strong>
-              <span className="status-lamp" data-active={game.status === "active" && game.turn === game.you.color ? "true" : "false"} /></div>
+            <div className={`player-card black-player${game.you.color === "b" ? " you-player" : ""}`}>
+              <span className="player-piece piece-b" aria-hidden="true">♟</span>
+              <div>
+                <small>BLACK{game.you.color === "b" ? " • YOU" : ""}</small>
+                <strong>{game.players.black?.name ?? "Waiting…"}</strong>
+              </div>
+              <span className="status-lamp" data-active={game.status === "active" && game.turn === "b" ? "true" : "false"} />
+            </div>
+          </div>
+
+          <div className="captured-strip" aria-label="Captured pieces">
+            <div>
+              <span>WHITE PIECES LOST</span>
+              <b>{lostPieces.w.length ? lostPieces.w.map((piece, index) => (
+                <i key={`w-${piece}-${index}`} aria-label={`white ${PIECE_NAMES[piece]}`}>
+                  {PIECES.w[piece]}
+                </i>
+              )) : "—"}</b>
+            </div>
+            <div>
+              <span>BLACK PIECES LOST</span>
+              <b>{lostPieces.b.length ? lostPieces.b.map((piece, index) => (
+                <i key={`b-${piece}-${index}`} aria-label={`black ${PIECE_NAMES[piece]}`}>
+                  {PIECES.b[piece]}
+                </i>
+              )) : "—"}</b>
+            </div>
           </div>
 
           <div
-            className={`turn-panel ${game.turn === game.you.color ? "mine" : "theirs"} ${game.status}`}
-            role="status"
-            aria-live="polite"
+            className={`turn-panel ${game.turn === game.you.color ? "mine" : "theirs"} ${game.status}${game.check ? " check" : ""}`}
+            role={game.check ? "alert" : "status"}
+            aria-live={game.check ? "assertive" : "polite"}
           >
             <span>{game.status === "completed" ? "⚑" : game.check ? "!" : "◆"}</span>
             <div><small>{game.check && game.status !== "completed" ? "CHECK" : "MATCH STATUS"}</small><strong>{statusText}</strong></div>
-            {busy ? <b>{game.mode === "solo" ? "RIOT BOT THINKING…" : "LOCKING MOVE…"}</b> : null}
+            {busy ? <b>{ending ? "ENDING GAME…" : game.mode === "solo" ? "RIOT BOT THINKING…" : "LOCKING MOVE…"}</b> : null}
           </div>
 
           {game.claimableDraws.length > 0 ? (
@@ -643,6 +755,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 const capture = legal && Boolean(piece || legalMoves.some((move) => move.to === square && move.isEnPassant()));
                 const isSelected = selected === square;
                 const isLast = lastMove?.from === square || lastMove?.to === square;
+                const isCheckedKing = checkedKingSquare === square;
                 const isDragOver = drag?.moved && drag.over === square && legal;
                 const effect = effects.find((candidate) => candidate.to === square);
                 const file = square[0];
@@ -653,11 +766,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
                   <button
                     type="button"
                     role="gridcell"
-                    aria-label={`${square}${piece ? ` ${piece.color === "w" ? "white" : "black"} ${PIECE_NAMES[piece.type]}` : " empty"}${legal ? ", legal destination" : ""}`}
+                    aria-label={`${square}${piece ? ` ${piece.color === "w" ? "white" : "black"} ${PIECE_NAMES[piece.type]}` : " empty"}${isCheckedKing ? ", in check" : ""}${legal ? ", legal destination" : ""}`}
                     aria-disabled={!canMove}
                     aria-selected={isSelected}
                     data-square={square}
-                    className={`square ${(FILES.indexOf(file) + Number(rank)) % 2 === 0 ? "dark-square" : "light-square"}${isSelected ? " selected" : ""}${isLast ? " last-move" : ""}${legal ? capture ? " capture-target" : " legal-target" : ""}${isDragOver ? " drag-over" : ""}${effect?.capture ? " capture-impact" : ""}`}
+                    className={`square ${isDarkSquare(square) ? "dark-square" : "light-square"}${isSelected ? " selected" : ""}${isLast ? " last-move" : ""}${isCheckedKing ? " king-in-check" : ""}${legal ? capture ? " capture-target" : " legal-target" : ""}${isDragOver ? " drag-over" : ""}${effect?.capture ? " capture-impact" : ""}`}
                     key={square}
                     onClick={() => tapSquare(square)}
                     disabled={busy}
@@ -703,6 +816,29 @@ export function GameRoom({ gameId }: { gameId: string }) {
             </button>
             <input className="invite-field" value={privateUrl} readOnly onFocus={(event) => event.currentTarget.select()} aria-label="Your private game link" />
           </section>
+          <section className="side-card actions-card">
+            <h2>GAME ACTIONS</h2>
+            <Link className="secondary-button" href="/">NEW GAME</Link>
+            {game.status !== "completed" ? (
+              confirmEnd ? (
+                <div className="end-confirm" role="alert">
+                  <p>{game.status === "waiting"
+                    ? "Cancel this game? The invitation will stop working."
+                    : "End this game? This counts as a resignation and your opponent wins."}</p>
+                  <button className="danger-button" type="button" disabled={busy} onClick={() => void endGame()}>
+                    {busy ? "ENDING…" : "CONFIRM END"}
+                  </button>
+                  <button className="quiet-button" type="button" disabled={busy} onClick={() => setConfirmEnd(false)}>
+                    KEEP PLAYING
+                  </button>
+                </div>
+              ) : (
+                <button className="quiet-button" type="button" onClick={() => setConfirmEnd(true)}>
+                  {game.status === "waiting" ? "CANCEL GAME" : "END GAME"}
+                </button>
+              )
+            ) : null}
+          </section>
           <section className="side-card moves-card">
             <div className="side-heading"><h2>MOVE LOG</h2><span>{game.plyCount} PLY</span></div>
             {game.moves.length === 0 ? <p className="empty-moves">No moves yet. White opens the riot.</p> : (
@@ -713,10 +849,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
               </ol>
             )}
           </section>
-          <section className="side-card rules-card"><span>✓</span><div><strong>STANDARD CHESS</strong><small>
+          <section className="side-card rules-card"><span aria-hidden="true">i</span><div><strong>GAME INFO</strong><small>
             {game.mode === "solo" && game.aiDifficulty
-              ? `Riot Bot • ${DIFFICULTY_LABELS[game.aiDifficulty]}`
-              : "Castling • En passant • Promotion"}
+              ? `Standard chess • Riot Bot level ${game.aiDifficulty} • ${DIFFICULTY_LABELS[game.aiDifficulty]}`
+              : "Standard chess • Drag or tap • Every move saved"}
           </small></div></section>
         </aside>
       </section>

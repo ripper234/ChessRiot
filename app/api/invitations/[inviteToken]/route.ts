@@ -12,6 +12,12 @@ export async function GET(
   if (!isSecret(inviteToken)) return apiError(404, "not_found", "Invitation not found");
   const game = await findGameByInviteHash(await hashSecret(inviteToken));
   if (!game) return apiError(404, "not_found", "Invitation not found");
+  if (game.termination === "cancelled") {
+    return json(
+      { state: "cancelled", gameId: game.id },
+      { status: 410, headers: { "referrer-policy": "no-referrer" } },
+    );
+  }
   if (game.status !== "waiting") {
     return json(
       { state: "claimed", gameId: game.id },

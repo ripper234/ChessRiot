@@ -158,17 +158,17 @@ export function CreateGame() {
           {mode === "solo" ? (
             <div className="difficulty-control">
               <div className="difficulty-heading">
-                <label htmlFor="computer-difficulty">Computer difficulty</label>
-                <output htmlFor="computer-difficulty">{DIFFICULTY_LABELS[difficulty]} · {difficulty}/5</output>
+                <label htmlFor="computer-level">Riot Bot level</label>
+                <output htmlFor="computer-level">Level {difficulty} · {DIFFICULTY_LABELS[difficulty]}</output>
               </div>
               <input
-                id="computer-difficulty"
+                id="computer-level"
                 type="range"
                 min="1"
                 max="5"
                 step="1"
                 value={difficulty}
-                aria-valuetext={`${difficulty} of 5, ${DIFFICULTY_LABELS[difficulty]}`}
+                aria-valuetext={`Level ${difficulty} of 5, ${DIFFICULTY_LABELS[difficulty]}`}
                 onChange={(event) => {
                   setDifficulty(Number(event.target.value) as AiDifficulty);
                   pending.current = null;

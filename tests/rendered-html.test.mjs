@@ -15,6 +15,7 @@ test("renders the ChessRiot home page", async () => {
   assert.match(html, /ChessRiot/);
   assert.match(html, /Play chess/);
   assert.doesNotMatch(html, /MOVE BOLDLY/);
+  assert.doesNotMatch(html, /LEGAL CHESS|DRAG TO MOVE|SAVES EVERY MOVE/);
   assert.match(html, /WHAT&#x27;S NEW|WHAT'S NEW/);
 });
 
@@ -30,6 +31,6 @@ test("renders the newest-first public changelog", async () => {
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /WHAT.*NEW/);
-  assert.ok(html.indexOf("v0.3.0") < html.indexOf("v0.2.2"));
+  assert.ok(html.indexOf("v0.3.1") < html.indexOf("v0.3.0"));
   assert.match(html, /github\.com\/ripper234\/ChessRiot/);
 });

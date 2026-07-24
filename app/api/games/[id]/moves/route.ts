@@ -98,6 +98,7 @@ export async function POST(
   }
 
   let outcome;
+  const wasInCheck = replayed.isCheck();
   try {
     outcome = applyCandidate(game.initial_fen, storedMoves, {
       from,
@@ -105,7 +106,15 @@ export async function POST(
       ...(promotion ? { promotion: promotion as Promotion } : {}),
     });
   } catch (error) {
-    if (error instanceof IllegalMoveError) return apiError(422, "illegal_move", "That move is not legal");
+    if (error instanceof IllegalMoveError) {
+      return wasInCheck
+        ? apiError(
+          422,
+          "must_answer_check",
+          "You are in check. Move the king, capture the attacker, or block the attack.",
+        )
+        : apiError(422, "illegal_move", "That move is not legal");
+    }
     throw error;
   }
 

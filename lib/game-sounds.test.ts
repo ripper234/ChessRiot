@@ -62,4 +62,20 @@ describe("classifyGameSound", () => {
       version: 4, plyCount: 4, status: "completed", outcome: { winner: null, reason: "stalemate" },
     }))).toBe("draw");
   });
+
+  it("plays terminal sounds for claims and resignations that add no move", () => {
+    const previous = snapshot({ version: 7, plyCount: 6 });
+    expect(classifyGameSound(previous, snapshot({
+      version: 8,
+      plyCount: 6,
+      status: "completed",
+      outcome: { winner: null, reason: "threefold_repetition" },
+    }))).toBe("draw");
+    expect(classifyGameSound(previous, snapshot({
+      version: 8,
+      plyCount: 6,
+      status: "completed",
+      outcome: { winner: "b", reason: "resignation" },
+    }))).toBe("defeat");
+  });
 });

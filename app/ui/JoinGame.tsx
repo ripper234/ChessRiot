@@ -17,6 +17,7 @@ type InviteState =
   | { kind: "loading" }
   | { kind: "waiting"; gameId: string; creatorName: string }
   | { kind: "claimed"; gameId?: string }
+  | { kind: "cancelled"; gameId?: string }
   | { kind: "missing" }
   | { kind: "error" };
 
@@ -42,7 +43,10 @@ export function JoinGame({ inviteToken }: { inviteToken: string }) {
       if (response.ok && data.gameId && data.creatorName) {
         setInvite({ kind: "waiting", gameId: data.gameId, creatorName: data.creatorName });
       } else if (response.status === 410) {
-        setInvite({ kind: "claimed", gameId: data.gameId });
+        setInvite({
+          kind: data.state === "cancelled" ? "cancelled" : "claimed",
+          gameId: data.gameId,
+        });
       } else if (response.status === 404) {
         setInvite({ kind: "missing" });
       } else {
@@ -86,6 +90,10 @@ export function JoinGame({ inviteToken }: { inviteToken: string }) {
       };
       if (response.status === 409 && data.error?.code === "invite_claimed") {
         setInvite({ kind: "claimed", gameId: invite.gameId });
+        return;
+      }
+      if (response.status === 410 && data.error?.code === "invite_cancelled") {
+        setInvite({ kind: "cancelled", gameId: invite.gameId });
         return;
       }
       if (!response.ok || !data.game) throw new Error(data.error?.message ?? "Could not join this game");
@@ -134,6 +142,12 @@ export function JoinGame({ inviteToken }: { inviteToken: string }) {
           <div className="voxel-card state-card">
             <span className="big-glyph">⚑</span><h1>SEAT ALREADY CLAIMED</h1>
             <p>That invitation has already been used.</p><Link className="secondary-button" href="/">START ANOTHER GAME</Link>
+          </div>
+        ) : null}
+        {invite.kind === "cancelled" ? (
+          <div className="voxel-card state-card">
+            <span className="big-glyph">×</span><h1>GAME CANCELLED</h1>
+            <p>The creator ended this game before it started.</p><Link className="secondary-button" href="/">START ANOTHER GAME</Link>
           </div>
         ) : null}
         {invite.kind === "missing" ? (

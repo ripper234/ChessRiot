@@ -5,12 +5,14 @@ export type Promotion = "q" | "r" | "b" | "n";
 export type DrawClaim = "threefold_repetition" | "fifty_move";
 export type Termination =
   | "checkmate"
+  | "resignation"
   | "stalemate"
   | "insufficient_material"
   | "threefold_repetition"
   | "fivefold_repetition"
   | "fifty_move"
   | "seventy_five_move"
+  | "cancelled"
   | "draw";
 
 export interface StoredMove {

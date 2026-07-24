@@ -22,6 +22,9 @@ export async function POST(
   const [inviteHash, playerHash] = await Promise.all([hashSecret(inviteToken), hashSecret(playerToken)]);
   let game = await findGameByInviteHash(inviteHash);
   if (!game) return apiError(404, "not_found", "Invitation not found");
+  if (game.termination === "cancelled") {
+    return apiError(410, "invite_cancelled", "This game was cancelled");
+  }
   if (game.white_token_hash === playerHash) {
     return apiError(409, "same_player", "The creator cannot claim the second seat");
   }

@@ -114,7 +114,7 @@ export async function recordEvent(input: ObservabilityEvent): Promise<void> {
       environment: record.environment,
       appVersion: record.appVersion,
       event: record.event,
-      message: error instanceof Error ? error.message.slice(0, 240) : "Unknown logging error",
+      errorType: error instanceof Error ? error.name.slice(0, 80) : "UnknownError",
     }));
   }
 }
@@ -140,13 +140,18 @@ function routeEvent(method: string, pathname: string): string | null {
   if (method === "POST" && /^\/api\/games\/[^/]+\/claims$/.test(pathname)) {
     return "draw.claimed";
   }
+  if (method === "POST" && /^\/api\/games\/[^/]+\/end$/.test(pathname)) {
+    return "game.ended";
+  }
   if (method === "GET" && /^\/api\/games\/[^/]+$/.test(pathname)) return "game.loaded";
   if (method === "POST" && pathname === "/api/telemetry/client") return "client.telemetry";
   if (method === "POST" && pathname === "/api/feedback") return "feedback.submitted";
-  if (method === "GET" && pathname === "/api/health") return "system.health_checked";
-  if (method === "GET" && pathname === "/api/ops/observability") {
-    return "observability.viewed";
-  }
+  // Health and dashboard polling are operational reads, not product actions.
+  // Omitting them keeps the recent-event feed focused on player and system events.
+  if (
+    (method === "GET" && pathname === "/api/health")
+    || (method === "POST" && pathname === "/api/ops/overview")
+  ) return null;
   if (pathname.startsWith("/api/")) return "api.request";
   return null;
 }
@@ -255,8 +260,6 @@ export async function observeHttpRequest(
     && response.status < 400
     && url.searchParams.has("sinceVersion")
   ) return;
-  if (baseEvent === "observability.viewed") return;
-
   const [requestInfo, responseInfo] = await Promise.all([
     preparedDetails,
     responseDetails(response),

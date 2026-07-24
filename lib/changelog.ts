@@ -11,6 +11,20 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.3.1",
+    date: "2026-07-24",
+    title: "A clearer, complete game board",
+    summary: "The board now fits shorter screens, makes player colors and check unmistakable, and adds captured pieces and game-ending controls.",
+    changes: [
+      "Made the full board fit common laptop screens at normal browser zoom and increased important label sizes.",
+      "Added explicit White and Black player cards plus captured-piece trays.",
+      "Highlighted the checked king and explained exactly when a move fails to answer check.",
+      "Added New Game and confirmed End Game or Cancel Game actions.",
+      "Renamed computer difficulty to bot level.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.3.1`,
+  },
+  {
     version: "0.3.0",
     date: "2026-07-24",
     title: "A faster start and clearer releases",

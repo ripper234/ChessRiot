@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     return apiError(400, "invalid_request", "Name, secrets, or request id are invalid");
   }
   if (!isGameMode(mode) || (mode === "solo" && !isAiDifficulty(difficulty))) {
-    return apiError(400, "invalid_request", "Game mode or computer difficulty is invalid");
+    return apiError(400, "invalid_request", "Game mode or bot level is invalid");
   }
   if (playerToken === inviteToken) return apiError(400, "invalid_request", "Secrets must be different");
 
@@ -86,7 +86,9 @@ export async function POST(request: Request) {
     ? null
     : humanColor === "b" ? displayName : "Riot Bot";
   const whiteHash = humanColor === "w" ? playerHash : botHash;
-  const blackHash = humanColor === "b" ? playerHash : null;
+  const blackHash = humanColor === "b"
+    ? playerHash
+    : mode === "solo" ? botHash : null;
   const joinedAt = mode === "solo" ? now : null;
   const openingCandidate = mode === "solo" && computerColor === "w" && difficulty
     ? chooseComputerMove(INITIAL_FEN, difficulty as AiDifficulty, computerColor)

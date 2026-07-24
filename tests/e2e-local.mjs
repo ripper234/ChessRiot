@@ -7,6 +7,7 @@ import { Miniflare } from "miniflare";
 import { Chess } from "chess.js";
 
 const origin = "http://chessriot.test";
+const controlOrigin = "https://control.chessriot.test";
 const secret = () => randomBytes(32).toString("base64url");
 const requestIdForColor = (color) => {
   const id = randomUUID();
@@ -52,7 +53,7 @@ function createRuntime() {
     d1Databases: { DB: "chessriot-e2e" },
     bindings: {
       CHESSRIOT_ENV: "test",
-      CONTROL_ORIGIN: origin,
+      CONTROL_ORIGIN: controlOrigin,
       OBSERVABILITY_HASH_SECRET: "local-observability-hash-secret-for-e2e",
       OPS_READ_SECRET: opsSecret,
     },
@@ -63,7 +64,7 @@ function createRuntime() {
 
 async function request(runtime, path, init = {}) {
   const headers = new Headers(init.headers);
-  headers.set("origin", origin);
+  if (!headers.has("origin")) headers.set("origin", origin);
   if (init.body && !headers.has("content-type")) headers.set("content-type", "application/json");
   return runtime.dispatchFetch(`${origin}${path}`, { ...init, headers });
 }
@@ -124,7 +125,11 @@ try {
     body: JSON.stringify({ displayName: "Omri", playerToken: blackToken }),
   });
   assert.equal(joinedResponse.status, 200);
-  assert.equal((await body(joinedResponse)).game.you.color, "b");
+  const joined = await body(joinedResponse);
+  assert.equal(joined.game.you.color, "b");
+  assert.equal(joined.game.you.name, "Omri");
+  assert.equal(joined.game.players.white.name, "Ron");
+  assert.equal(joined.game.players.black.name, "Omri");
 
   const joinRetry = await request(runtime, `/api/invitations/${inviteToken}/join`, {
     method: "POST",
@@ -203,6 +208,8 @@ try {
   }));
   assert.equal(whiteState.game.fen, blackState.game.fen);
   assert.equal(whiteState.game.version, 5);
+  assert.deepEqual(whiteState.game.you, { color: "w", name: "Ron" });
+  assert.deepEqual(blackState.game.you, { color: "b", name: "Omri" });
 
   await runtime.dispose();
   runtime = createRuntime();
@@ -213,6 +220,160 @@ try {
   const persisted = await body(afterRestart);
   assert.equal(persisted.game.version, 5);
   assert.equal(persisted.game.outcome.reason, "checkmate");
+
+  const endWhite = secret();
+  const endBlack = secret();
+  const endInvite = secret();
+  const endCreated = await body(await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "White",
+      mode: "multiplayer",
+      playerToken: endWhite,
+      inviteToken: endInvite,
+      requestId: randomUUID(),
+    }),
+  }));
+  const endGameId = endCreated.game.id;
+  const endJoined = await body(await request(runtime, `/api/invitations/${endInvite}/join`, {
+    method: "POST",
+    body: JSON.stringify({ displayName: "Black", playerToken: endBlack }),
+  }));
+  const endRequestId = randomUUID();
+  const staleEndResponse = await request(runtime, `/api/games/${endGameId}/end`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${endBlack}` },
+    body: JSON.stringify({
+      expectedVersion: endJoined.game.version - 1,
+      requestId: randomUUID(),
+    }),
+  });
+  assert.equal(staleEndResponse.status, 409);
+  assert.equal((await body(staleEndResponse)).error.code, "stale_position");
+  const endResponse = await request(runtime, `/api/games/${endGameId}/end`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${endBlack}` },
+    body: JSON.stringify({
+      expectedVersion: endJoined.game.version,
+      requestId: endRequestId,
+    }),
+  });
+  assert.equal(endResponse.status, 200);
+  const ended = await body(endResponse);
+  assert.equal(ended.game.status, "completed");
+  assert.deepEqual(ended.game.outcome, { winner: "w", reason: "resignation" });
+  assert.equal(ended.game.moves.length, 0);
+  const endRetry = await request(runtime, `/api/games/${endGameId}/end`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${endBlack}` },
+    body: JSON.stringify({
+      expectedVersion: endJoined.game.version,
+      requestId: endRequestId,
+    }),
+  });
+  assert.equal(endRetry.status, 200);
+  assert.equal((await body(endRetry)).game.version, ended.game.version);
+  assert.equal((await request(runtime, `/api/games/${endGameId}/end`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${thirdToken}` },
+    body: JSON.stringify({
+      expectedVersion: ended.game.version,
+      requestId: randomUUID(),
+    }),
+  })).status, 404);
+  assert.equal((await request(runtime, `/api/games/${endGameId}/moves`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${endWhite}` },
+    body: JSON.stringify({
+      from: "e2",
+      to: "e4",
+      expectedVersion: ended.game.version,
+      requestId: randomUUID(),
+    }),
+  })).status, 409);
+
+  const cancelToken = secret();
+  const cancelInvite = secret();
+  const waitingGame = await body(await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Waiting",
+      mode: "multiplayer",
+      playerToken: cancelToken,
+      inviteToken: cancelInvite,
+      requestId: randomUUID(),
+    }),
+  }));
+  const cancelResponse = await request(runtime, `/api/games/${waitingGame.game.id}/end`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${cancelToken}` },
+    body: JSON.stringify({
+      expectedVersion: waitingGame.game.version,
+      requestId: randomUUID(),
+    }),
+  });
+  assert.equal(cancelResponse.status, 200);
+  assert.deepEqual((await body(cancelResponse)).game.outcome, {
+    winner: null,
+    reason: "cancelled",
+  });
+  const cancelledInvite = await request(runtime, `/api/invitations/${cancelInvite}`);
+  assert.equal(cancelledInvite.status, 410);
+  assert.equal((await body(cancelledInvite)).state, "cancelled");
+  const cancelledJoin = await request(runtime, `/api/invitations/${cancelInvite}/join`, {
+    method: "POST",
+    body: JSON.stringify({ displayName: "Late", playerToken: secret() }),
+  });
+  assert.equal(cancelledJoin.status, 410);
+  assert.equal((await body(cancelledJoin)).error.code, "invite_cancelled");
+
+  const checkWhite = secret();
+  const checkBlack = secret();
+  const checkInvite = secret();
+  const checkCreated = await body(await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Checked",
+      mode: "multiplayer",
+      playerToken: checkWhite,
+      inviteToken: checkInvite,
+      requestId: randomUUID(),
+    }),
+  }));
+  const checkJoined = await body(await request(runtime, `/api/invitations/${checkInvite}/join`, {
+    method: "POST",
+    body: JSON.stringify({ displayName: "Attacker", playerToken: checkBlack }),
+  }));
+  let checkVersion = checkJoined.game.version;
+  const checkMove = async (token, from, to) => {
+    const response = await request(runtime, `/api/games/${checkCreated.game.id}/moves`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        from,
+        to,
+        expectedVersion: checkVersion,
+        requestId: randomUUID(),
+      }),
+    });
+    const data = await body(response);
+    if (response.ok) checkVersion = data.game.version;
+    return { response, data };
+  };
+  for (const [token, from, to] of [
+    [checkWhite, "f2", "f3"],
+    [checkBlack, "e7", "e5"],
+    [checkWhite, "e1", "f2"],
+    [checkBlack, "d8", "h4"],
+  ]) {
+    assert.equal((await checkMove(token, from, to)).response.status, 200);
+  }
+  const ignoredCheck = await checkMove(checkWhite, "a2", "a3");
+  assert.equal(ignoredCheck.response.status, 422);
+  assert.equal(ignoredCheck.data.error.code, "must_answer_check");
+  const answeredCheck = await checkMove(checkWhite, "g2", "g3");
+  assert.equal(answeredCheck.response.status, 200);
+  assert.equal(answeredCheck.data.game.check, false);
 
   const invalidDifficulty = await request(runtime, "/api/games", {
     method: "POST",
@@ -434,6 +595,11 @@ try {
   const health = await body(healthResponse);
   assert.equal(health.environment, "test");
   assert.equal(health.database, "ok");
+  const controlHealthResponse = await request(runtime, "/api/health", {
+    headers: { origin: controlOrigin },
+  });
+  assert.equal(controlHealthResponse.headers.get("access-control-allow-origin"), controlOrigin);
+  assert.equal(controlHealthResponse.headers.get("access-control-allow-credentials"), "true");
 
   const feedbackTitle = "Make captures feel chunkier";
   const feedbackComment = "A short burst is enough.";
@@ -471,14 +637,19 @@ try {
 
   const overviewResponse = await request(runtime, "/api/ops/overview", {
     method: "POST",
-    headers: { "content-type": "text/plain" },
+    headers: { "content-type": "text/plain", origin: controlOrigin },
     body: opsGrant(),
   });
   assert.equal(overviewResponse.status, 200);
+  assert.equal(overviewResponse.headers.get("access-control-allow-origin"), controlOrigin);
+  assert.equal(overviewResponse.headers.get("access-control-allow-credentials"), "true");
   const overview = await body(overviewResponse);
   assert.equal(overview.environment, "test");
   assert.ok(overview.totals.total > 0);
   assert.ok(overview.breakdown.some((row) => row.event_name === "move.submitted"));
+  assert.ok(overview.breakdown.some((row) => row.event_name === "game.ended"));
+  assert.ok(overview.breakdown.every((row) => row.event_name !== "system.health_checked"));
+  assert.ok(overview.breakdown.every((row) => row.event_name !== "observability.viewed"));
   assert.ok(overview.recentEvents.every((event) => !JSON.stringify(event).includes(soloToken)));
   assert.equal(overview.feedback[0].title, feedbackTitle);
   assert.equal(overview.feedback[0].comment, feedbackComment);
@@ -490,13 +661,13 @@ try {
   const tamperedGrant = validGrant.slice(0, -1) + (validGrant.endsWith("a") ? "b" : "a");
   assert.equal((await request(runtime, "/api/ops/overview", {
     method: "POST",
-    headers: { "content-type": "text/plain" },
+    headers: { "content-type": "text/plain", origin: controlOrigin },
     body: tamperedGrant,
   })).status, 403);
   const expiredAt = Math.floor(Date.now() / 1000) - 10;
   assert.equal((await request(runtime, "/api/ops/overview", {
     method: "POST",
-    headers: { "content-type": "text/plain" },
+    headers: { "content-type": "text/plain", origin: controlOrigin },
     body: opsGrant({ iat: expiredAt - 120, exp: expiredAt }),
   })).status, 403);
   assert.equal((await runtime.dispatchFetch(`${origin}/api/ops/overview`, {

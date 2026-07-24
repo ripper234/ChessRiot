@@ -1,11 +1,11 @@
 # ChessRiot
 
-ChessRiot v0.3.0 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
+ChessRiot v0.3.1 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
 
 ## What works
 
 - Enter a display name, then choose Solo or Multiplayer.
-- Play Riot Bot at one of five difficulty levels, starting at Medium, as either color. If the bot is White, it opens automatically.
+- Play Riot Bot at one of five levels, starting at Level 3, Medium, as either color. If the bot is White, it opens automatically.
 - Create a multiplayer game and share one private invitation link.
 - Join from another browser or device without an account.
 - Play complete standard chess with server-authoritative legal move validation.
@@ -14,6 +14,8 @@ ChessRiot v0.3.0 is a mobile-first chess game for solo play against Riot Bot or 
 - Detect check, checkmate, stalemate, castling, en passant, all four promotions, insufficient material, claimable threefold/50-move draws, and automatic fivefold/75-move draws.
 - Use one original voxel/block-world identity with optional synthesized move, capture, check, and game-ending sounds.
 - Drag and drop pieces with mouse or touch, while tap, click, and keyboard input still work. Short move and capture animations make accepted moves visible.
+- See explicit White and Black player cards, captured pieces, a highlighted checked king, and check-specific move guidance.
+- End an active game by resignation, cancel a waiting game, or start a separate new game without deleting history.
 - Start from one compact new-game screen with no marketing detour.
 - Open a newest-first public changelog from the home screen or any active game.
 - Send a titled feedback item without leaving the current flow; each environment stores its own owner-review pool.
