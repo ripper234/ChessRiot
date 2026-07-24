@@ -34,6 +34,8 @@ const page = await pageResponse.text();
 assert.match(page, new RegExp(`CONTROL v${packageVersion.replace(/\./g, "\\.")}`));
 assert.match(page, /AUTO CHECK · 5 MIN/);
 assert.match(page, /OBSERVABILITY/);
+assert.match(page, /Version history/);
+assert.match(page, /Development → Staging → Production/);
 assert.match(page, /script src="\/control\.js"/);
 assert.doesNotMatch(page, /script-src 'unsafe-inline'/);
 
@@ -48,6 +50,19 @@ assert.match(script, /\/api\/ops\/overview/);
 assert.match(script, /content-type": "text\/plain"/);
 assert.match(script, /setInterval\(function \(\) \{ void loadStatus\(\); \}, 300000\)/);
 assert.doesNotMatch(script, /REFRESH STATUS/);
+assert.match(script, /credentials: item\.access === "Owner only" \? "include" : "omit"/);
+assert.match(script, /const requestTimeoutMs = 15000/);
+assert.match(
+  script,
+  /const inspectionResults = await Promise\.allSettled\(/,
+);
+assert.doesNotMatch(script, /No successful health response/);
+assert.doesNotMatch(script, /\bUNAVAILABLE\b|\bUNDEPLOYED\b/i);
+assert.doesNotMatch(script, /UNDEPLOYED|UNAVAILABLE/);
+assert.match(script, /AbortController/);
+assert.match(script, /sessionStorage/);
+assert.match(script, /COULD NOT VERIFY/);
+assert.match(script, /Deployment state is unaffected/);
 
 const statusResponse = await workerModule.default.fetch(
   new Request("https://control.test/api/status"),
@@ -58,6 +73,28 @@ const statusResponse = await workerModule.default.fetch(
     PROD_OPS_READ_SECRET: "prod-secret-with-at-least-32-characters",
     STAGING_OPS_READ_SECRET: "staging-secret-with-at-least-32-characters",
     DEV_OPS_READ_SECRET: "dev-secret-with-at-least-32-characters",
+    PROD_DEPLOYED_VERSION: "0.2.2",
+    STAGING_DEPLOYED_VERSION: "0.3.0",
+    DEV_DEPLOYED_VERSION: "0.3.2",
+    DEPLOYMENT_STATE_JSON: JSON.stringify({
+      environments: {
+        development: {
+          version: "0.3.2",
+          deployedAt: "2026-07-24T14:00:00.000Z",
+          verifiedAt: "2026-07-24T14:01:00.000Z",
+        },
+        staging: {
+          version: "0.3.0",
+          deployedAt: "2026-07-24T13:00:00.000Z",
+          verifiedAt: "2026-07-24T13:01:00.000Z",
+        },
+        production: {
+          version: "0.2.2",
+          deployedAt: "2026-07-24T12:00:00.000Z",
+          verifiedAt: "2026-07-24T12:01:00.000Z",
+        },
+      },
+    }),
   },
   {},
 );
@@ -65,31 +102,50 @@ const status = await statusResponse.json();
 assert.equal(status.controlVersion, packageVersion);
 assert.equal(status.refreshIntervalMs, 300000);
 assert.deepEqual(
-  status.environments.map(({ key, expectedVersion, url, grant }) => ({
+  status.environments.map(({ key, deployedVersion, url, grant }) => ({
     key,
-    expectedVersion,
+    deployedVersion,
     url,
     hasGrant: typeof grant === "string" && grant.includes("."),
   })),
   [
     {
-      key: "production",
-      expectedVersion: "0.2.2",
-      url: "https://prod.test",
+      key: "development",
+      deployedVersion: "0.3.2",
+      url: "https://dev.test",
       hasGrant: true,
     },
     {
       key: "staging",
-      expectedVersion: "0.2.2",
+      deployedVersion: "0.3.0",
       url: "https://staging.test",
       hasGrant: true,
     },
     {
-      key: "development",
-      expectedVersion: "0.2.2",
-      url: "https://dev.test",
+      key: "production",
+      deployedVersion: "0.2.2",
+      url: "https://prod.test",
       hasGrant: true,
     },
+  ],
+);
+assert.equal(status.releases[0].version, "0.3.2");
+
+const fallbackResponse = await workerModule.default.fetch(
+  new Request("https://control.test/api/status"),
+  {},
+  {},
+);
+const fallbackStatus = await fallbackResponse.json();
+assert.deepEqual(
+  fallbackStatus.environments.map(({ key, deployedVersion }) => ({
+    key,
+    deployedVersion,
+  })),
+  [
+    { key: "development", deployedVersion: "0.3.1" },
+    { key: "staging", deployedVersion: "0.2.2" },
+    { key: "production", deployedVersion: "0.2.2" },
   ],
 );
 
