@@ -4,10 +4,14 @@
 
 1. Enter a name, choose Solo, and verify Bot level starts at Level 3, Medium.
 2. Move the level lower and higher, then restore Medium and create the game.
-3. Verify both color assignments: as White, drag e2 to e4 and verify Riot Bot replies; as Black, verify Riot Bot's White opening exists before the board becomes playable.
-4. Verify the human move and bot reply persist together, the move log shows two plies, and the turn returns to White.
-5. Refresh and reopen the private link and verify the same board, level, history, and turn.
-6. Complete a Solo game and verify Riot Bot does not move after checkmate or another terminal result.
+3. Verify both color assignments: as White, drag e2 to e4 and verify the pawn appears on e4 immediately while Riot Bot is still thinking; as Black, verify Riot Bot's White opening exists before the board becomes playable.
+4. Verify the human move becomes durable before Riot Bot replies, then verify
+   the bot reply animates, the move log shows two plies, and the turn returns to
+   White.
+5. Close or refresh after the human ply but before the bot ply and verify the
+   next authenticated load completes the pending bot turn.
+6. Reopen the private link and verify the same board, level, history, and turn.
+7. Complete a Solo game and verify Riot Bot does not move after checkmate or another terminal result.
 
 ## Two-player happy path
 
