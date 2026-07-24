@@ -1,5 +1,14 @@
 # Acceptance tests
 
+## Solo happy path
+
+1. Enter a name, choose Solo, and verify difficulty starts at 3, Medium.
+2. Move the difficulty lower and higher, then restore Medium and create the game.
+3. Drag White's e-pawn from e2 to e4 and verify Riot Bot replies.
+4. Verify the human move and bot reply persist together, the move log shows two plies, and the turn returns to White.
+5. Refresh and reopen the private link and verify the same board, difficulty, history, and turn.
+6. Complete a Solo game and verify Riot Bot does not move after checkmate or another terminal result.
+
 ## Two-player happy path
 
 1. Browser A creates a game and receives an invitation.
@@ -42,3 +51,6 @@
 - Do not play on first load, refresh, join-only state changes, repeated polls, or an out-of-order snapshot.
 - Persist mute state and verify turning sound back on plays one short confirmation cue.
 - Recover from an initial game or invitation network failure with the on-screen retry action.
+- Drag a legal move with mouse and touch and verify exactly one move is submitted.
+- Drop off-board or on an illegal square and verify the piece snaps back with no mutation.
+- Verify tap/click and keyboard moves still work after drag-and-drop is enabled.

@@ -678,6 +678,160 @@ footer {
 }
 .cancel-promotion { border-bottom: 3px solid var(--wood-dark); color: #fff0bd; }
 
+/* v0.2.0: game modes, difficulty, and pointer drag */
+.mode-fieldset {
+  min-width: 0;
+  margin: 23px 0 0;
+  padding: 0;
+  border: 0;
+}
+.mode-fieldset legend {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font: 700 9px/1 var(--mono);
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+.mode-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.mode-options label {
+  position: relative;
+  min-height: 88px;
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  grid-template-rows: auto auto;
+  align-content: center;
+  column-gap: 9px;
+  margin: 0;
+  padding: 13px;
+  border: 4px solid var(--stone-dark);
+  color: var(--text);
+  background: var(--stone);
+  box-shadow: inset 0 4px rgba(255,255,255,.1), 4px 4px 0 #1d2a2a;
+  cursor: pointer;
+  text-transform: none;
+}
+.mode-options label.selected {
+  border-color: var(--grass-dark);
+  background: #547548;
+  box-shadow: inset 0 4px rgba(255,255,255,.12), 4px 4px 0 #294126;
+}
+.mode-options input {
+  position: absolute;
+  width: 1px;
+  min-height: 1px;
+  opacity: 0;
+}
+.mode-options label:focus-within {
+  outline: 3px solid var(--chess-gold);
+  outline-offset: 3px;
+}
+.mode-options label > span {
+  width: 31px;
+  height: 31px;
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  align-self: center;
+  border: 3px solid var(--dirt-dark);
+  color: #25321d;
+  background: var(--chess-gold);
+  box-shadow: 3px 3px 0 #6b4d22;
+  font: 900 14px/1 var(--display);
+}
+.mode-options strong {
+  align-self: end;
+  font: 900 12px/1 var(--display);
+  letter-spacing: .5px;
+}
+.mode-options small {
+  align-self: start;
+  margin-top: 5px;
+  color: #e1e8cf;
+  font: 600 9px/1.2 var(--ui);
+  letter-spacing: 0;
+}
+.difficulty-control {
+  margin-top: 18px;
+  padding: 15px;
+  border: 4px solid var(--dirt-dark);
+  background: #695238;
+  box-shadow: inset 0 4px rgba(255,255,255,.09), 4px 4px 0 #382719;
+}
+.difficulty-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.difficulty-heading label { margin: 0; color: #fff2c8; }
+.difficulty-heading output {
+  color: var(--chess-gold);
+  font: 900 10px/1 var(--mono);
+  white-space: nowrap;
+}
+.difficulty-control input[type="range"] {
+  width: 100%;
+  min-height: 28px;
+  margin: 9px 0 0;
+  padding: 0;
+  border: 0;
+  clip-path: none;
+  accent-color: var(--teal-spark);
+  background: transparent;
+  cursor: pointer;
+}
+.difficulty-control input[type="range"]:focus-visible {
+  outline: 3px solid var(--chess-gold);
+  outline-offset: 2px;
+}
+.difficulty-scale {
+  display: flex;
+  justify-content: space-between;
+  color: #d8d0ba;
+  font: 800 7px/1 var(--mono);
+  letter-spacing: 1px;
+}
+.piece {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+}
+.board-wrap[data-interactive="true"] .piece {
+  cursor: grab;
+  touch-action: none;
+}
+.board-wrap[data-interactive="true"] .piece:active { cursor: grabbing; }
+.piece.dragging {
+  opacity: .24;
+  transform: translate(-2px, -3px) scale(.88);
+}
+.square.drag-over::before {
+  position: absolute;
+  inset: 3px;
+  z-index: 2;
+  border: 5px solid #ddff86;
+  content: "";
+  box-shadow: inset 0 0 0 3px rgba(40,72,32,.52), 0 0 14px rgba(194,255,108,.5);
+}
+.drag-ghost {
+  position: fixed;
+  z-index: 100;
+  width: clamp(48px,9vw,84px);
+  height: clamp(48px,9vw,84px);
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  font-family: "Arial Unicode MS","Segoe UI Symbol","Noto Sans Symbols 2",Georgia,serif;
+  font-size: clamp(43px,8vw,78px);
+  line-height: 1;
+  transform: translate(-50%, -58%) scale(1.08);
+  filter: drop-shadow(8px 11px 4px rgba(0,0,0,.48));
+}
+
 @media (max-width: 980px) {
   .hero-grid { grid-template-columns: 1fr; max-width: 780px; }
   .hero-copy { text-align: center; }
@@ -704,6 +858,8 @@ footer {
   .feature-row { display: grid; grid-template-columns: 1fr; }
   .feature-row span { justify-content: center; }
   .create-card { padding: 26px 20px; }
+  .mode-options { grid-template-columns: 1fr; }
+  .mode-options label { min-height: 72px; }
   .recent-section { padding: 0 16px 56px; }
   .recent-grid { grid-template-columns: 1fr; }
   .join-stage { min-height: calc(100vh - 56px); padding: 43px 13px 68px; }

@@ -57,16 +57,30 @@ try {
 
   const createdResponse = await request(runtime, "/api/games", {
     method: "POST",
-    body: JSON.stringify({ displayName: "Ron", playerToken: whiteToken, inviteToken, requestId: createRequestId }),
+    body: JSON.stringify({
+      displayName: "Ron",
+      mode: "multiplayer",
+      playerToken: whiteToken,
+      inviteToken,
+      requestId: createRequestId,
+    }),
   });
   assert.equal(createdResponse.status, 201);
   const created = await body(createdResponse);
   const gameId = created.game.id;
   assert.equal(created.game.status, "waiting");
+  assert.equal(created.game.mode, "multiplayer");
+  assert.equal(created.game.aiDifficulty, null);
 
   const createRetry = await request(runtime, "/api/games", {
     method: "POST",
-    body: JSON.stringify({ displayName: "Ron", playerToken: whiteToken, inviteToken, requestId: createRequestId }),
+    body: JSON.stringify({
+      displayName: "Ron",
+      mode: "multiplayer",
+      playerToken: whiteToken,
+      inviteToken,
+      requestId: createRequestId,
+    }),
   });
   assert.equal(createRetry.status, 200);
   assert.equal((await body(createRetry)).game.id, gameId);
@@ -161,7 +175,88 @@ try {
   assert.equal(persisted.game.version, 5);
   assert.equal(persisted.game.outcome.reason, "checkmate");
 
-  console.log("E2E passed: two players, security, stale writes, checkmate, and cold-start persistence");
+  const invalidDifficulty = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Ron",
+      mode: "solo",
+      difficulty: 6,
+      playerToken: secret(),
+      inviteToken: secret(),
+      requestId: randomUUID(),
+    }),
+  });
+  assert.equal(invalidDifficulty.status, 400);
+
+  const soloToken = secret();
+  const soloInvite = secret();
+  const soloRequestId = randomUUID();
+  const soloCreatedResponse = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Ron",
+      mode: "solo",
+      difficulty: 3,
+      playerToken: soloToken,
+      inviteToken: soloInvite,
+      requestId: soloRequestId,
+    }),
+  });
+  assert.equal(soloCreatedResponse.status, 201);
+  const soloCreated = await body(soloCreatedResponse);
+  const soloGameId = soloCreated.game.id;
+  assert.equal(soloCreated.inviteUrl, undefined);
+  assert.equal(soloCreated.game.mode, "solo");
+  assert.equal(soloCreated.game.aiDifficulty, 3);
+  assert.equal(soloCreated.game.status, "active");
+  assert.equal(soloCreated.game.players.black.name, "Riot Bot");
+  assert.equal(soloCreated.game.version, 0);
+
+  const soloInviteCannotBeClaimed = await request(runtime, `/api/invitations/${soloInvite}`);
+  assert.equal(soloInviteCannotBeClaimed.status, 410);
+
+  const soloMoveId = randomUUID();
+  const soloMoveResponse = await request(runtime, `/api/games/${soloGameId}/moves`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${soloToken}` },
+    body: JSON.stringify({
+      from: "e2",
+      to: "e4",
+      expectedVersion: 0,
+      requestId: soloMoveId,
+    }),
+  });
+  assert.equal(soloMoveResponse.status, 200);
+  const soloAfterMove = await body(soloMoveResponse);
+  assert.equal(soloAfterMove.game.version, 2);
+  assert.equal(soloAfterMove.game.plyCount, 2);
+  assert.equal(soloAfterMove.game.turn, "w");
+  assert.equal(soloAfterMove.game.moves[0].color, "w");
+  assert.equal(soloAfterMove.game.moves[1].color, "b");
+
+  const soloRetryResponse = await request(runtime, `/api/games/${soloGameId}/moves`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${soloToken}` },
+    body: JSON.stringify({
+      from: "e2",
+      to: "e4",
+      expectedVersion: 0,
+      requestId: soloMoveId,
+    }),
+  });
+  assert.equal(soloRetryResponse.status, 200);
+  assert.equal((await body(soloRetryResponse)).game.moves.length, 2);
+
+  await runtime.dispose();
+  runtime = createRuntime();
+  const soloAfterRestart = await body(await request(runtime, `/api/games/${soloGameId}`, {
+    headers: { authorization: `Bearer ${soloToken}` },
+  }));
+  assert.equal(soloAfterRestart.game.version, 2);
+  assert.equal(soloAfterRestart.game.moves.length, 2);
+  assert.equal(soloAfterRestart.game.turn, "w");
+
+  console.log("E2E passed: multiplayer, solo AI, security, atomic moves, checkmate, and cold-start persistence");
 } finally {
   await runtime.dispose();
   await rm(persistRoot, { recursive: true, force: true });

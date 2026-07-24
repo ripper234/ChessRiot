@@ -1,20 +1,23 @@
 # ChessRiot
 
-ChessRiot v0.1.2 is a mobile-first, asynchronous chess game for two people who already know each other.
+ChessRiot v0.2.0 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
 
 ## What works
 
-- Create a game with a display name and share one private invitation link.
+- Enter a display name, then choose Solo or Multiplayer.
+- Play Riot Bot at one of five difficulty levels, starting at Medium.
+- Create a multiplayer game and share one private invitation link.
 - Join from another browser or device without an account.
 - Play complete standard chess with server-authoritative legal move validation.
 - Persist the board, player names, result, and immutable move history in Cloudflare D1.
 - Resume on any device using a private per-player game link whose key stays in the URL fragment.
 - Detect check, checkmate, stalemate, castling, en passant, all four promotions, repetition, insufficient material, and the fifty-move rule.
 - Use one original voxel/block-world identity with optional synthesized move, capture, check, and game-ending sounds.
+- Drag and drop pieces with mouse or touch, while tap, click, and keyboard input still work.
 
-## Deliberate v0.1 limits
+## Deliberate v0.2 limits
 
-No AI opponent, notifications, chat, matchmaking, ratings, rewards, themes, payments, accounts, or server-side account recovery. A private game link is a bearer credential: anyone who has it can play as that seat, so it must be kept private. A previously copied bare `/g/<id>` URL cannot recover a seat because it contains no credential.
+No AI coach, notifications, chat, matchmaking, ratings, rewards, themes, payments, accounts, or server-side account recovery. A private game link is a bearer credential: anyone who has it can play as that seat, so it must be kept private. A previously copied bare `/g/<id>` URL cannot recover a seat because it contains no credential.
 
 ## Versioning
 

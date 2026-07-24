@@ -5,6 +5,8 @@ import { classifyGameSound } from "./game-sounds";
 function snapshot(overrides: Partial<GameSnapshot> = {}): GameSnapshot {
   return {
     id: "game-1",
+    mode: "multiplayer",
+    aiDifficulty: null,
     status: "active",
     version: 1,
     fen: "start",

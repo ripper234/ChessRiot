@@ -1,6 +1,14 @@
 import { Chess } from "chess.js";
 import { ensureSchema, getDatabase } from "@/db";
-import type { Color, GameSnapshot, Promotion, StoredMove, Termination } from "./game-types";
+import type {
+  AiDifficulty,
+  Color,
+  GameMode,
+  GameSnapshot,
+  Promotion,
+  StoredMove,
+  Termination,
+} from "./game-types";
 
 export interface GameRow {
   id: string;
@@ -23,6 +31,8 @@ export interface GameRow {
   joined_at: string | null;
   updated_at: string;
   finished_at: string | null;
+  game_mode: GameMode;
+  ai_difficulty: AiDifficulty | null;
 }
 
 interface MoveRow {
@@ -41,14 +51,29 @@ interface MoveRow {
 
 export async function findGameById(id: string): Promise<GameRow | null> {
   await ensureSchema();
-  return (await getDatabase().prepare("SELECT * FROM games WHERE id = ?").bind(id).first<GameRow>()) ?? null;
+  return (
+    (await getDatabase()
+      .prepare(`SELECT games.*,
+        COALESCE(game_settings.game_mode, 'multiplayer') AS game_mode,
+        game_settings.ai_difficulty AS ai_difficulty
+        FROM games
+        LEFT JOIN game_settings ON game_settings.game_id = games.id
+        WHERE games.id = ?`)
+      .bind(id)
+      .first<GameRow>()) ?? null
+  );
 }
 
 export async function findGameByCreateRequest(requestId: string): Promise<GameRow | null> {
   await ensureSchema();
   return (
     (await getDatabase()
-      .prepare("SELECT * FROM games WHERE create_request_id = ?")
+      .prepare(`SELECT games.*,
+        COALESCE(game_settings.game_mode, 'multiplayer') AS game_mode,
+        game_settings.ai_difficulty AS ai_difficulty
+        FROM games
+        LEFT JOIN game_settings ON game_settings.game_id = games.id
+        WHERE games.create_request_id = ?`)
       .bind(requestId)
       .first<GameRow>()) ?? null
   );
@@ -58,7 +83,12 @@ export async function findGameByInviteHash(inviteHash: string): Promise<GameRow 
   await ensureSchema();
   return (
     (await getDatabase()
-      .prepare("SELECT * FROM games WHERE invite_token_hash = ?")
+      .prepare(`SELECT games.*,
+        COALESCE(game_settings.game_mode, 'multiplayer') AS game_mode,
+        game_settings.ai_difficulty AS ai_difficulty
+        FROM games
+        LEFT JOIN game_settings ON game_settings.game_id = games.id
+        WHERE games.invite_token_hash = ?`)
       .bind(inviteHash)
       .first<GameRow>()) ?? null
   );
@@ -94,6 +124,8 @@ export function snapshot(game: GameRow, moves: StoredMove[], you: Color): GameSn
   const position = new Chess(game.current_fen);
   return {
     id: game.id,
+    mode: game.game_mode,
+    aiDifficulty: game.ai_difficulty,
     status: game.status,
     version: game.version,
     fen: game.current_fen,

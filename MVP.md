@@ -3,6 +3,7 @@
 ## Included
 
 - Human versus human asynchronous chess
+- Solo chess against Riot Bot with five difficulty levels
 - Two separate devices or browsers
 - Create, invite, and join
 - Standard legal rules and complete endings
@@ -10,12 +11,13 @@
 - Reusable private seat links that resume on another device
 - Turn enforcement and stale-write protection
 - Mobile-friendly original voxel/block-world interface
+- Pointer and touch drag-and-drop with tap, click, and keyboard fallback
 - Optional in-browser game sounds with a persistent mute preference
 
 ## Excluded
 
 - Accounts, social graph, and server-side account recovery
-- Computer opponent or coach
+- AI coach
 - Real-time transport and notifications
 - Chat, matchmaking, ratings, points, rewards, and payments
 - Multiple skins or customization

@@ -2,7 +2,14 @@
 
 import { Chess, type Move, type PieceSymbol, type Square } from "chess.js";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type PointerEvent as ReactPointerEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   generateUuid,
   hasSeatTokenInHash,
@@ -34,6 +41,18 @@ const PIECE_NAMES: Record<PieceSymbol, string> = {
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
 const RANKS = ["8", "7", "6", "5", "4", "3", "2", "1"];
 const CONNECTION_MESSAGE = "Connection interrupted. We’ll keep trying.";
+const DIFFICULTY_LABELS = ["", "Easy", "Relaxed", "Medium", "Tough", "Brutal"];
+
+interface DragState {
+  pointerId: number;
+  from: Square;
+  startX: number;
+  startY: number;
+  x: number;
+  y: number;
+  moved: boolean;
+  over: Square | null;
+}
 
 function apiMessage(data: unknown, fallback: string): string {
   if (
@@ -71,9 +90,12 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [inviteShared, setInviteShared] = useState(false);
   const [privateShared, setPrivateShared] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
+  const [drag, setDrag] = useState<DragState | null>(null);
   const latestVersion = useRef(-1);
   const previousGame = useRef<GameSnapshot | null>(null);
   const activeToken = useRef<string | null>(null);
+  const dragRef = useRef<DragState | null>(null);
+  const suppressClick = useRef(false);
 
   const acceptGame = useCallback((nextGame: GameSnapshot) => {
     if (!shouldAcceptGameSnapshot(latestVersion.current, nextGame.version)) return false;
@@ -195,6 +217,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
   useEffect(() => {
     setSelected(null);
     setPromotionMove(null);
+    dragRef.current = null;
+    setDrag(null);
   }, [game?.version]);
 
   useEffect(() => {
@@ -268,7 +292,27 @@ export function GameRoom({ gameId }: { gameId: string }) {
     }
   }
 
+  function tryBoardMove(from: Square, to: Square) {
+    if (!chess || !game || !canMove) return;
+    const targetMoves = chess.moves({ square: from, verbose: true }).filter((move) => move.to === to);
+    if (targetMoves.length === 0) {
+      setSelected(from);
+      setMessage("Choose one of the highlighted squares.");
+      playInvalidSound();
+      return;
+    }
+    if (targetMoves.some((move) => Boolean(move.promotion))) {
+      setPromotionMove({ from, to });
+    } else {
+      void sendMove(from, to);
+    }
+  }
+
   function tapSquare(square: Square) {
+    if (suppressClick.current) {
+      suppressClick.current = false;
+      return;
+    }
     if (soundOn) void unlockGameSounds();
     if (!chess || !game) return;
     if (!canMove) {
@@ -277,11 +321,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     }
     const targetMoves = selected ? legalMoves.filter((move) => move.to === square) : [];
     if (selected && targetMoves.length > 0) {
-      if (targetMoves.some((move) => Boolean(move.promotion))) {
-        setPromotionMove({ from: selected, to: square });
-      } else {
-        void sendMove(selected, square);
-      }
+      tryBoardMove(selected, square);
       return;
     }
     const piece = chess.get(square);
@@ -294,6 +334,84 @@ export function GameRoom({ gameId }: { gameId: string }) {
     } else {
       setSelected(null);
     }
+  }
+
+  function squareAtPoint(x: number, y: number): Square | null {
+    const element = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-square]");
+    const value = element?.dataset.square;
+    return value && /^[a-h][1-8]$/.test(value) ? value as Square : null;
+  }
+
+  function startPieceDrag(event: ReactPointerEvent<HTMLSpanElement>, square: Square) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (!chess || !game || !canMove || chess.get(square)?.color !== game.you.color) return;
+    if (soundOn) void unlockGameSounds();
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const next: DragState = {
+      pointerId: event.pointerId,
+      from: square,
+      startX: event.clientX,
+      startY: event.clientY,
+      x: event.clientX,
+      y: event.clientY,
+      moved: false,
+      over: square,
+    };
+    dragRef.current = next;
+    setDrag(next);
+    setSelected(square);
+    setMessage("");
+  }
+
+  function movePieceDrag(event: ReactPointerEvent<HTMLSpanElement>) {
+    const current = dragRef.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    const moved = current.moved || Math.hypot(
+      event.clientX - current.startX,
+      event.clientY - current.startY,
+    ) >= 6;
+    const next: DragState = {
+      ...current,
+      x: event.clientX,
+      y: event.clientY,
+      moved,
+      over: moved ? squareAtPoint(event.clientX, event.clientY) : current.from,
+    };
+    dragRef.current = next;
+    setDrag(next);
+    if (moved) event.preventDefault();
+  }
+
+  function finishPieceDrag(event: ReactPointerEvent<HTMLSpanElement>) {
+    const current = dragRef.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    const target = current.moved ? squareAtPoint(event.clientX, event.clientY) : current.from;
+    dragRef.current = null;
+    setDrag(null);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (!current.moved) {
+      setSelected(current.from);
+      return;
+    }
+    suppressClick.current = true;
+    window.setTimeout(() => { suppressClick.current = false; }, 0);
+    if (target) tryBoardMove(current.from, target);
+    else {
+      setSelected(current.from);
+      setMessage("Drop the piece on a highlighted square.");
+      playInvalidSound();
+    }
+  }
+
+  function cancelPieceDrag(event: ReactPointerEvent<HTMLSpanElement>) {
+    const current = dragRef.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    setDrag(null);
+    setSelected(current.from);
   }
 
   async function shareInvite() {
@@ -395,6 +513,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     : game.status === "completed"
       ? outcomeText(game)
       : game.turn === game.you.color ? "Your turn" : `${turnName}’s turn`;
+  const draggedPiece = drag ? chess.get(drag.from) : null;
 
   return (
     <main className="game-shell">
@@ -432,7 +551,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
           >
             <span>{game.status === "completed" ? "⚑" : game.check ? "!" : "◆"}</span>
             <div><small>{game.check && game.status !== "completed" ? "CHECK" : "MATCH STATUS"}</small><strong>{statusText}</strong></div>
-            {busy ? <b>LOCKING MOVE…</b> : null}
+            {busy ? <b>{game.mode === "solo" ? "RIOT BOT THINKING…" : "LOCKING MOVE…"}</b> : null}
           </div>
 
           <div className="board-wrap" aria-busy={busy} data-interactive={canMove ? "true" : "false"}>
@@ -443,6 +562,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 const capture = legal && Boolean(piece || legalMoves.some((move) => move.to === square && move.isEnPassant()));
                 const isSelected = selected === square;
                 const isLast = lastMove?.from === square || lastMove?.to === square;
+                const isDragOver = drag?.moved && drag.over === square && legal;
                 const file = square[0];
                 const rank = square[1];
                 const showRank = index % 8 === 0;
@@ -451,16 +571,29 @@ export function GameRoom({ gameId }: { gameId: string }) {
                   <button
                     type="button"
                     role="gridcell"
-                    aria-label={`${square}${piece ? ` ${piece.color === "w" ? "white" : "black"} ${PIECE_NAMES[piece.type]}` : " empty"}`}
+                    aria-label={`${square}${piece ? ` ${piece.color === "w" ? "white" : "black"} ${PIECE_NAMES[piece.type]}` : " empty"}${legal ? ", legal destination" : ""}`}
                     aria-disabled={!canMove}
-                    className={`square ${(FILES.indexOf(file) + Number(rank)) % 2 === 0 ? "dark-square" : "light-square"}${isSelected ? " selected" : ""}${isLast ? " last-move" : ""}${legal ? capture ? " capture-target" : " legal-target" : ""}`}
+                    aria-selected={isSelected}
+                    data-square={square}
+                    className={`square ${(FILES.indexOf(file) + Number(rank)) % 2 === 0 ? "dark-square" : "light-square"}${isSelected ? " selected" : ""}${isLast ? " last-move" : ""}${legal ? capture ? " capture-target" : " legal-target" : ""}${isDragOver ? " drag-over" : ""}`}
                     key={square}
                     onClick={() => tapSquare(square)}
                     disabled={busy}
                   >
                     {showRank ? <span className="rank-label">{rank}</span> : null}
                     {showFile ? <span className="file-label">{file}</span> : null}
-                    {piece ? <span className={`piece piece-${piece.color}`}>{PIECES[piece.color][piece.type]}</span> : null}
+                    {piece ? (
+                      <span
+                        className={`piece piece-${piece.color}${drag?.from === square && drag.moved ? " dragging" : ""}`}
+                        draggable={false}
+                        onPointerDown={(event) => startPieceDrag(event, square)}
+                        onPointerMove={movePieceDrag}
+                        onPointerUp={finishPieceDrag}
+                        onPointerCancel={cancelPieceDrag}
+                      >
+                        {PIECES[piece.color][piece.type]}
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}
@@ -497,9 +630,23 @@ export function GameRoom({ gameId }: { gameId: string }) {
               </ol>
             )}
           </section>
-          <section className="side-card rules-card"><span>✓</span><div><strong>STANDARD CHESS</strong><small>Castling • En passant • Promotion</small></div></section>
+          <section className="side-card rules-card"><span>✓</span><div><strong>STANDARD CHESS</strong><small>
+            {game.mode === "solo" && game.aiDifficulty
+              ? `Riot Bot • ${DIFFICULTY_LABELS[game.aiDifficulty]}`
+              : "Castling • En passant • Promotion"}
+          </small></div></section>
         </aside>
       </section>
+
+      {drag?.moved && draggedPiece ? (
+        <span
+          className={`drag-ghost piece-${draggedPiece.color}`}
+          style={{ left: drag.x, top: drag.y }}
+          aria-hidden="true"
+        >
+          {PIECES[draggedPiece.color][draggedPiece.type]}
+        </span>
+      ) : null}
 
       {promotionMove ? (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Choose promotion piece">

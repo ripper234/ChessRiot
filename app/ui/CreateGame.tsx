@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
-import type { GameSnapshot } from "@/lib/game-types";
+import type { AiDifficulty, GameMode, GameSnapshot } from "@/lib/game-types";
 import {
   canUseGameStorage,
   generateSecret,
@@ -24,9 +24,19 @@ interface PendingCreate {
   requestId: string;
 }
 
+const DIFFICULTY_LABELS: Record<AiDifficulty, string> = {
+  1: "Easy",
+  2: "Relaxed",
+  3: "Medium",
+  4: "Tough",
+  5: "Brutal",
+};
+
 export function CreateGame() {
   const router = useRouter();
   const [name, setName] = useState("");
+  const [mode, setMode] = useState<GameMode>("multiplayer");
+  const [difficulty, setDifficulty] = useState<AiDifficulty>(3);
   const [recent, setRecent] = useState<RecentGame[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -60,19 +70,24 @@ export function CreateGame() {
       const response = await fetch("/api/games", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ displayName: cleanName, ...pending.current }),
+        body: JSON.stringify({
+          displayName: cleanName,
+          mode,
+          ...(mode === "solo" ? { difficulty } : {}),
+          ...pending.current,
+        }),
       });
       const data = (await response.json()) as {
         game?: GameSnapshot;
         inviteUrl?: string;
         error?: { message?: string };
       };
-      if (!response.ok || !data.game || !data.inviteUrl) {
+      if (!response.ok || !data.game || (mode === "multiplayer" && !data.inviteUrl)) {
         throw new Error(data.error?.message ?? "Could not create the game");
       }
       localStorage.setItem("chessriot:displayName", cleanName);
       localStorage.setItem(playerKey(data.game.id), pending.current.playerToken);
-      localStorage.setItem(inviteKey(data.game.id), data.inviteUrl);
+      if (data.inviteUrl) localStorage.setItem(inviteKey(data.game.id), data.inviteUrl);
       rememberGame(data.game);
       router.push(privateGamePath(data.game.id, pending.current.playerToken));
     } catch (caught) {
@@ -84,14 +99,14 @@ export function CreateGame() {
 
   return (
     <main className="home-shell">
-      <header className="topbar"><Brand /><span className="top-tag">ASYNC&nbsp;&nbsp;//&nbsp;&nbsp;2 PLAYERS</span></header>
+      <header className="topbar"><Brand /><span className="top-tag">SOLO&nbsp;&nbsp;//&nbsp;&nbsp;MULTIPLAYER</span></header>
       <section className="hero-grid">
         <div className="hero-copy">
           <p className="eyebrow"><span /> REAL CHESS. TOTAL PLAY.</p>
           <h1>MOVE BOLDLY.<br /><em>WIN BRIGHTLY.</em></h1>
-          <p className="hero-text">Start a game, send one link, and keep playing whenever you both have time.</p>
+          <p className="hero-text">Challenge Riot Bot now, or send one link and keep playing with a friend whenever you both have time.</p>
           <div className="feature-row" aria-label="Game features">
-            <span>♜ LEGAL CHESS</span><span>◇ SAVES EVERY MOVE</span><span>⌁ PHONE READY</span>
+            <span>♜ LEGAL CHESS</span><span>↗ DRAG TO MOVE</span><span>◇ SAVES EVERY MOVE</span>
           </div>
         </div>
         <form className="voxel-card create-card" onSubmit={createGame}>
@@ -110,11 +125,75 @@ export function CreateGame() {
             placeholder="Ron"
             disabled={busy}
           />
+          <fieldset className="mode-fieldset" disabled={busy}>
+            <legend>Game mode</legend>
+            <div className="mode-options">
+              <label className={mode === "solo" ? "selected" : ""}>
+                <input
+                  type="radio"
+                  name="game-mode"
+                  value="solo"
+                  checked={mode === "solo"}
+                  onChange={() => {
+                    setMode("solo");
+                    pending.current = null;
+                  }}
+                />
+                <span aria-hidden="true">◆</span>
+                <strong>SOLO</strong>
+                <small>You vs Riot Bot</small>
+              </label>
+              <label className={mode === "multiplayer" ? "selected" : ""}>
+                <input
+                  type="radio"
+                  name="game-mode"
+                  value="multiplayer"
+                  checked={mode === "multiplayer"}
+                  onChange={() => {
+                    setMode("multiplayer");
+                    pending.current = null;
+                  }}
+                />
+                <span aria-hidden="true">⚔</span>
+                <strong>MULTIPLAYER</strong>
+                <small>Challenge a friend</small>
+              </label>
+            </div>
+          </fieldset>
+          {mode === "solo" ? (
+            <div className="difficulty-control">
+              <div className="difficulty-heading">
+                <label htmlFor="computer-difficulty">Computer difficulty</label>
+                <output htmlFor="computer-difficulty">{DIFFICULTY_LABELS[difficulty]} · {difficulty}/5</output>
+              </div>
+              <input
+                id="computer-difficulty"
+                type="range"
+                min="1"
+                max="5"
+                step="1"
+                value={difficulty}
+                aria-valuetext={`${difficulty} of 5, ${DIFFICULTY_LABELS[difficulty]}`}
+                onChange={(event) => {
+                  setDifficulty(Number(event.target.value) as AiDifficulty);
+                  pending.current = null;
+                }}
+                disabled={busy}
+              />
+              <div className="difficulty-scale" aria-hidden="true"><span>LOWER</span><span>HIGHER</span></div>
+            </div>
+          ) : null}
           {error ? <p className="form-error" role="alert">{error}</p> : null}
           <button className="primary-button" disabled={busy || !name.trim()}>
-            {busy ? "BUILDING BOARD…" : "CREATE GAME  →"}
+            {busy
+              ? "BUILDING BOARD…"
+              : mode === "solo" ? "PLAY RIOT BOT  →" : "CREATE MULTIPLAYER GAME  →"}
           </button>
-          <p className="fine-print">No account. Your private game link works across your devices.</p>
+          <p className="fine-print">
+            {mode === "solo"
+              ? "Difficulty starts in the middle. Your game saves automatically."
+              : "No account. Your private game link works across your devices."}
+          </p>
         </form>
       </section>
       {recent.length > 0 ? (

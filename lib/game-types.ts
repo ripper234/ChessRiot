@@ -1,4 +1,6 @@
 export type Color = "w" | "b";
+export type GameMode = "solo" | "multiplayer";
+export type AiDifficulty = 1 | 2 | 3 | 4 | 5;
 export type Promotion = "q" | "r" | "b" | "n";
 export type Termination =
   | "checkmate"
@@ -33,6 +35,8 @@ export interface PublicMove {
 
 export interface GameSnapshot {
   id: string;
+  mode: GameMode;
+  aiDifficulty: AiDifficulty | null;
   status: "waiting" | "active" | "completed";
   version: number;
   fen: string;

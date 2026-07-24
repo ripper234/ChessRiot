@@ -54,6 +54,18 @@ export async function ensureSchema(): Promise<void> {
           FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
         )`),
         db.prepare("CREATE INDEX IF NOT EXISTS moves_game_ply_idx ON moves (game_id, ply)"),
+        db.prepare(`CREATE TABLE IF NOT EXISTS game_settings (
+          game_id TEXT PRIMARY KEY NOT NULL,
+          game_mode TEXT NOT NULL DEFAULT 'multiplayer'
+            CHECK (game_mode IN ('solo', 'multiplayer')),
+          ai_difficulty INTEGER
+            CHECK (ai_difficulty IS NULL OR ai_difficulty BETWEEN 1 AND 5),
+          FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE,
+          CHECK (
+            (game_mode = 'solo' AND ai_difficulty IS NOT NULL) OR
+            (game_mode = 'multiplayer' AND ai_difficulty IS NULL)
+          )
+        )`),
       ])
       .then(() => undefined)
       .catch((error: unknown) => {

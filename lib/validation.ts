@@ -1,3 +1,5 @@
+import type { AiDifficulty, GameMode } from "./game-types";
+
 const SECRET_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -14,6 +16,14 @@ export function isSecret(value: unknown): value is string {
 
 export function isUuid(value: unknown): value is string {
   return typeof value === "string" && UUID_PATTERN.test(value);
+}
+
+export function isGameMode(value: unknown): value is GameMode {
+  return value === "solo" || value === "multiplayer";
+}
+
+export function isAiDifficulty(value: unknown): value is AiDifficulty {
+  return Number.isInteger(value) && Number(value) >= 1 && Number(value) <= 5;
 }
 
 export async function hashSecret(secret: string): Promise<string> {

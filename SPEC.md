@@ -1,21 +1,23 @@
-# ChessRiot v0.1.x specification
+# ChessRiot v0.2.0 specification
 
 This file and `MVP.md` are the source of truth for the current milestone.
 
 ## Flow
 
-1. White enters a display name and creates a game.
-2. The app opens White's reusable private game URL and shows a separate one-use invitation URL.
-3. Black opens that URL on another device, enters a display name, and claims the second seat.
-4. Both players make legal moves in turn. The server revalidates every move against authoritative history.
-5. The board polls for changes and refreshes on focus. Either player can open their private game URL on any device and restore the correct seat.
+1. The player enters a display name, then chooses Solo or Multiplayer.
+2. Solo reveals a five-step difficulty bar that starts at 3, Medium. The game starts immediately with the player as White against Riot Bot.
+3. Multiplayer opens White's reusable private game URL and shows a separate one-use invitation URL.
+4. Black opens that invitation on another device, enters a display name, and claims the second seat.
+5. Every human and computer move is revalidated by the server against authoritative history.
+6. The board polls for changes and refreshes on focus. A player can open their private game URL on any device and restore the correct seat.
 
 ## Rules and persistence
 
 - Standard chess only, implemented with chess.js.
-- D1 stores current FEN, status, version, players, hashed keys, and immutable ordered moves.
+- D1 stores current FEN, status, version, mode, computer difficulty, players, hashed keys, and immutable ordered moves.
 - Every move carries an expected version and idempotency key.
 - A conditional update plus move insert runs atomically. Stale, illegal, wrong-turn, unauthorized, and completed-game moves do not mutate state.
+- In Solo, the human move and Riot Bot reply are committed in one atomic batch. Riot Bot uses bounded server-side search and always submits a move through the same chess.js rules adapter.
 - Replaying move history is required before validation so repetition remains correct.
 
 ## Identity and privacy
@@ -29,7 +31,7 @@ This file and `MVP.md` are the source of truth for the current milestone.
 ## Interface
 
 - One original voxel/block-world identity using grass, dirt, stone, wood, sand, water, and torch-light colors. It does not copy third-party game branding or assets.
-- Tap a piece, then a legal destination.
+- Drag and drop a piece, or tap/click a piece and then a legal destination.
 - Board rotates for Black while submitted coordinates remain absolute chess squares.
 - The interface shows turn, check, outcome, players, and move history.
 - Synthesized move, capture, check, result, and invalid-action sounds are on by default and can be muted.

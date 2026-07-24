@@ -50,3 +50,9 @@ export const moves = sqliteTable(
     uniqueIndex("moves_request_unique").on(table.gameId, table.requestId),
   ],
 );
+
+export const gameSettings = sqliteTable("game_settings", {
+  gameId: text("game_id").primaryKey(),
+  gameMode: text("game_mode").notNull().default("multiplayer"),
+  aiDifficulty: integer("ai_difficulty"),
+});
