@@ -31,8 +31,36 @@ const ENVIRONMENTS = [
   },
 ];
 
-const CONTROL_VERSION = "0.1.6";
+const CONTROL_VERSION = "0.2.0";
 const STATUS_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+const SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
+const HEALTH_STATES = new Set([
+  "fresh",
+  "degraded",
+  "auth",
+  "invalid",
+  "misconfigured",
+  "network",
+  "not_configured",
+  "server",
+  "timeout",
+  "unknown",
+]);
+const REGISTRY_SCHEMA_SQL = `
+  CREATE TABLE IF NOT EXISTS deployment_registry (
+    environment TEXT PRIMARY KEY NOT NULL,
+    deployed_version TEXT NOT NULL,
+    deployed_at TEXT,
+    verified_at TEXT,
+    runtime_version TEXT,
+    health_state TEXT NOT NULL DEFAULT 'unknown',
+    health_status TEXT,
+    database_status TEXT,
+    last_health_at TEXT,
+    last_checked_at TEXT,
+    updated_at TEXT NOT NULL
+  )
+`;
 const RELEASES = [
   {
     version: "0.3.2",
@@ -117,7 +145,7 @@ async function mintGrant(secret, audience) {
   return encodedPayload + "." + base64Url(new Uint8Array(signature));
 }
 
-function deploymentRegistry(env) {
+function bootstrapRegistry(env) {
   const fallback = Object.fromEntries(
     ENVIRONMENTS.map((config) => [
       config.key,
@@ -125,6 +153,12 @@ function deploymentRegistry(env) {
         version: config.fallbackVersion,
         deployedAt: null,
         verifiedAt: null,
+        runtimeVersion: null,
+        healthState: "unknown",
+        healthStatus: null,
+        databaseStatus: null,
+        lastHealthAt: null,
+        lastCheckedAt: null,
       },
     ]),
   );
@@ -133,8 +167,9 @@ function deploymentRegistry(env) {
       const parsed = JSON.parse(env.DEPLOYMENT_STATE_JSON);
       for (const config of ENVIRONMENTS) {
         const candidate = parsed?.environments?.[config.key];
-        if (!candidate || !/^\d+\.\d+\.\d+$/.test(candidate.version)) continue;
+        if (!candidate || !SEMVER_PATTERN.test(candidate.version)) continue;
         fallback[config.key] = {
+          ...fallback[config.key],
           version: candidate.version,
           deployedAt: typeof candidate.deployedAt === "string" ? candidate.deployedAt : null,
           verifiedAt: typeof candidate.verifiedAt === "string" ? candidate.verifiedAt : null,
@@ -146,22 +181,222 @@ function deploymentRegistry(env) {
   }
   for (const config of ENVIRONMENTS) {
     const configuredVersion = env[config.deployedVersionKey];
-    if (/^\d+\.\d+\.\d+$/.test(configuredVersion || "")) {
+    if (SEMVER_PATTERN.test(configuredVersion || "")) {
       fallback[config.key].version = configuredVersion;
     }
   }
   return fallback;
 }
 
+function registryValue(row, fallback) {
+  if (!row || !SEMVER_PATTERN.test(row.deployed_version || "")) return fallback;
+  return {
+    version: row.deployed_version,
+    deployedAt: row.deployed_at || null,
+    verifiedAt: row.verified_at || null,
+    runtimeVersion: SEMVER_PATTERN.test(row.runtime_version || "")
+      ? row.runtime_version
+      : null,
+    healthState: HEALTH_STATES.has(row.health_state) ? row.health_state : "unknown",
+    healthStatus: row.health_status || null,
+    databaseStatus: row.database_status || null,
+    lastHealthAt: row.last_health_at || null,
+    lastCheckedAt: row.last_checked_at || null,
+  };
+}
+
+async function ensureDeploymentRegistry(env, fallback) {
+  if (!env.DB || typeof env.DB.prepare !== "function") return false;
+  await env.DB.prepare(REGISTRY_SCHEMA_SQL).run();
+  const now = new Date().toISOString();
+  const inserts = ENVIRONMENTS.map((config) =>
+    env.DB.prepare(`
+      INSERT OR IGNORE INTO deployment_registry (
+        environment,
+        deployed_version,
+        deployed_at,
+        verified_at,
+        health_state,
+        updated_at
+      ) VALUES (?, ?, ?, ?, 'unknown', ?)
+    `).bind(
+      config.key,
+      fallback[config.key].version,
+      fallback[config.key].deployedAt,
+      fallback[config.key].verifiedAt,
+      now,
+    ),
+  );
+  if (typeof env.DB.batch === "function") await env.DB.batch(inserts);
+  else for (const statement of inserts) await statement.run();
+  return true;
+}
+
+async function deploymentRegistry(env) {
+  const fallback = bootstrapRegistry(env);
+  try {
+    if (!await ensureDeploymentRegistry(env, fallback)) {
+      return { environments: fallback, persistence: "fallback" };
+    }
+    const response = await env.DB.prepare(`
+      SELECT
+        environment,
+        deployed_version,
+        deployed_at,
+        verified_at,
+        runtime_version,
+        health_state,
+        health_status,
+        database_status,
+        last_health_at,
+        last_checked_at
+      FROM deployment_registry
+    `).all();
+    for (const row of response.results || []) {
+      if (!fallback[row.environment]) continue;
+      fallback[row.environment] = registryValue(row, fallback[row.environment]);
+    }
+    return { environments: fallback, persistence: "d1" };
+  } catch {
+    return { environments: fallback, persistence: "fallback" };
+  }
+}
+
+function registryJson(payload, status = 200) {
+  return Response.json(payload, {
+    status,
+    headers: {
+      "cache-control": "no-store",
+      "content-security-policy": "default-src 'none'",
+      "referrer-policy": "no-referrer",
+      "x-content-type-options": "nosniff",
+    },
+  });
+}
+
+async function readObservationBody(request) {
+  const contentLength = Number(request.headers.get("content-length") || 0);
+  if (contentLength > 4096) throw new Error("body_too_large");
+  const text = await request.text();
+  if (text.length > 4096) throw new Error("body_too_large");
+  return JSON.parse(text);
+}
+
+async function observationResponse(request, env) {
+  if (request.headers.get("x-control-observation") !== "browser-health-v1") {
+    return registryJson({ error: "not_authorized" }, 403);
+  }
+  if (!env.DB || typeof env.DB.prepare !== "function") {
+    return registryJson({ error: "persistence_unavailable" }, 503);
+  }
+  let body;
+  try {
+    body = await readObservationBody(request);
+  } catch {
+    return registryJson({ error: "invalid_json" }, 400);
+  }
+  const config = ENVIRONMENTS.find((entry) => entry.key === body?.environment);
+  const state = typeof body?.healthState === "string" ? body.healthState : "unknown";
+  const runtimeVersion = SEMVER_PATTERN.test(body?.runtimeVersion || "")
+    ? body.runtimeVersion
+    : null;
+  if (!config || !HEALTH_STATES.has(state)) {
+    return registryJson({ error: "invalid_observation" }, 400);
+  }
+  const confirmsDeployment =
+    (state === "fresh" || state === "degraded") && runtimeVersion !== null;
+  if ((state === "fresh" || state === "degraded") && !runtimeVersion) {
+    return registryJson({ error: "invalid_runtime_version" }, 400);
+  }
+  const fallback = bootstrapRegistry(env);
+  await ensureDeploymentRegistry(env, fallback);
+  const current = await env.DB.prepare(`
+    SELECT
+      deployed_version,
+      deployed_at,
+      verified_at,
+      runtime_version,
+      last_health_at
+    FROM deployment_registry
+    WHERE environment = ?
+  `).bind(config.key).first();
+  if (!current) return registryJson({ error: "registry_missing" }, 500);
+
+  const now = new Date().toISOString();
+  const deployedVersion = confirmsDeployment
+    ? runtimeVersion
+    : current.deployed_version;
+  const deployedAt = confirmsDeployment && runtimeVersion !== current.deployed_version
+    ? now
+    : current.deployed_at;
+  const verifiedAt = confirmsDeployment ? now : current.verified_at;
+  const healthStatus = typeof body?.healthStatus === "string"
+    ? body.healthStatus.slice(0, 32)
+    : null;
+  const databaseStatus = typeof body?.databaseStatus === "string"
+    ? body.databaseStatus.slice(0, 32)
+    : null;
+  const lastHealthAt = confirmsDeployment ? now : current.last_health_at;
+
+  await env.DB.prepare(`
+    UPDATE deployment_registry
+    SET
+      deployed_version = ?,
+      deployed_at = ?,
+      verified_at = ?,
+      runtime_version = ?,
+      health_state = ?,
+      health_status = ?,
+      database_status = ?,
+      last_health_at = ?,
+      last_checked_at = ?,
+      updated_at = ?
+    WHERE environment = ?
+  `).bind(
+    deployedVersion,
+    deployedAt,
+    verifiedAt,
+    runtimeVersion || current.runtime_version,
+    state,
+    healthStatus,
+    databaseStatus,
+    lastHealthAt,
+    now,
+    now,
+    config.key,
+  ).run();
+
+  return registryJson({
+    environment: config.key,
+    deployedVersion,
+    deployedAt,
+    verifiedAt,
+    runtimeVersion: runtimeVersion || current.runtime_version || null,
+    healthState: state,
+    healthStatus,
+    databaseStatus,
+    lastHealthAt,
+    lastCheckedAt: now,
+  });
+}
+
 async function statusResponse(env) {
-  const registry = deploymentRegistry(env);
+  const registry = await deploymentRegistry(env);
   const environments = await Promise.all(
     ENVIRONMENTS.map(async (config) => ({
       key: config.key,
       name: config.name,
-      deployedVersion: registry[config.key].version,
-      deployedAt: registry[config.key].deployedAt,
-      verifiedAt: registry[config.key].verifiedAt,
+      deployedVersion: registry.environments[config.key].version,
+      deployedAt: registry.environments[config.key].deployedAt,
+      verifiedAt: registry.environments[config.key].verifiedAt,
+      lastKnownHealth: {
+        runtimeVersion: registry.environments[config.key].runtimeVersion,
+        state: registry.environments[config.key].healthState,
+        status: registry.environments[config.key].healthStatus,
+        database: registry.environments[config.key].databaseStatus,
+        lastHealthAt: registry.environments[config.key].lastHealthAt,
+        lastCheckedAt: registry.environments[config.key].lastCheckedAt,
+      },
       access: config.access,
       accent: config.accent,
       url: env[config.urlKey] ?? null,
@@ -175,6 +410,7 @@ async function statusResponse(env) {
       controlVersion: CONTROL_VERSION,
       releases: RELEASES,
       latestVersion: RELEASES[0].version,
+      registryPersistence: registry.persistence,
       refreshIntervalMs: STATUS_REFRESH_INTERVAL_MS,
       sourceUrl: "https://github.com/ripper234/ChessRiot",
     },
@@ -272,6 +508,14 @@ const page = `<!doctype html>
         border-bottom:1px solid #25334e;text-align:left;vertical-align:top}th{color:var(--muted);font-size:8px;letter-spacing:.8px}
       td.success{color:var(--green)}td.rejected{color:var(--gold)}td.failure{color:#ff8cab}.empty{padding:25px;
         color:var(--muted);text-align:center;font:700 11px/1.4 var(--mono)}
+      .feedback{margin-top:20px;padding:20px;border:1px solid var(--line);background:rgba(5,9,20,.58)}
+      .feedback[hidden]{display:none}.feedback-head{display:flex;align-items:center;justify-content:space-between;gap:15px;
+        margin-bottom:14px}.feedback h2{margin:0;font:italic 27px/1 var(--display);text-transform:uppercase}
+      .feedback-count{color:var(--cyan);font:800 9px/1 var(--mono)}.feedback-list{display:grid;gap:8px}
+      .feedback-item{padding:13px;border:1px solid #2b3956;background:rgba(17,26,45,.72)}
+      .feedback-item strong{display:block;font-size:12px}.feedback-item p{margin:7px 0 0;color:#c0cbde;font-size:11px;
+        line-height:1.5;white-space:pre-wrap}.feedback-meta{display:block;margin-top:9px;color:var(--muted);
+        font:700 8px/1.35 var(--mono)}
       .notice{margin-top:18px;padding:16px 18px;border:1px solid rgba(255,196,0,.28);color:#cbd4e5;
         background:rgba(255,196,0,.04);font-size:11px;line-height:1.5}.notice b{color:var(--gold)}
       .changelog{margin-top:20px;padding:20px;border:1px solid var(--line);background:rgba(5,9,20,.58)}
@@ -319,6 +563,10 @@ const page = `<!doctype html>
         <div class="events-head"><h2>Recent events</h2><div class="tabs" id="tabs"></div></div>
         <div id="event-content"><p class="empty">Loading environment events…</p></div>
       </section>
+      <section class="feedback" id="feedback" hidden>
+        <div class="feedback-head"><h2>Feedback pool</h2><span class="feedback-count" id="feedback-count"></span></div>
+        <div id="feedback-content"></div>
+      </section>
       <section class="changelog">
         <h2>Version history</h2>
         <div class="release-list">${RELEASES.map((release) => `
@@ -350,6 +598,9 @@ const clientScript = String.raw`
   const checked = document.querySelector("#checked");
   const tabs = document.querySelector("#tabs");
   const eventContent = document.querySelector("#event-content");
+  const feedbackSection = document.querySelector("#feedback");
+  const feedbackCount = document.querySelector("#feedback-count");
+  const feedbackContent = document.querySelector("#feedback-content");
   const initialEnvironments = ${JSON.stringify(
     ENVIRONMENTS.map(
       ({ key, name, fallbackVersion, access, accent }) => ({
@@ -369,7 +620,8 @@ const clientScript = String.raw`
   const copy = document.querySelector("#copy");
   const snapshots = new Map();
   let activeEnvironment = "production";
-  let lastUpdatedAt = null;
+  let lastAttemptAt = null;
+  let lastSuccessfulAt = null;
   let refreshIntervalMs = 300000;
   let statusRequest = null;
   const snapshotPrefix = "chessriot-control:snapshot:";
@@ -454,6 +706,71 @@ const clientScript = String.raw`
     }
   }
 
+  function registrySnapshot(item) {
+    const known = item.lastKnownHealth;
+    if (!known || !known.runtimeVersion) return null;
+    const lastHealthAt = known.lastHealthAt ? new Date(known.lastHealthAt) : null;
+    const lastCheckedAt = known.lastCheckedAt ? new Date(known.lastCheckedAt) : null;
+    return {
+      item: item,
+      health: {
+        version: known.runtimeVersion,
+        status: known.status || (known.state === "degraded" ? "degraded" : "ok"),
+        database: known.database || null,
+      },
+      overview: null,
+      healthFresh: false,
+      telemetryFresh: false,
+      healthState: "stale",
+      telemetryState: "unknown",
+      checkedAt: lastCheckedAt,
+      lastHealthAt: lastHealthAt,
+      lastTelemetryAt: null,
+    };
+  }
+
+  async function persistObservation(snapshot) {
+    const runtimeVersion = snapshot.healthFresh && snapshot.health
+      ? snapshot.health.version
+      : null;
+    try {
+      const response = await fetch("/api/registry/observation", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-control-observation": "browser-health-v1",
+        },
+        body: JSON.stringify({
+          environment: snapshot.item.key,
+          healthState: snapshot.healthState,
+          runtimeVersion: runtimeVersion,
+          healthStatus: snapshot.healthFresh && snapshot.health
+            ? snapshot.health.status
+            : null,
+          databaseStatus: snapshot.healthFresh && snapshot.health
+            ? snapshot.health.database
+            : null,
+        }),
+        cache: "no-store",
+      });
+      if (!response.ok) return;
+      const persisted = await response.json();
+      snapshot.item.deployedVersion = persisted.deployedVersion;
+      snapshot.item.deployedAt = persisted.deployedAt;
+      snapshot.item.verifiedAt = persisted.verifiedAt;
+      snapshot.item.lastKnownHealth = {
+        runtimeVersion: persisted.runtimeVersion,
+        state: persisted.healthState,
+        status: persisted.healthStatus,
+        database: persisted.databaseStatus,
+        lastHealthAt: persisted.lastHealthAt,
+        lastCheckedAt: persisted.lastCheckedAt,
+      };
+    } catch {
+      // The current check still renders; the next five-minute cycle retries persistence.
+    }
+  }
+
   function probeState(result, expectedEnvironment) {
     if (result.status === "rejected") {
       const reason = result.reason;
@@ -484,9 +801,13 @@ const clientScript = String.raw`
   }
 
   async function inspectEnvironment(item) {
-    const previous = snapshots.get(item.key) || cachedSnapshot(item);
+    const existing = snapshots.get(item.key);
+    const previous =
+      (existing && (existing.health || existing.overview) ? existing : null) ||
+      cachedSnapshot(item) ||
+      registrySnapshot(item);
     if (!item.url) {
-      return {
+      const value = {
         item: item,
         health: previous && previous.health || null,
         overview: previous && previous.overview || null,
@@ -498,6 +819,9 @@ const clientScript = String.raw`
         lastHealthAt: previous && previous.lastHealthAt || null,
         lastTelemetryAt: previous && previous.lastTelemetryAt || null,
       };
+      snapshots.set(item.key, value);
+      await persistObservation(value);
+      return value;
     }
     const healthPromise = fetchProbe(item.url + "/api/health?control-check=" + Date.now(), {
       cache: "no-store",
@@ -531,12 +855,17 @@ const clientScript = String.raw`
       lastTelemetryAt: telemetryProbe.fresh ? now : previous && previous.lastTelemetryAt || null,
     };
     snapshots.set(item.key, value);
+    await persistObservation(value);
     if (value.health || value.overview) preserveSnapshot(value);
     return value;
   }
 
   function failedInspection(item) {
-    const previous = snapshots.get(item.key) || cachedSnapshot(item);
+    const existing = snapshots.get(item.key);
+    const previous =
+      (existing && (existing.health || existing.overview) ? existing : null) ||
+      cachedSnapshot(item) ||
+      registrySnapshot(item);
     const value = {
       item: item,
       health: previous && previous.health || null,
@@ -783,7 +1112,78 @@ const clientScript = String.raw`
     }
   }
 
+  function feedbackData(overview) {
+    if (!overview || typeof overview !== "object") return null;
+    const candidate = overview.feedbackPool ?? overview.feedback;
+    if (Array.isArray(candidate)) {
+      return { items: candidate, total: candidate.length };
+    }
+    if (candidate && Array.isArray(candidate.items)) {
+      return {
+        items: candidate.items,
+        total: Number.isFinite(candidate.total) ? candidate.total : candidate.items.length,
+      };
+    }
+    return null;
+  }
+
+  function feedbackTimestamp(entry) {
+    return entry && (
+      entry.createdAt ||
+      entry.submittedAt ||
+      entry.occurredAt ||
+      entry.created_at
+    );
+  }
+
+  function renderFeedback() {
+    const snapshot = snapshots.get(activeEnvironment);
+    const feedback = feedbackData(snapshot && snapshot.overview);
+    if (!feedback) {
+      feedbackSection.hidden = true;
+      feedbackCount.textContent = "";
+      feedbackContent.replaceChildren();
+      return;
+    }
+    feedbackSection.hidden = false;
+    feedbackCount.textContent = feedback.total + (feedback.total === 1 ? " ITEM" : " ITEMS") +
+      " · " + (snapshot && snapshot.item ? snapshot.item.name.toUpperCase() : "");
+    if (!feedback.items.length) {
+      feedbackContent.innerHTML = '<p class="empty">No feedback submitted yet.</p>';
+      return;
+    }
+    const list = document.createElement("div");
+    list.className = "feedback-list";
+    const ordered = feedback.items.slice().sort(function (left, right) {
+      return String(feedbackTimestamp(right) || "").localeCompare(
+        String(feedbackTimestamp(left) || ""),
+      );
+    });
+    ordered.forEach(function (entry) {
+      const item = document.createElement("article");
+      item.className = "feedback-item";
+      const title = document.createElement("strong");
+      title.textContent = entry && entry.title ? String(entry.title) : "Untitled feedback";
+      item.append(title);
+      const comment = entry && (entry.comment || entry.details || entry.message);
+      if (comment) {
+        const body = document.createElement("p");
+        body.textContent = String(comment);
+        item.append(body);
+      }
+      const meta = document.createElement("span");
+      meta.className = "feedback-meta";
+      const timestamp = feedbackTimestamp(entry);
+      const status = entry && entry.status ? String(entry.status) : "new";
+      meta.textContent = (timestamp ? new Date(timestamp).toLocaleString() + " · " : "") + status;
+      item.append(meta);
+      list.append(item);
+    });
+    feedbackContent.replaceChildren(list);
+  }
+
   function renderEvents() {
+    renderFeedback();
     const snapshot = snapshots.get(activeEnvironment);
     if (snapshot && snapshot.loading) {
       eventContent.innerHTML = '<p class="empty">Loading environment events…</p>';
@@ -828,6 +1228,7 @@ const clientScript = String.raw`
     if (statusRequest) return statusRequest;
     grid.setAttribute("aria-busy", "true");
     statusRequest = (async function () {
+      lastAttemptAt = new Date();
       try {
         const status = await fetch("/api/status", { cache: "no-store" }).then(function (response) {
           return readJson(response, false);
@@ -848,15 +1249,19 @@ const clientScript = String.raw`
         if (!snapshots.has(activeEnvironment) && inspected[0]) activeEnvironment = inspected[0].item.key;
         renderTabs();
         renderEvents();
-        lastUpdatedAt = new Date();
         const liveChecks = inspected.filter(function (entry) { return entry.healthFresh; }).length;
-        checked.textContent = "Last update " + lastUpdatedAt.toLocaleString() +
-          " · " + liveChecks + "/" + inspected.length + " live health checks";
-        checked.title = lastUpdatedAt.toISOString();
+        if (liveChecks > 0) lastSuccessfulAt = lastAttemptAt;
+        checked.textContent = "Last check " + lastAttemptAt.toLocaleString() +
+          " · last live success " +
+          (lastSuccessfulAt ? lastSuccessfulAt.toLocaleString() : "none yet") +
+          " · " + liveChecks + "/" + inspected.length + " live";
+        checked.title = "Last check: " + lastAttemptAt.toISOString() +
+          (lastSuccessfulAt ? " · Last live success: " + lastSuccessfulAt.toISOString() : "");
       } catch {
-        checked.textContent = lastUpdatedAt
-          ? "Last update " + lastUpdatedAt.toLocaleString() + " · latest check failed"
-          : "Update failed · retrying automatically";
+        checked.textContent = "Last check " + lastAttemptAt.toLocaleString() +
+          " failed · last live success " +
+          (lastSuccessfulAt ? lastSuccessfulAt.toLocaleString() : "none yet") +
+          " · retrying automatically";
       } finally {
         grid.setAttribute("aria-busy", "false");
       }
@@ -903,7 +1308,7 @@ const clientScript = String.raw`
   setInterval(function () { void loadStatus(); }, 300000);
   document.addEventListener("visibilitychange", function () {
     if (document.visibilityState === "visible" &&
-      (!lastUpdatedAt || Date.now() - lastUpdatedAt.getTime() >= refreshIntervalMs)) {
+      (!lastAttemptAt || Date.now() - lastAttemptAt.getTime() >= refreshIntervalMs)) {
       void loadStatus();
     }
   });
@@ -925,6 +1330,9 @@ export default {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/api/status") {
       return statusResponse(env);
+    }
+    if (request.method === "POST" && url.pathname === "/api/registry/observation") {
+      return observationResponse(request, env);
     }
     if (request.method === "GET" && url.pathname === "/control.js") {
       return new Response(clientScript, {

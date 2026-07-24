@@ -63,6 +63,8 @@ assert.match(script, /AbortController/);
 assert.match(script, /sessionStorage/);
 assert.match(script, /COULD NOT VERIFY/);
 assert.match(script, /Deployment state is unaffected/);
+assert.match(script, /lastSuccessfulAt/);
+assert.match(script, /last live success/);
 
 const statusResponse = await workerModule.default.fetch(
   new Request("https://control.test/api/status"),
@@ -143,7 +145,7 @@ assert.deepEqual(
     deployedVersion,
   })),
   [
-    { key: "development", deployedVersion: "0.3.1" },
+    { key: "development", deployedVersion: "0.3.2" },
     { key: "staging", deployedVersion: "0.2.2" },
     { key: "production", deployedVersion: "0.2.2" },
   ],

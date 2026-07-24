@@ -7,8 +7,9 @@ dist_root="$project_root/dist"
 node "$project_root/scripts/release-version.mjs" check
 
 rm -rf "$dist_root"
-mkdir -p "$dist_root/server" "$dist_root/.openai"
+mkdir -p "$dist_root/server" "$dist_root/.openai/drizzle"
 cp "$project_root/worker/index.js" "$dist_root/server/index.js"
 cp "$project_root/.openai/hosting.json" "$dist_root/.openai/hosting.json"
+cp -R "$project_root/drizzle/." "$dist_root/.openai/drizzle/"
 
 echo "Built $dist_root"
