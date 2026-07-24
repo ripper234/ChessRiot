@@ -42,6 +42,16 @@ interface GameCountRow {
   completed: number;
 }
 
+interface FeedbackRow {
+  id: string;
+  title: string;
+  comment: string | null;
+  page: string;
+  app_version: string;
+  status: string;
+  created_at: string;
+}
+
 function safeMetadata(value: string | null): Record<string, unknown> {
   if (!value) return {};
   try {
@@ -68,7 +78,7 @@ export async function POST(request: Request) {
   await ensureSchema();
   const db = getDatabase();
   const since = new Date(Date.now() - 24 * 60 * 60 * 1_000).toISOString();
-  const [counts, breakdown, recent, gameCounts, latencyRows] = await Promise.all([
+  const [counts, breakdown, recent, gameCounts, latencyRows, feedbackRows] = await Promise.all([
     db.prepare(`SELECT
       COUNT(*) AS total,
       SUM(CASE WHEN outcome = 'success' THEN 1 ELSE 0 END) AS successes,
@@ -78,12 +88,13 @@ export async function POST(request: Request) {
       AVG(latency_ms) AS average_latency_ms,
       MAX(occurred_at) AS last_event_at,
       MAX(CASE WHEN outcome = 'failure' THEN occurred_at END) AS last_error_at
-      FROM observability_events WHERE occurred_at >= ?`)
+      FROM observability_events
+      WHERE occurred_at >= ? AND event_name <> 'system.health_checked'`)
       .bind(since)
       .first<CountRow>(),
     db.prepare(`SELECT event_name, outcome, COUNT(*) AS count
       FROM observability_events
-      WHERE occurred_at >= ?
+      WHERE occurred_at >= ? AND event_name <> 'system.health_checked'
       GROUP BY event_name, outcome
       ORDER BY event_name, outcome`)
       .bind(since)
@@ -92,6 +103,7 @@ export async function POST(request: Request) {
       subject_hash, route, method, status_code, error_code, latency_ms,
       metadata_json
       FROM observability_events
+      WHERE event_name <> 'system.health_checked'
       ORDER BY occurred_at DESC
       LIMIT 60`)
       .all<RecentRow>(),
@@ -102,11 +114,18 @@ export async function POST(request: Request) {
       FROM games`)
       .first<GameCountRow>(),
     db.prepare(`SELECT latency_ms FROM observability_events
-      WHERE occurred_at >= ? AND latency_ms IS NOT NULL
+      WHERE occurred_at >= ?
+        AND event_name <> 'system.health_checked'
+        AND latency_ms IS NOT NULL
       ORDER BY latency_ms ASC
       LIMIT 2000`)
       .bind(since)
       .all<{ latency_ms: number }>(),
+    db.prepare(`SELECT id, title, comment, page, app_version, status, created_at
+      FROM feedback
+      ORDER BY created_at DESC
+      LIMIT 100`)
+      .all<FeedbackRow>(),
   ]);
 
   const latencyValues = (latencyRows.results ?? []).map((row) => row.latency_ms);
@@ -155,6 +174,15 @@ export async function POST(request: Request) {
       errorCode: row.error_code,
       latencyMs: row.latency_ms,
       metadata: safeMetadata(row.metadata_json),
+    })),
+    feedback: (feedbackRows.results ?? []).map((row) => ({
+      id: row.id,
+      title: row.title,
+      comment: row.comment,
+      page: row.page,
+      appVersion: row.app_version,
+      status: row.status,
+      createdAt: row.created_at,
     })),
   }), { headers });
 }
