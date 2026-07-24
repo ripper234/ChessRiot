@@ -64,4 +64,22 @@ describe("boardEffects", () => {
       { ply: 3, from: "e4", to: "d5", capture: true },
     ]);
   });
+
+  it("animates an optimistic human move first and only the bot reply afterward", () => {
+    const before = snapshot([]);
+    const humanPreview = snapshot(moves.slice(0, 1));
+    const committedHuman = {
+      ...humanPreview,
+      version: humanPreview.version + 1,
+    };
+    const finalReply = snapshot(moves.slice(0, 2));
+
+    expect(boardEffects(before, humanPreview)).toEqual([
+      { ply: 1, from: "e2", to: "e4", capture: false },
+    ]);
+    expect(boardEffects(humanPreview, committedHuman)).toEqual([]);
+    expect(boardEffects(committedHuman, finalReply)).toEqual([
+      { ply: 2, from: "d7", to: "d5", capture: false },
+    ]);
+  });
 });
