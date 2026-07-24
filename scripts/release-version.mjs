@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packagePath = resolve(root, "package.json");
+const packageLockPath = resolve(root, "package-lock.json");
 const workerPath = resolve(root, "worker/index.js");
 const command = process.argv[2] ?? "check";
 
@@ -44,12 +45,19 @@ function versionAt(ref) {
 
 function readCurrent() {
   const packageJson = JSON.parse(readFileSync(packagePath, "utf8"));
+  const packageLock = JSON.parse(readFileSync(packageLockPath, "utf8"));
   const worker = readFileSync(workerPath, "utf8");
   const embedded = /const CONTROL_VERSION = "(\d+\.\d+\.\d+)"/.exec(worker)?.[1];
   if (packageJson.version !== embedded) {
     throw new Error("package.json and CONTROL_VERSION do not match.");
   }
-  return { packageJson, worker, version: packageJson.version };
+  if (
+    packageLock.version !== packageJson.version ||
+    packageLock.packages?.[""]?.version !== packageJson.version
+  ) {
+    throw new Error("package.json and package-lock.json versions do not match.");
+  }
+  return { packageJson, packageLock, worker, version: packageJson.version };
 }
 
 if (command === "check") {
@@ -61,13 +69,16 @@ if (command === "check") {
   }
   console.log(baseline ? `Control version verified: ${baseline} → ${version}` : `Control version verified: ${version}`);
 } else if (["patch", "minor", "major"].includes(command)) {
-  const { packageJson, worker, version } = readCurrent();
+  const { packageJson, packageLock, worker, version } = readCurrent();
   const [major, minor, patch] = parse(version);
   const next = command === "major"
     ? `${major + 1}.0.0`
     : command === "minor" ? `${major}.${minor + 1}.0` : `${major}.${minor}.${patch + 1}`;
   packageJson.version = next;
+  packageLock.version = next;
+  packageLock.packages[""].version = next;
   writeFileSync(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`);
+  writeFileSync(packageLockPath, `${JSON.stringify(packageLock, null, 2)}\n`);
   writeFileSync(
     workerPath,
     worker.replace(
