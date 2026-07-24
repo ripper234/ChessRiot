@@ -193,7 +193,7 @@ export function CreateGame() {
             {recent.map((game) => (
               <Link className="recent-card" href={`/g/${game.id}`} key={game.id}>
                 <span className={`mini-piece ${game.color === "w" ? "light" : "dark"}`}>
-                  {game.color === "w" ? "♙" : "♟"}
+                  ♟
                 </span>
                 <span><strong>{game.label}</strong><small>Tap to return</small></span>
                 <b>→</b>
