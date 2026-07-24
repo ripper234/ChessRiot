@@ -101,7 +101,7 @@ export async function playPendingComputerTurn(gameId: string): Promise<void> {
   );
   if (committed) {
     await recordEvent({
-      event: changes(results[0]) === 1 ? "bot.move_recovered" : "bot.move_raced",
+      event: changes(results[0]) === 1 ? "bot.move_committed" : "bot.move_raced",
       outcome: "success",
       requestId,
       subjectId: gameId,
