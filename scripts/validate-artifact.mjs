@@ -290,7 +290,7 @@ assert.deepEqual(
     },
   ],
 );
-assert.equal(status.releases[0].version, "0.4.0");
+assert.equal(status.releases[0].version, "0.4.1");
 
 const fallbackResponse = await workerModule.default.fetch(
   new Request("https://control.test/api/status"),
@@ -304,7 +304,7 @@ assert.deepEqual(
     deployedVersion,
   })),
   [
-    { key: "development", deployedVersion: "0.4.0" },
+    { key: "development", deployedVersion: "0.4.1" },
     { key: "staging", deployedVersion: "0.3.3" },
     { key: "production", deployedVersion: "0.3.3" },
   ],
@@ -402,7 +402,7 @@ assert.equal(
   persisted.environments[0].lastKnownHealth.lastHealthAt,
   successfulObservation.lastHealthAt,
 );
-assert.equal(persisted.latestVersion, "0.4.0");
+assert.equal(persisted.latestVersion, "0.4.1");
 
 const promotedEnv = {
   ...persistentEnv,
@@ -425,7 +425,7 @@ const promotedResponse = await workerModule.default.fetch(
 const promoted = await promotedResponse.json();
 assert.equal(promoted.environments[0].deployedVersion, "0.3.4");
 assert.equal(promoted.environments[0].lastKnownHealth.runtimeVersion, null);
-assert.equal(promoted.latestVersion, "0.4.0");
+assert.equal(promoted.latestVersion, "0.4.1");
 
 const reconciliationDb = new FakeD1();
 const oldRegistryEnv = {

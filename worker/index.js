@@ -2,7 +2,7 @@ const ENVIRONMENTS = [
   {
     key: "development",
     name: "Development",
-    fallbackVersion: "0.4.0",
+    fallbackVersion: "0.4.1",
     deployedVersionKey: "DEV_DEPLOYED_VERSION",
     urlKey: "DEV_URL",
     secretKey: "DEV_OPS_READ_SECRET",
@@ -31,7 +31,7 @@ const ENVIRONMENTS = [
   },
 ];
 
-const CONTROL_VERSION = "0.2.7";
+const CONTROL_VERSION = "0.2.8";
 const STATUS_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
 const HEALTH_STATES = new Set([
@@ -62,6 +62,11 @@ const REGISTRY_SCHEMA_SQL = `
   )
 `;
 const RELEASES = [
+  {
+    version: "0.4.1",
+    title: "Viewport clearance",
+    summary: "Short desktop and landscape layouts keep the board, replay, and controls usable.",
+  },
   {
     version: "0.4.0",
     title: "Themes, replay, and safer async play",

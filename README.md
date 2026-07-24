@@ -33,7 +33,7 @@ Required runtime variables:
 - `DEV_URL`
 - `PROD_DEPLOYED_VERSION` (fallback: `0.3.3`)
 - `STAGING_DEPLOYED_VERSION` (fallback: `0.3.3`)
-- `DEV_DEPLOYED_VERSION` (fallback: `0.4.0`)
+- `DEV_DEPLOYED_VERSION` (fallback: `0.4.1`)
 - `PROD_OPS_READ_SECRET`
 - `STAGING_OPS_READ_SECRET`
 - `DEV_OPS_READ_SECRET`
