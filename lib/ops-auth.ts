@@ -10,10 +10,19 @@ interface ReadGrant {
 }
 
 function decodeBase64Url(value: string): Uint8Array {
+  if (!/^[A-Za-z0-9_-]+$/.test(value)) throw new Error("Invalid base64url");
   const base64 = value.replace(/-/g, "+").replace(/_/g, "/")
     + "=".repeat((4 - value.length % 4) % 4);
   const decoded = atob(base64);
-  return Uint8Array.from(decoded, (character) => character.charCodeAt(0));
+  const bytes = Uint8Array.from(decoded, (character) => character.charCodeAt(0));
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  const canonical = btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+  if (canonical !== value) throw new Error("Non-canonical base64url");
+  return bytes;
 }
 
 async function verifySignature(payload: string, signature: string, secret: string): Promise<boolean> {
@@ -44,6 +53,7 @@ export function opsCorsHeaders(origin: string | null): Headers {
   });
   if (origin === controlOrigin()) {
     headers.set("access-control-allow-origin", origin);
+    headers.set("access-control-allow-credentials", "true");
     headers.set("vary", "Origin");
   }
   return headers;
