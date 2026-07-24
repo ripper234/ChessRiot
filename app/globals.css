@@ -643,14 +643,14 @@ footer {
 }
 .square:hover .piece { transform: translate(-2px, -5px); }
 .piece-w {
-  color: #fff9df;
-  -webkit-text-stroke: clamp(1px,.16vw,2px) #384b45;
+  color: #fff3c7;
+  -webkit-text-stroke: clamp(1px,.12vw,2px) #5c4b2d;
   filter: drop-shadow(4px 5px 0 #435149);
 }
 .piece-b {
-  color: #242d28;
-  -webkit-text-stroke: clamp(1px,.16vw,2px) #ffd65a;
-  filter: drop-shadow(4px 5px 0 #594523);
+  color: #202a26;
+  -webkit-text-stroke: clamp(1px,.1vw,2px) #101815;
+  filter: drop-shadow(4px 5px 0 #b18a30);
 }
 .rank-label, .file-label { color: rgba(24,38,29,.72); font-weight: 900; text-shadow: 1px 1px rgba(255,255,255,.2); }
 .board-message {
