@@ -7,14 +7,27 @@ const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const workerPath = resolve(projectRoot, "dist/server/index.js");
 const manifestPath = resolve(projectRoot, "dist/.openai/hosting.json");
 const packagePath = resolve(projectRoot, "package.json");
+const packageLockPath = resolve(projectRoot, "package-lock.json");
+const migrationPath = resolve(
+  projectRoot,
+  "dist/.openai/drizzle/0000_lazy_thunderbolt_ross.sql",
+);
 
-const [source, manifest, packageSource] = await Promise.all([
+const [source, manifest, packageSource, packageLockSource, migration] =
+  await Promise.all([
   readFile(workerPath, "utf8"),
   readFile(manifestPath, "utf8"),
   readFile(packagePath, "utf8"),
-]);
-JSON.parse(manifest);
+  readFile(packageLockPath, "utf8"),
+  readFile(migrationPath, "utf8"),
+  ]);
+const hostingManifest = JSON.parse(manifest);
+assert.equal(hostingManifest.d1, "DB");
+assert.match(migration, /CREATE TABLE `deployment_registry`/);
 const packageVersion = JSON.parse(packageSource).version;
+const packageLock = JSON.parse(packageLockSource);
+assert.equal(packageLock.version, packageVersion);
+assert.equal(packageLock.packages[""].version, packageVersion);
 
 // A data URL forces ESM parsing even though the generated output has no package.json.
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
@@ -67,6 +80,8 @@ assert.match(script, /lastSuccessfulAt/);
 assert.match(script, /latest successful environment check/);
 assert.match(script, /LOADING DEPLOYMENT STATE/);
 assert.match(script, /PREPARE PROMOTION FROM/);
+assert.match(script, /snapshot\.loading = true/);
+assert.doesNotMatch(script, /if \(cached\) snapshot\.loading = false/);
 
 class FakeD1Statement {
   constructor(database, sql, bindings = []) {
@@ -262,9 +277,9 @@ assert.deepEqual(
     deployedVersion,
   })),
   [
-    { key: "development", deployedVersion: "0.3.2" },
-    { key: "staging", deployedVersion: "0.2.2" },
-    { key: "production", deployedVersion: "0.2.2" },
+    { key: "development", deployedVersion: "0.3.3" },
+    { key: "staging", deployedVersion: "0.3.3" },
+    { key: "production", deployedVersion: "0.3.3" },
   ],
 );
 
@@ -384,5 +399,58 @@ const promoted = await promotedResponse.json();
 assert.equal(promoted.environments[0].deployedVersion, "0.3.4");
 assert.equal(promoted.environments[0].lastKnownHealth.runtimeVersion, null);
 assert.equal(promoted.latestVersion, "0.3.4");
+
+const reconciliationDb = new FakeD1();
+const oldRegistryEnv = {
+  DB: reconciliationDb,
+  PROD_DEPLOYED_VERSION: "0.3.2",
+  STAGING_DEPLOYED_VERSION: "0.3.2",
+  DEV_DEPLOYED_VERSION: "0.3.2",
+  DEPLOYMENT_STATE_JSON: JSON.stringify({
+    environments: Object.fromEntries(
+      ["development", "staging", "production"].map((environment) => [
+        environment,
+        {
+          version: "0.3.2",
+          deployedAt: "2026-07-24T14:20:00.000Z",
+          verifiedAt: "2026-07-24T14:20:00.000Z",
+        },
+      ]),
+    ),
+  }),
+};
+await workerModule.default.fetch(
+  new Request("https://control.test/api/status"),
+  oldRegistryEnv,
+  {},
+);
+const reconciledEnv = {
+  ...oldRegistryEnv,
+  PROD_DEPLOYED_VERSION: "0.3.3",
+  STAGING_DEPLOYED_VERSION: "0.3.3",
+  DEV_DEPLOYED_VERSION: "0.3.3",
+  DEPLOYMENT_STATE_JSON: JSON.stringify({
+    environments: Object.fromEntries(
+      ["development", "staging", "production"].map((environment) => [
+        environment,
+        {
+          version: "0.3.3",
+          deployedAt: "2026-07-24T15:00:00.000Z",
+          verifiedAt: "2026-07-24T15:01:00.000Z",
+        },
+      ]),
+    ),
+  }),
+};
+const reconciledResponse = await workerModule.default.fetch(
+  new Request("https://control.test/api/status"),
+  reconciledEnv,
+  {},
+);
+const reconciled = await reconciledResponse.json();
+assert.deepEqual(
+  reconciled.environments.map(({ deployedVersion }) => deployedVersion),
+  ["0.3.3", "0.3.3", "0.3.3"],
+);
 
 console.log("Artifact is valid ESM and exports default.fetch");
