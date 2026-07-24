@@ -15,6 +15,7 @@ function snapshot(overrides: Partial<GameSnapshot> = {}): GameSnapshot {
     players: { white: { name: "Ron" }, black: { name: "Omri" } },
     you: { color: "w", name: "Ron" },
     check: false,
+    claimableDraws: [],
     outcome: null,
     moves: [{
       ply: 1,

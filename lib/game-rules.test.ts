@@ -5,7 +5,9 @@ import {
   IllegalMoveError,
   analyzeTerminal,
   applyCandidate,
+  claimableDraws,
   replayGame,
+  replayWithRepetition,
   type CandidateMove,
 } from "./game-rules";
 import type { Promotion } from "./game-types";
@@ -64,6 +66,20 @@ describe("ChessRiot rules adapter", () => {
     expect(new Chess(result.fenAfter).get("a8")?.type).toBe(promotion);
   });
 
+  it("rejects promotion data on an ordinary move", () => {
+    expect(() => applyCandidate(INITIAL_FEN, [], {
+      from: "e2",
+      to: "e4",
+      promotion: "q",
+    })).toThrow(IllegalMoveError);
+  });
+
+  it("rejects castling through check", () => {
+    const fen = "r3k2r/8/8/8/2b5/8/8/R3K2R w KQkq - 0 1";
+    expect(() => applyCandidate(fen, [], { from: "e1", to: "g1" }))
+      .toThrow(IllegalMoveError);
+  });
+
   it("recognizes checkmate and the winner", () => {
     const result = play(INITIAL_FEN, [
       { from: "f2", to: "f3" }, { from: "e7", to: "e5" },
@@ -84,18 +100,44 @@ describe("ChessRiot rules adapter", () => {
     expect(analyzeTerminal(new Chess("8/8/8/8/8/8/4k3/6K1 w - - 0 1")).termination).toBe("insufficient_material");
   });
 
-  it("recognizes threefold repetition from replayed history", () => {
-    const result = play(INITIAL_FEN, [
+  it("makes threefold repetition claimable instead of ending automatically", () => {
+    const played = play(INITIAL_FEN, [
       { from: "g1", to: "f3" }, { from: "g8", to: "f6" },
       { from: "f3", to: "g1" }, { from: "f6", to: "g8" },
       { from: "g1", to: "f3" }, { from: "g8", to: "f6" },
       { from: "f3", to: "g1" }, { from: "f6", to: "g8" },
-    ]).last;
-    expect(result?.termination).toBe("threefold_repetition");
+    ]);
+    const replayed = replayWithRepetition(
+      INITIAL_FEN,
+      played.history.map((item) => ({ ...item, promotion: item.promotion ?? null })),
+    );
+    expect(played.last?.termination).toBeNull();
+    expect(replayed.currentRepetitionCount).toBe(3);
+    expect(claimableDraws(replayed.chess, replayed.currentRepetitionCount))
+      .toContain("threefold_repetition");
   });
 
-  it("recognizes the fifty-move rule", () => {
+  it("makes the fifty-move rule claimable instead of ending automatically", () => {
     const result = applyCandidate("8/8/8/8/8/8/R6k/K7 w - - 99 50", [], { from: "a2", to: "a3" });
-    expect(result.termination).toBe("fifty_move");
+    expect(result.termination).toBeNull();
+    expect(claimableDraws(new Chess(result.fenAfter))).toContain("fifty_move");
+  });
+
+  it("automatically ends at fivefold repetition", () => {
+    const cycle = [
+      { from: "g1", to: "f3" }, { from: "g8", to: "f6" },
+      { from: "f3", to: "g1" }, { from: "f6", to: "g8" },
+    ];
+    const result = play(INITIAL_FEN, [...cycle, ...cycle, ...cycle, ...cycle]).last;
+    expect(result?.termination).toBe("fivefold_repetition");
+  });
+
+  it("automatically ends after seventy-five moves without a pawn move or capture", () => {
+    const result = applyCandidate(
+      "8/8/8/8/8/8/R6k/K7 w - - 149 75",
+      [],
+      { from: "a2", to: "a3" },
+    );
+    expect(result.termination).toBe("seventy_five_move");
   });
 });

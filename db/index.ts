@@ -12,8 +12,8 @@ export function getDatabase(): D1Database {
 export async function ensureSchema(): Promise<void> {
   if (!schemaPromise) {
     const db = getDatabase();
-    schemaPromise = db
-      .batch([
+    schemaPromise = (async () => {
+      await db.batch([
         db.prepare(`CREATE TABLE IF NOT EXISTS games (
           id TEXT PRIMARY KEY NOT NULL,
           create_request_id TEXT NOT NULL UNIQUE,
@@ -60,15 +60,75 @@ export async function ensureSchema(): Promise<void> {
             CHECK (game_mode IN ('solo', 'multiplayer')),
           ai_difficulty INTEGER
             CHECK (ai_difficulty IS NULL OR ai_difficulty BETWEEN 1 AND 5),
+          human_color TEXT NOT NULL DEFAULT 'w'
+            CHECK (human_color IN ('w', 'b')),
           FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE,
           CHECK (
             (game_mode = 'solo' AND ai_difficulty IS NOT NULL) OR
             (game_mode = 'multiplayer' AND ai_difficulty IS NULL)
           )
         )`),
-      ])
-      .then(() => undefined)
-      .catch((error: unknown) => {
+        db.prepare(`CREATE TABLE IF NOT EXISTS game_actions (
+          game_id TEXT NOT NULL,
+          request_id TEXT NOT NULL,
+          action_type TEXT NOT NULL,
+          payload TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          PRIMARY KEY (game_id, request_id),
+          FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
+        )`),
+        db.prepare(`CREATE TABLE IF NOT EXISTS observability_events (
+          id TEXT PRIMARY KEY NOT NULL,
+          occurred_at TEXT NOT NULL,
+          environment TEXT NOT NULL,
+          app_version TEXT NOT NULL,
+          event_name TEXT NOT NULL,
+          outcome TEXT NOT NULL CHECK (outcome IN ('success', 'rejected', 'failure')),
+          request_id TEXT,
+          subject_hash TEXT,
+          route TEXT,
+          method TEXT,
+          status_code INTEGER,
+          error_code TEXT,
+          latency_ms INTEGER,
+          metadata_json TEXT
+        )`),
+        db.prepare("CREATE INDEX IF NOT EXISTS observability_time_idx ON observability_events (occurred_at DESC)"),
+        db.prepare("CREATE INDEX IF NOT EXISTS observability_event_time_idx ON observability_events (event_name, occurred_at DESC)"),
+        db.prepare("CREATE INDEX IF NOT EXISTS observability_outcome_time_idx ON observability_events (outcome, occurred_at DESC)"),
+        db.prepare("CREATE INDEX IF NOT EXISTS observability_subject_time_idx ON observability_events (subject_hash, occurred_at DESC)"),
+        db.prepare(`CREATE TRIGGER IF NOT EXISTS observability_hard_cap
+          AFTER INSERT ON observability_events
+          BEGIN
+            DELETE FROM observability_events
+            WHERE id IN (
+              SELECT id FROM observability_events
+              ORDER BY occurred_at DESC
+              LIMIT -1 OFFSET 20000
+            );
+          END`),
+      ]);
+
+      const columns = await db
+        .prepare("PRAGMA table_info(game_settings)")
+        .all<{ name: string }>();
+      if (!(columns.results ?? []).some((column) => column.name === "human_color")) {
+        try {
+          await db
+            .prepare(`ALTER TABLE game_settings
+              ADD COLUMN human_color TEXT NOT NULL DEFAULT 'w'
+              CHECK (human_color IN ('w', 'b'))`)
+            .run();
+        } catch (error) {
+          const reloaded = await db
+            .prepare("PRAGMA table_info(game_settings)")
+            .all<{ name: string }>();
+          if (!(reloaded.results ?? []).some((column) => column.name === "human_color")) {
+            throw error;
+          }
+        }
+      }
+    })().catch((error: unknown) => {
         schemaPromise = undefined;
         throw error;
       });

@@ -1,5 +1,11 @@
 import { Chess, type Move, type Square } from "chess.js";
-import type { Color, Promotion, StoredMove, Termination } from "./game-types";
+import type {
+  Color,
+  DrawClaim,
+  Promotion,
+  StoredMove,
+  Termination,
+} from "./game-types";
 
 export const INITIAL_FEN = new Chess().fen();
 
@@ -26,6 +32,43 @@ export interface TerminalState {
   termination: Termination | null;
 }
 
+function positionKey(fen: string): string {
+  return fen.split(" ").slice(0, 4).join(" ");
+}
+
+function halfmoveClock(chess: Chess): number {
+  return Number(chess.fen().split(" ")[4] ?? "0");
+}
+
+export function replayWithRepetition(
+  initialFen: string,
+  moves: Pick<StoredMove, "from" | "to" | "promotion">[],
+): { chess: Chess; currentRepetitionCount: number } {
+  const chess = new Chess(initialFen);
+  const counts = new Map<string, number>();
+  const mark = () => {
+    const key = positionKey(chess.fen());
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  };
+  mark();
+  for (const stored of moves) {
+    try {
+      chess.move({
+        from: stored.from as Square,
+        to: stored.to as Square,
+        ...(stored.promotion ? { promotion: stored.promotion } : {}),
+      });
+      mark();
+    } catch {
+      throw new Error("Stored move history is invalid");
+    }
+  }
+  return {
+    chess,
+    currentRepetitionCount: counts.get(positionKey(chess.fen())) ?? 1,
+  };
+}
+
 export class IllegalMoveError extends Error {
   constructor(message = "Illegal move") {
     super(message);
@@ -34,19 +77,7 @@ export class IllegalMoveError extends Error {
 }
 
 export function replayGame(initialFen: string, moves: Pick<StoredMove, "from" | "to" | "promotion">[]): Chess {
-  const chess = new Chess(initialFen);
-  for (const stored of moves) {
-    try {
-      chess.move({
-        from: stored.from as Square,
-        to: stored.to as Square,
-        ...(stored.promotion ? { promotion: stored.promotion } : {}),
-      });
-    } catch {
-      throw new Error("Stored move history is invalid");
-    }
-  }
-  return chess;
+  return replayWithRepetition(initialFen, moves).chess;
 }
 
 export function applyCandidate(
@@ -56,6 +87,10 @@ export function applyCandidate(
 ): MoveOutcome {
   const chess = replayGame(initialFen, moves);
   const fenBefore = chess.fen();
+  const piece = chess.get(candidate.from as Square);
+  const reachesPromotionRank = piece?.type === "p"
+    && (candidate.to.endsWith("8") || candidate.to.endsWith("1"));
+  if (candidate.promotion && !reachesPromotionRank) throw new IllegalMoveError();
   let move: Move;
   try {
     move = chess.move({
@@ -67,7 +102,15 @@ export function applyCandidate(
     throw new IllegalMoveError();
   }
 
-  const terminal = analyzeTerminal(chess);
+  const replayed = replayWithRepetition(initialFen, [
+    ...moves,
+    {
+      from: candidate.from,
+      to: candidate.to,
+      promotion: candidate.promotion ?? null,
+    },
+  ]);
+  const terminal = analyzeTerminal(chess, replayed.currentRepetitionCount);
 
   return {
     move,
@@ -81,7 +124,10 @@ export function applyCandidate(
   };
 }
 
-export function analyzeTerminal(chess: Chess): TerminalState {
+export function analyzeTerminal(
+  chess: Chess,
+  currentRepetitionCount = 1,
+): TerminalState {
   let termination: Termination | null = null;
   let winner: Color | null = null;
   if (chess.isCheckmate()) {
@@ -91,14 +137,28 @@ export function analyzeTerminal(chess: Chess): TerminalState {
     termination = "stalemate";
   } else if (chess.isInsufficientMaterial()) {
     termination = "insufficient_material";
-  } else if (chess.isThreefoldRepetition()) {
-    termination = "threefold_repetition";
-  } else if (chess.isDrawByFiftyMoves()) {
-    termination = "fifty_move";
+  } else if (currentRepetitionCount >= 5) {
+    termination = "fivefold_repetition";
+  } else if (halfmoveClock(chess) >= 150) {
+    termination = "seventy_five_move";
   } else if (chess.isDraw()) {
-    termination = "draw";
+    // chess.js groups claimable and automatic draws together. Claimable
+    // threefold/fifty-move positions remain active until a player claims.
+    if (!chess.isThreefoldRepetition() && !chess.isDrawByFiftyMoves()) {
+      termination = "draw";
+    }
   }
   return { completed: termination !== null, winner, termination };
+}
+
+export function claimableDraws(
+  chess: Chess,
+  currentRepetitionCount = 1,
+): DrawClaim[] {
+  const claims: DrawClaim[] = [];
+  if (currentRepetitionCount >= 3) claims.push("threefold_repetition");
+  if (halfmoveClock(chess) >= 100) claims.push("fifty_move");
+  return claims;
 }
 
 export function isSquare(value: unknown): value is Square {

@@ -13,6 +13,7 @@
 - Mobile-friendly original voxel/block-world interface
 - Pointer and touch drag-and-drop with tap, click, and keyboard fallback
 - Optional in-browser game sounds with a persistent mute preference
+- Privacy-safe per-environment logging and owner control-panel observability
 
 ## Excluded
 

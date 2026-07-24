@@ -2,16 +2,40 @@ import type { Square } from "chess.js";
 import { getDatabase } from "@/db";
 import { chooseComputerMove } from "@/lib/computer-player";
 import { playPendingComputerTurn } from "@/lib/computer-turn";
-import { applyCandidate, IllegalMoveError, isPromotion, isSquare, replayGame } from "@/lib/game-rules";
-import { findGameById, playerColor, readMoves, snapshot } from "@/lib/game-store";
+import { applyCandidate, IllegalMoveError, isPromotion, isSquare } from "@/lib/game-rules";
+import {
+  assertAuthoritativeState,
+  computerColor,
+  findGameById,
+  playerColor,
+  readMoves,
+  snapshot,
+} from "@/lib/game-store";
 import { apiError, bearerToken, json, readJson } from "@/lib/http";
 import type { Promotion } from "@/lib/game-types";
 import { hashSecret, isUuid, requestIsSameOrigin } from "@/lib/validation";
+import { recordEvent } from "@/lib/observability";
 
 export const dynamic = "force-dynamic";
 
 function changes(result: D1Result<unknown> | undefined): number {
   return result?.meta.changes ?? 0;
+}
+
+function sameMoveRequest(
+  move: Awaited<ReturnType<typeof readMoves>>[number] | undefined,
+  color: "w" | "b",
+  from: string,
+  to: string,
+  promotion: Promotion | undefined,
+): boolean {
+  return Boolean(
+    move
+    && move.color === color
+    && move.from === from
+    && move.to === to
+    && (move.promotion ?? undefined) === promotion,
+  );
 }
 
 export async function POST(
@@ -48,12 +72,7 @@ export async function POST(
   let storedMoves = await readMoves(id);
   const repeated = storedMoves.find((move) => move.requestId === requestId);
   if (repeated) {
-    if (
-      repeated.color !== color ||
-      repeated.from !== from ||
-      repeated.to !== to ||
-      (repeated.promotion ?? undefined) !== promotion
-    ) {
+    if (!sameMoveRequest(repeated, color, from, to, promotion as Promotion | undefined)) {
       return apiError(409, "idempotency_conflict", "This move request id was already used");
     }
     return json({ game: snapshot(game, storedMoves, color) });
@@ -67,8 +86,10 @@ export async function POST(
   }
   if (game.turn_color !== color) return apiError(409, "wrong_turn", "It is not your turn");
 
-  const replayed = replayGame(game.initial_fen, storedMoves);
-  if (replayed.fen() !== game.current_fen) {
+  let replayed;
+  try {
+    replayed = assertAuthoritativeState(game, storedMoves);
+  } catch {
     return apiError(500, "history_mismatch", "Stored game history does not match the board");
   }
   const piece = replayed.get(from as Square);
@@ -104,6 +125,7 @@ export async function POST(
     createdAt: now,
   };
   let computerMove: {
+    color: "w" | "b";
     from: string;
     to: string;
     promotion: Promotion | null;
@@ -112,17 +134,20 @@ export async function POST(
     fenAfter: string;
   } | null = null;
   let finalOutcome = outcome;
+  const botColor = computerColor(game);
 
   if (
     game.game_mode === "solo" &&
-    color === "w" &&
+    color === game.human_color &&
+    botColor &&
     !outcome.completed &&
     game.ai_difficulty !== null
   ) {
-    const candidate = chooseComputerMove(outcome.fenAfter, game.ai_difficulty);
+    const candidate = chooseComputerMove(outcome.fenAfter, game.ai_difficulty, botColor);
     if (!candidate) return apiError(500, "computer_move_failed", "The computer could not choose a move");
     const computerOutcome = applyCandidate(game.initial_fen, [...storedMoves, humanMove], candidate);
     computerMove = {
+      color: botColor,
       from: candidate.from,
       to: candidate.to,
       promotion: candidate.promotion ?? null,
@@ -186,12 +211,13 @@ export async function POST(
     ? db.prepare(`INSERT INTO moves (
       game_id, ply, request_id, color, from_square, to_square, promotion,
       san, fen_before, fen_after, created_at
-    ) SELECT ?, ?, ?, 'b', ?, ?, ?, ?, ?, ?, ?
+    ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       FROM games WHERE id = ? AND version = ? AND last_mutation_nonce = ?`)
       .bind(
         id,
         humanPly + 1,
         crypto.randomUUID(),
+        computerMove.color,
         computerMove.from,
         computerMove.to,
         computerMove.promotion,
@@ -212,8 +238,11 @@ export async function POST(
     game = await findGameById(id);
     storedMoves = await readMoves(id);
     const wonRace = storedMoves.find((move) => move.requestId === requestId);
-    if (game && wonRace && wonRace.color === color && wonRace.from === from && wonRace.to === to) {
-      return json({ game: snapshot(game, storedMoves, color) });
+    if (game && wonRace) {
+      if (sameMoveRequest(wonRace, color, from, to, promotion as Promotion | undefined)) {
+        return json({ game: snapshot(game, storedMoves, color) });
+      }
+      return apiError(409, "idempotency_conflict", "This move request id was already used");
     }
     if (game) {
       return json(
@@ -231,6 +260,13 @@ export async function POST(
   ) {
     game = await findGameById(id);
     storedMoves = await readMoves(id);
+    const wonRace = storedMoves.find((move) => move.requestId === requestId);
+    if (game && wonRace) {
+      if (sameMoveRequest(wonRace, color, from, to, promotion as Promotion | undefined)) {
+        return json({ game: snapshot(game, storedMoves, color) });
+      }
+      return apiError(409, "idempotency_conflict", "This move request id was already used");
+    }
     if (game) {
       return json(
         { error: { code: "stale_position", message: "The board changed" }, game: snapshot(game, storedMoves, color) },
@@ -243,11 +279,42 @@ export async function POST(
   game = await findGameById(id);
   storedMoves = await readMoves(id);
   if (!game) return apiError(500, "move_failed", "Game disappeared after the move");
-  if (game.game_mode === "solo" && game.status === "active" && game.turn_color === "b") {
+  if (
+    game.game_mode === "solo"
+    && game.status === "active"
+    && game.turn_color === computerColor(game)
+  ) {
     await playPendingComputerTurn(id);
     game = await findGameById(id);
     storedMoves = await readMoves(id);
     if (!game) return apiError(500, "move_failed", "Game disappeared after the computer move");
+  }
+  if (computerMove) {
+    await recordEvent({
+      event: "bot.move_committed",
+      outcome: "success",
+      subjectId: id,
+      metadata: {
+        color: computerMove.color,
+        difficulty: game.ai_difficulty,
+        from: computerMove.from,
+        to: computerMove.to,
+        gameStatus: game.status,
+      },
+    });
+  }
+  if (game.status === "completed") {
+    await recordEvent({
+      event: "game.completed",
+      outcome: "success",
+      requestId,
+      subjectId: id,
+      metadata: {
+        mode: game.game_mode,
+        termination: game.termination,
+        winner: game.winner_color,
+      },
+    });
   }
   return json({ game: snapshot(game, storedMoves, color) });
 }

@@ -623,6 +623,34 @@ footer {
   box-shadow: 5px 5px 0 rgba(65,29,21,.52);
   clip-path: none;
 }
+.draw-claims {
+  width: min(100%,770px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 auto 8px;
+  padding: 8px;
+  border: 3px solid var(--wood-dark);
+  background: #695238;
+  box-shadow: 3px 3px 0 #382719;
+}
+.draw-claims span {
+  color: #fff2c8;
+  font: 900 8px/1 var(--mono);
+  letter-spacing: 1px;
+}
+.draw-claims button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 3px solid var(--grass-dark);
+  color: #172515;
+  background: var(--chess-gold);
+  box-shadow: 2px 2px 0 #6b4d22;
+  cursor: pointer;
+  font: 900 8px/1 var(--display);
+}
+.draw-claims button:disabled { cursor: wait; opacity: .6; }
 .game-sidebar { gap: 20px; }
 .side-card {
   padding: 20px;

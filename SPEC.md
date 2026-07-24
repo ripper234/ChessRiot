@@ -1,11 +1,11 @@
-# ChessRiot v0.2.1 specification
+# ChessRiot v0.2.2 specification
 
 This file and `MVP.md` are the source of truth for the current milestone.
 
 ## Flow
 
 1. The player enters a display name, then chooses Solo or Multiplayer.
-2. Solo reveals a five-step difficulty bar that starts at 3, Medium. The game starts immediately with the player as White against Riot Bot.
+2. Solo reveals a five-step difficulty bar that starts at 3, Medium. Colors are assigned evenly and deterministically from the idempotent create request. If Riot Bot is White, its legal opening is committed before the game appears.
 3. Multiplayer opens White's reusable private game URL and shows a separate one-use invitation URL.
 4. Black opens that invitation on another device, enters a display name, and claims the second seat.
 5. Every human and computer move is revalidated by the server against authoritative history.
@@ -17,8 +17,11 @@ This file and `MVP.md` are the source of truth for the current milestone.
 - D1 stores current FEN, status, version, mode, computer difficulty, players, hashed keys, and immutable ordered moves.
 - Every move carries an expected version and idempotency key.
 - A conditional update plus move insert runs atomically. Stale, illegal, wrong-turn, unauthorized, and completed-game moves do not mutate state.
-- In Solo, the human move and Riot Bot reply are committed in one atomic batch. Riot Bot uses bounded server-side search and always submits a move through the same chess.js rules adapter.
+- In Solo, the human move and Riot Bot reply are committed in one atomic batch. Riot Bot evaluates from its assigned color, uses bounded server-side search, and always submits a move through the same chess.js rules adapter.
 - Replaying move history is required before validation so repetition remains correct.
+- Promotion data is accepted only when a pawn reaches its final rank.
+- Threefold repetition and the fifty-move rule are player claims. Fivefold repetition and the seventy-five-move rule end automatically, after checkmate precedence.
+- Before human or computer moves, immutable history must match current FEN, turn, and ply count.
 
 ## Identity and privacy
 
@@ -34,5 +37,14 @@ This file and `MVP.md` are the source of truth for the current milestone.
 - Drag and drop a piece, or tap/click a piece and then a legal destination.
 - Board rotates for Black while submitted coordinates remain absolute chess squares.
 - The interface shows turn, check, outcome, players, and move history.
+- When a threefold or fifty-move draw is available to the player on move, the interface offers an explicit claim.
 - Synthesized move, capture, check, result, and invalid-action sounds are on by default and can be muted.
 - Initial loads, refreshes, repeated polling responses, and join-only version changes do not replay move sounds.
+
+## Observability
+
+- Every important API action is recorded as a structured, privacy-safe event in that environment's isolated D1 database.
+- Events carry environment, app version, request id, normalized route, result, latency, safe metadata, and an environment-local HMAC reference for the game.
+- Unchanged three-second polls are excluded. Events are retained for 30 days with a hard cap.
+- Never record player names, bearer keys, key hashes, invitation or private links, fragments, IP addresses, user agents, FENs, raw bodies, or arbitrary exception messages.
+- The owner-only control panel uses two-minute, environment-specific signed read grants and shows each environment separately. Failed reads remain visibly stale and never become fake zeroes.

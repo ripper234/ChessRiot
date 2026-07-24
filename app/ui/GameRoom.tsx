@@ -28,7 +28,7 @@ import {
   writeSoundPreference,
 } from "@/lib/game-sounds";
 import { shouldAcceptGameSnapshot } from "@/lib/game-snapshots";
-import type { GameSnapshot, Promotion } from "@/lib/game-types";
+import type { DrawClaim, GameSnapshot, Promotion } from "@/lib/game-types";
 import { Brand } from "./Brand";
 
 const PIECES: Record<"w" | "b", Record<PieceSymbol, string>> = {
@@ -73,6 +73,8 @@ function outcomeText(game: GameSnapshot): string {
     threefold_repetition: "Draw by repetition",
     insufficient_material: "Draw by insufficient material",
     fifty_move: "Draw by the fifty-move rule",
+    fivefold_repetition: "Draw by automatic fivefold repetition",
+    seventy_five_move: "Draw by the seventy-five-move rule",
     draw: "Draw",
   };
   return labels[game.outcome.reason] ?? "Game over";
@@ -289,6 +291,39 @@ export function GameRoom({ gameId }: { gameId: string }) {
       setBusy(false);
       setSelected(null);
       setPromotionMove(null);
+    }
+  }
+
+  async function claimDraw(claim: DrawClaim) {
+    if (!game || !canMove) return;
+    const token = activeToken.current;
+    if (!token) return setAccess("missing");
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/games/${gameId}/claims`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          claim,
+          expectedVersion: game.version,
+          requestId: generateUuid(),
+        }),
+      });
+      const data = (await response.json()) as {
+        game?: GameSnapshot;
+        error?: { message?: string };
+      };
+      if (data.game) acceptGame(data.game);
+      if (!response.ok) {
+        setMessage(apiMessage(data, "That draw cannot be claimed now"));
+        playInvalidSound();
+      }
+    } catch {
+      setMessage("Could not claim the draw. Refreshing the board…");
+      await loadGame(latestVersion.current);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -553,6 +588,24 @@ export function GameRoom({ gameId }: { gameId: string }) {
             <div><small>{game.check && game.status !== "completed" ? "CHECK" : "MATCH STATUS"}</small><strong>{statusText}</strong></div>
             {busy ? <b>{game.mode === "solo" ? "RIOT BOT THINKING…" : "LOCKING MOVE…"}</b> : null}
           </div>
+
+          {game.claimableDraws.length > 0 ? (
+            <div className="draw-claims" role="group" aria-label="Available draw claims">
+              <span>DRAW AVAILABLE</span>
+              {game.claimableDraws.map((claim) => (
+                <button
+                  type="button"
+                  key={claim}
+                  disabled={busy}
+                  onClick={() => void claimDraw(claim)}
+                >
+                  {claim === "threefold_repetition"
+                    ? "CLAIM REPETITION"
+                    : "CLAIM 50-MOVE DRAW"}
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           <div className="board-wrap" aria-busy={busy} data-interactive={canMove ? "true" : "false"}>
             <div className="chessboard" role="grid" aria-label="Chess board">

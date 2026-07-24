@@ -2,12 +2,15 @@ export type Color = "w" | "b";
 export type GameMode = "solo" | "multiplayer";
 export type AiDifficulty = 1 | 2 | 3 | 4 | 5;
 export type Promotion = "q" | "r" | "b" | "n";
+export type DrawClaim = "threefold_repetition" | "fifty_move";
 export type Termination =
   | "checkmate"
   | "stalemate"
-  | "threefold_repetition"
   | "insufficient_material"
+  | "threefold_repetition"
+  | "fivefold_repetition"
   | "fifty_move"
+  | "seventy_five_move"
   | "draw";
 
 export interface StoredMove {
@@ -48,6 +51,7 @@ export interface GameSnapshot {
   };
   you: { color: Color; name: string };
   check: boolean;
+  claimableDraws: DrawClaim[];
   outcome: { winner: Color | null; reason: Termination } | null;
   moves: PublicMove[];
   updatedAt: string;

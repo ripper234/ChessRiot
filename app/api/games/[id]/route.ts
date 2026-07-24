@@ -1,4 +1,10 @@
-import { findGameById, playerColor, readMoves, snapshot } from "@/lib/game-store";
+import {
+  computerColor,
+  findGameById,
+  playerColor,
+  readMoves,
+  snapshot,
+} from "@/lib/game-store";
 import { playPendingComputerTurn } from "@/lib/computer-turn";
 import { apiError, bearerToken, json } from "@/lib/http";
 import { hashSecret } from "@/lib/validation";
@@ -16,7 +22,11 @@ export async function GET(
   if (!game) return apiError(404, "not_found", "Game not found");
   const color = playerColor(game, await hashSecret(token));
   if (!color) return apiError(404, "not_found", "Game not found");
-  if (game.game_mode === "solo" && game.status === "active" && game.turn_color === "b") {
+  if (
+    game.game_mode === "solo"
+    && game.status === "active"
+    && game.turn_color === computerColor(game)
+  ) {
     await playPendingComputerTurn(id);
     game = await findGameById(id);
     if (!game) return apiError(404, "not_found", "Game not found");

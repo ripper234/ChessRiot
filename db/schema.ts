@@ -55,4 +55,42 @@ export const gameSettings = sqliteTable("game_settings", {
   gameId: text("game_id").primaryKey(),
   gameMode: text("game_mode").notNull().default("multiplayer"),
   aiDifficulty: integer("ai_difficulty"),
+  humanColor: text("human_color").notNull().default("w"),
 });
+
+export const gameActions = sqliteTable(
+  "game_actions",
+  {
+    gameId: text("game_id").notNull(),
+    requestId: text("request_id").notNull(),
+    actionType: text("action_type").notNull(),
+    payload: text("payload").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.gameId, table.requestId] }),
+  ],
+);
+
+export const observabilityEvents = sqliteTable(
+  "observability_events",
+  {
+    id: text("id").primaryKey(),
+    occurredAt: text("occurred_at").notNull(),
+    environment: text("environment").notNull(),
+    appVersion: text("app_version").notNull(),
+    eventName: text("event_name").notNull(),
+    outcome: text("outcome").notNull(),
+    requestId: text("request_id"),
+    subjectHash: text("subject_hash"),
+    route: text("route"),
+    method: text("method"),
+    statusCode: integer("status_code"),
+    errorCode: text("error_code"),
+    latencyMs: integer("latency_ms"),
+    metadataJson: text("metadata_json"),
+  },
+  (table) => [
+    uniqueIndex("observability_events_id_unique").on(table.id),
+  ],
+);

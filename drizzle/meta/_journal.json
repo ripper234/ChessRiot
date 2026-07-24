@@ -15,6 +15,13 @@
       "when": 1784857337330,
       "tag": "0001_faithful_baron_zemo",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784889404863,
+      "tag": "0002_pale_orphan",
+      "breakpoints": true
     }
   ]
 }

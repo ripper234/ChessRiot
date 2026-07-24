@@ -1,12 +1,31 @@
 import assert from "node:assert/strict";
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { Miniflare } from "miniflare";
+import { Chess } from "chess.js";
 
 const origin = "http://chessriot.test";
 const secret = () => randomBytes(32).toString("base64url");
+const requestIdForColor = (color) => {
+  const id = randomUUID();
+  return id.slice(0, -1) + (color === "w" ? "0" : "1");
+};
+const opsSecret = "local-ops-read-secret-for-e2e-tests";
+const opsGrant = (overrides = {}) => {
+  const now = Math.floor(Date.now() / 1000);
+  const payload = Buffer.from(JSON.stringify({
+    v: 1,
+    aud: "test",
+    scope: "observability:read",
+    iat: now,
+    exp: now + 120,
+    nonce: randomUUID(),
+    ...overrides,
+  })).toString("base64url");
+  return payload + "." + createHmac("sha256", opsSecret).update(payload).digest("base64url");
+};
 const persistRoot = await mkdtemp(join(tmpdir(), "chessriot-e2e-"));
 const serverRoot = resolve("dist/server");
 
@@ -31,6 +50,12 @@ function createRuntime() {
     compatibilityDate: "2026-05-22",
     compatibilityFlags: ["nodejs_compat"],
     d1Databases: { DB: "chessriot-e2e" },
+    bindings: {
+      CHESSRIOT_ENV: "test",
+      CONTROL_ORIGIN: origin,
+      OBSERVABILITY_HASH_SECRET: "local-observability-hash-secret-for-e2e",
+      OPS_READ_SECRET: opsSecret,
+    },
     defaultPersistRoot: persistRoot,
     d1Persist: true,
   });
@@ -122,17 +147,31 @@ try {
   });
   assert.equal(unauthorized.status, 404);
 
-  const move = async (token, from, to, expectedVersion, requestId = randomUUID()) => {
+  const move = async (
+    token,
+    from,
+    to,
+    expectedVersion,
+    requestId = randomUUID(),
+    promotion,
+  ) => {
     const response = await request(runtime, `/api/games/${gameId}/moves`, {
       method: "POST",
       headers: { authorization: `Bearer ${token}` },
-      body: JSON.stringify({ from, to, expectedVersion, requestId }),
+      body: JSON.stringify({
+        from,
+        to,
+        expectedVersion,
+        requestId,
+        ...(promotion ? { promotion } : {}),
+      }),
     });
     return { response, data: await body(response), requestId };
   };
 
   assert.equal((await move(blackToken, "e7", "e5", 1)).response.status, 409);
   assert.equal((await move(whiteToken, "e2", "e5", 1)).response.status, 422);
+  assert.equal((await move(whiteToken, "e2", "e4", 1, randomUUID(), "q")).response.status, 422);
 
   const first = await move(whiteToken, "f2", "f3", 1);
   assert.equal(first.response.status, 200);
@@ -190,7 +229,7 @@ try {
 
   const soloToken = secret();
   const soloInvite = secret();
-  const soloRequestId = randomUUID();
+  const soloRequestId = requestIdForColor("w");
   const soloCreatedResponse = await request(runtime, "/api/games", {
     method: "POST",
     body: JSON.stringify({
@@ -209,6 +248,7 @@ try {
   assert.equal(soloCreated.game.mode, "solo");
   assert.equal(soloCreated.game.aiDifficulty, 3);
   assert.equal(soloCreated.game.status, "active");
+  assert.equal(soloCreated.game.you.color, "w");
   assert.equal(soloCreated.game.players.black.name, "Riot Bot");
   assert.equal(soloCreated.game.version, 0);
 
@@ -256,7 +296,177 @@ try {
   assert.equal(soloAfterRestart.game.moves.length, 2);
   assert.equal(soloAfterRestart.game.turn, "w");
 
-  console.log("E2E passed: multiplayer, solo AI, security, atomic moves, checkmate, and cold-start persistence");
+  const blackSoloToken = secret();
+  const blackSoloInvite = secret();
+  const blackSoloCreatedResponse = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Ron",
+      mode: "solo",
+      difficulty: 3,
+      playerToken: blackSoloToken,
+      inviteToken: blackSoloInvite,
+      requestId: requestIdForColor("b"),
+    }),
+  });
+  assert.equal(blackSoloCreatedResponse.status, 201);
+  const blackSoloCreated = await body(blackSoloCreatedResponse);
+  const blackSoloGameId = blackSoloCreated.game.id;
+  assert.equal(blackSoloCreated.game.you.color, "b");
+  assert.equal(blackSoloCreated.game.players.white.name, "Riot Bot");
+  assert.equal(blackSoloCreated.game.players.black.name, "Ron");
+  assert.equal(blackSoloCreated.game.version, 1);
+  assert.equal(blackSoloCreated.game.plyCount, 1);
+  assert.equal(blackSoloCreated.game.moves[0].color, "w");
+  assert.equal(blackSoloCreated.game.turn, "b");
+
+  const blackPosition = new Chess(blackSoloCreated.game.fen);
+  const blackReply = blackPosition.moves({ verbose: true })[0];
+  const blackReplyResponse = await request(runtime, `/api/games/${blackSoloGameId}/moves`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${blackSoloToken}` },
+    body: JSON.stringify({
+      from: blackReply.from,
+      to: blackReply.to,
+      ...(blackReply.promotion ? { promotion: blackReply.promotion } : {}),
+      expectedVersion: 1,
+      requestId: randomUUID(),
+    }),
+  });
+  assert.equal(blackReplyResponse.status, 200);
+  const blackSoloAfterReply = await body(blackReplyResponse);
+  assert.equal(blackSoloAfterReply.game.version, 3);
+  assert.equal(blackSoloAfterReply.game.plyCount, 3);
+  assert.equal(blackSoloAfterReply.game.moves[1].color, "b");
+  assert.equal(blackSoloAfterReply.game.moves[2].color, "w");
+  assert.equal(blackSoloAfterReply.game.turn, "b");
+
+  const repetitionWhite = secret();
+  const repetitionBlack = secret();
+  const repetitionInvite = secret();
+  const repetitionCreate = await body(await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "White",
+      mode: "multiplayer",
+      playerToken: repetitionWhite,
+      inviteToken: repetitionInvite,
+      requestId: randomUUID(),
+    }),
+  }));
+  const repetitionGameId = repetitionCreate.game.id;
+  const repetitionJoin = await body(await request(
+    runtime,
+    `/api/invitations/${repetitionInvite}/join`,
+    {
+      method: "POST",
+      body: JSON.stringify({ displayName: "Black", playerToken: repetitionBlack }),
+    },
+  ));
+  let repetitionVersion = repetitionJoin.game.version;
+  const repetitionMove = async (token, from, to, requestId = randomUUID()) => {
+    const response = await request(runtime, `/api/games/${repetitionGameId}/moves`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        from,
+        to,
+        expectedVersion: repetitionVersion,
+        requestId,
+      }),
+    });
+    const data = await body(response);
+    if (response.ok) repetitionVersion = data.game.version;
+    return { response, data };
+  };
+  const concurrentId = randomUUID();
+  const concurrentVersion = repetitionVersion;
+  const concurrentMove = () => request(runtime, `/api/games/${repetitionGameId}/moves`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${repetitionWhite}` },
+    body: JSON.stringify({
+      from: "g1",
+      to: "f3",
+      expectedVersion: concurrentVersion,
+      requestId: concurrentId,
+    }),
+  });
+  const concurrentResponses = await Promise.all([concurrentMove(), concurrentMove()]);
+  assert.deepEqual(concurrentResponses.map((response) => response.status), [200, 200]);
+  const concurrentStates = await Promise.all(concurrentResponses.map(body));
+  assert.equal(concurrentStates[0].game.moves.length, 1);
+  assert.equal(concurrentStates[1].game.moves.length, 1);
+  repetitionVersion = concurrentStates[0].game.version;
+  for (const [token, from, to] of [
+    [repetitionBlack, "g8", "f6"],
+    [repetitionWhite, "f3", "g1"],
+    [repetitionBlack, "f6", "g8"],
+    [repetitionWhite, "g1", "f3"],
+    [repetitionBlack, "g8", "f6"],
+    [repetitionWhite, "f3", "g1"],
+    [repetitionBlack, "f6", "g8"],
+  ]) {
+    const result = await repetitionMove(token, from, to);
+    assert.equal(result.response.status, 200);
+  }
+  const repetitionState = await body(await request(
+    runtime,
+    `/api/games/${repetitionGameId}`,
+    { headers: { authorization: `Bearer ${repetitionWhite}` } },
+  ));
+  assert.deepEqual(repetitionState.game.claimableDraws, ["threefold_repetition"]);
+  const claimResponse = await request(runtime, `/api/games/${repetitionGameId}/claims`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${repetitionWhite}` },
+    body: JSON.stringify({
+      claim: "threefold_repetition",
+      expectedVersion: repetitionVersion,
+      requestId: randomUUID(),
+    }),
+  });
+  assert.equal(claimResponse.status, 200);
+  const claimed = await body(claimResponse);
+  assert.equal(claimed.game.status, "completed");
+  assert.equal(claimed.game.outcome.reason, "threefold_repetition");
+
+  const healthResponse = await request(runtime, "/api/health");
+  assert.equal(healthResponse.status, 200);
+  const health = await body(healthResponse);
+  assert.equal(health.environment, "test");
+  assert.equal(health.database, "ok");
+
+  const overviewResponse = await request(runtime, "/api/ops/overview", {
+    method: "POST",
+    headers: { "content-type": "text/plain" },
+    body: opsGrant(),
+  });
+  assert.equal(overviewResponse.status, 200);
+  const overview = await body(overviewResponse);
+  assert.equal(overview.environment, "test");
+  assert.ok(overview.totals.total > 0);
+  assert.ok(overview.breakdown.some((row) => row.event_name === "move.submitted"));
+  assert.ok(overview.recentEvents.every((event) => !JSON.stringify(event).includes(soloToken)));
+
+  const validGrant = opsGrant();
+  const tamperedGrant = validGrant.slice(0, -1) + (validGrant.endsWith("a") ? "b" : "a");
+  assert.equal((await request(runtime, "/api/ops/overview", {
+    method: "POST",
+    headers: { "content-type": "text/plain" },
+    body: tamperedGrant,
+  })).status, 403);
+  const expiredAt = Math.floor(Date.now() / 1000) - 10;
+  assert.equal((await request(runtime, "/api/ops/overview", {
+    method: "POST",
+    headers: { "content-type": "text/plain" },
+    body: opsGrant({ iat: expiredAt - 120, exp: expiredAt }),
+  })).status, 403);
+  assert.equal((await runtime.dispatchFetch(`${origin}/api/ops/overview`, {
+    method: "POST",
+    headers: { origin: "https://evil.example", "content-type": "text/plain" },
+    body: opsGrant(),
+  })).status, 403);
+
+  console.log("E2E passed: rules, both Solo colors, concurrency, draw claims, observability, and persistence");
 } finally {
   await runtime.dispose();
   await rm(persistRoot, { recursive: true, force: true });

@@ -9,7 +9,7 @@ describe("Riot Bot", () => {
     (difficulty) => {
       const chess = new Chess();
       chess.move("e4");
-      const move = chooseComputerMove(chess.fen(), difficulty, () => 0);
+      const move = chooseComputerMove(chess.fen(), difficulty, "b", () => 0);
 
       expect(move).not.toBeNull();
       expect(() => chess.move(move!)).not.toThrow();
@@ -22,8 +22,16 @@ describe("Riot Bot", () => {
     chess.move("e5");
     chess.move("g4");
 
-    const move = chooseComputerMove(chess.fen(), 5, () => 0);
+    const move = chooseComputerMove(chess.fen(), 5, "b", () => 0);
     expect(move).toMatchObject({ from: "d8", to: "h4" });
+    chess.move(move!);
+    expect(chess.isCheckmate()).toBe(true);
+  });
+
+  it("takes an immediate checkmate as White", () => {
+    const chess = new Chess("6k1/5ppp/8/8/8/8/5PPP/3Q2K1 w - - 0 1");
+    const move = chooseComputerMove(chess.fen(), 5, "w", () => 0);
+    expect(move).toMatchObject({ from: "d1", to: "d8" });
     chess.move(move!);
     expect(chess.isCheckmate()).toBe(true);
   });
@@ -33,7 +41,7 @@ describe("Riot Bot", () => {
   });
 
   it("preserves promotion details", () => {
-    const move = chooseComputerMove("7K/8/8/8/8/8/p7/7k b - - 0 1", 4, () => 0);
+    const move = chooseComputerMove("7K/8/8/8/8/8/p7/7k b - - 0 1", 4, "b", () => 0);
     expect(move).toMatchObject({ from: "a2", to: "a1", promotion: "q" });
   });
 });

@@ -191,7 +191,7 @@ export function CreateGame() {
           </button>
           <p className="fine-print">
             {mode === "solo"
-              ? "Difficulty starts in the middle. Your game saves automatically."
+              ? "Difficulty starts in the middle. Colors are assigned fairly, and White always moves first."
               : "No account. Your private game link works across your devices."}
           </p>
         </form>
