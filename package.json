@@ -1,9 +1,14 @@
 {
   "name": "chessriot-control",
+  "version": "0.1.4",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "bash scripts/build.sh",
-    "validate": "node scripts/validate-artifact.mjs"
+    "validate": "node scripts/validate-artifact.mjs",
+    "release:check": "node scripts/release-version.mjs check",
+    "release:patch": "node scripts/release-version.mjs patch",
+    "release:minor": "node scripts/release-version.mjs minor",
+    "release:major": "node scripts/release-version.mjs major"
   }
 }
