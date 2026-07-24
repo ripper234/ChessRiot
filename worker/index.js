@@ -28,7 +28,7 @@ const ENVIRONMENTS = [
   },
 ];
 
-const CONTROL_VERSION = "0.1.4";
+const CONTROL_VERSION = "0.1.5";
 const AVAILABLE_VERSIONS = [
   "0.1.0",
   "0.1.1",
@@ -233,6 +233,18 @@ const clientScript = String.raw`
   const checked = document.querySelector("#checked");
   const tabs = document.querySelector("#tabs");
   const eventContent = document.querySelector("#event-content");
+  const initialEnvironments = ${JSON.stringify(
+    ENVIRONMENTS.map(
+      ({ key, name, expectedVersion, access, accent }) => ({
+        key,
+        name,
+        expectedVersion,
+        access,
+        accent,
+      }),
+    ),
+  )};
+  const initialVersions = ${JSON.stringify(AVAILABLE_VERSIONS)};
   const dialog = document.querySelector("#release-dialog");
   const command = document.querySelector("#command");
   const copy = document.querySelector("#copy");
@@ -315,6 +327,7 @@ const clientScript = String.raw`
     const item = snapshot.item;
     const health = snapshot.health;
     const overview = snapshot.overview;
+    const loading = Boolean(snapshot.loading);
     const version = health && health.version || overview && overview.version || null;
     const matches = version === item.expectedVersion;
     const healthy = health && health.status === "ok";
@@ -331,10 +344,15 @@ const clientScript = String.raw`
       '<a class="open" target="_blank" rel="noopener noreferrer">OPEN ENVIRONMENT ↗</a>';
     article.querySelector("h2").textContent = item.name;
     article.querySelector(".access").textContent = item.access + " // isolated data";
-    article.querySelector(".version").textContent = version ? "v" + version : "Unavailable";
+    article.querySelector(".version").textContent = loading
+      ? "Checking…"
+      : version ? "v" + version : "Unavailable";
     const status = article.querySelector(".status");
     const statusText = article.querySelector(".status-text");
-    if (!health) {
+    if (loading) {
+      status.classList.add("warn");
+      statusText.textContent = "CHECKING";
+    } else if (!health) {
       status.classList.add("down");
       statusText.textContent = "UNAVAILABLE";
     } else if (!snapshot.healthFresh || !snapshot.telemetryFresh) {
@@ -348,7 +366,9 @@ const clientScript = String.raw`
       statusText.textContent = "HEALTHY";
     }
     const expected = article.querySelector(".expected");
-    expected.textContent = version
+    expected.textContent = loading
+      ? "Connecting to v" + item.expectedVersion
+      : version
       ? (matches ? "Matches target v" + item.expectedVersion : "Target v" + item.expectedVersion)
       : "No successful health response";
 
@@ -367,20 +387,29 @@ const clientScript = String.raw`
       metric("p95 latency", totals && totals.p95LatencyMs !== null ? totals.p95LatencyMs + "ms" : null),
     );
     const note = article.querySelector(".telemetry-note");
-    if (!overview) note.textContent = "Telemetry unavailable. No zeroes or demo data substituted.";
+    if (loading) note.textContent = "Loading health and telemetry…";
+    else if (!overview) note.textContent = "Telemetry unavailable. No zeroes or demo data substituted.";
     else if (!snapshot.telemetryFresh) note.textContent = "Showing last good telemetry snapshot. Latest check failed.";
     else note.textContent = "Last event " + (totals.lastEventAt ? new Date(totals.lastEventAt).toLocaleString() : "none yet");
 
     const select = article.querySelector("select");
     const targets = versions.filter(function (candidate) { return candidate !== version; });
-    targets.forEach(function (candidate) {
-      const option = document.createElement("option");
-      option.value = candidate;
-      option.textContent = "v" + candidate + " · " + releaseVerb(version, candidate).toLowerCase();
-      select.append(option);
-    });
     const prepare = article.querySelector(".prepare");
-    if (!targets.length) {
+    if (loading) {
+      const option = document.createElement("option");
+      option.textContent = "Waiting for health";
+      select.append(option);
+      select.disabled = true;
+      prepare.disabled = true;
+    } else {
+      targets.forEach(function (candidate) {
+        const option = document.createElement("option");
+        option.value = candidate;
+        option.textContent = "v" + candidate + " · " + releaseVerb(version, candidate).toLowerCase();
+        select.append(option);
+      });
+    }
+    if (!loading && !targets.length) {
       const option = document.createElement("option");
       option.textContent = "No other release";
       select.append(option);
@@ -397,7 +426,11 @@ const clientScript = String.raw`
       dialog.showModal();
     });
     const link = article.querySelector(".open");
-    link.href = item.url;
+    if (item.url) link.href = item.url;
+    else {
+      link.removeAttribute("href");
+      link.textContent = "CONNECTING…";
+    }
     article.addEventListener("click", function (event) {
       if (event.target.closest("button,select,a")) return;
       activeEnvironment = item.key;
@@ -425,6 +458,10 @@ const clientScript = String.raw`
 
   function renderEvents() {
     const snapshot = snapshots.get(activeEnvironment);
+    if (snapshot && snapshot.loading) {
+      eventContent.innerHTML = '<p class="empty">Loading environment events…</p>';
+      return;
+    }
     const events = snapshot && snapshot.overview && snapshot.overview.recentEvents;
     if (!events) {
       eventContent.innerHTML = '<p class="empty">No readable telemetry for this environment.</p>';
@@ -504,6 +541,20 @@ const clientScript = String.raw`
   document.querySelector("#cancel").addEventListener("click", function () { dialog.close(); });
   dialog.addEventListener("click", function (event) { if (event.target === dialog) dialog.close(); });
   copy.addEventListener("click", copyRequest);
+  initialEnvironments.forEach(function (item) {
+    const snapshot = {
+      item: item,
+      health: null,
+      overview: null,
+      healthFresh: false,
+      telemetryFresh: false,
+      loading: true,
+    };
+    snapshots.set(item.key, snapshot);
+    grid.append(createCard(snapshot, initialVersions));
+  });
+  renderTabs();
+  renderEvents();
   void loadStatus();
   setInterval(function () { void loadStatus(); }, 300000);
   document.addEventListener("visibilitychange", function () {
