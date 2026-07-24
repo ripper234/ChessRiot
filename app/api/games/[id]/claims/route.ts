@@ -2,6 +2,7 @@ import { getDatabase } from "@/db";
 import { claimableDraws, replayWithRepetition } from "@/lib/game-rules";
 import {
   assertAuthoritativeState,
+  expireMultiplayerTurn,
   findGameById,
   playerColor,
   readMoves,
@@ -74,6 +75,7 @@ export async function POST(
   if (!game) return apiError(404, "not_found", "Game not found");
   const color = playerColor(game, await hashSecret(token));
   if (!color) return apiError(404, "not_found", "Game not found");
+  game = await expireMultiplayerTurn(game);
   let moves = await readMoves(id);
   const existingAction = await readAction(id, requestId);
   if (existingAction) {

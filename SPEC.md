@@ -1,4 +1,34 @@
-# ChessRiot v0.3.5 specification
+# ChessRiot v0.4.0 specification
+
+## v0.4 release additions
+
+- A textless palette control is available on every route and opens a
+  keyboard-accessible picker with exactly nine original visual themes.
+- Theme choices affect the page background, panels, board, captured pieces,
+  and playable pieces. The choice persists locally, applies before paint, and
+  synchronizes across open tabs.
+- A small global version link is visible on home, join, loading, error, game,
+  and changelog states.
+- Active joined multiplayer games expose six safe preset cheers. For 15 minutes
+  after completion, only Good Game and Thanks remain available; bounded history
+  stays readable afterward. Cheers are authenticated, idempotent, rate-limited,
+  and never allow free-form chat.
+- Multiplayer creation offers one, three, or five days per move, defaulting to
+  three. An expired turn ends the game with the side that missed its move as
+  the loser. Legacy games without a stored pace keep no deadline.
+- Every game exposes a read-only replay dialog with start, back, next, and end
+  controls. Replay never mutates or replaces the live board.
+- A live checkmate transition briefly animates the actual winning piece
+  defeating the losing king. It does not replay after refresh and honors
+  reduced-motion preferences.
+- The app ships installable PWA metadata and a service worker that caches only
+  public static assets. It never caches game, join, API, or credential-bearing
+  responses.
+- A subtle dot marks an unseen release. Players can opt into opponent-move
+  notifications while ChessRiot remains open and unfocused; closed-app push is
+  not claimed.
+- Themes use CSS and existing chess glyphs only. They do not use third-party
+  logos, proprietary assets, or copied branded artwork.
 
 ## v0.3 release additions
 
@@ -46,7 +76,7 @@ This file and `MVP.md` are the source of truth for the current milestone.
 
 1. The player enters a display name, then chooses Solo or Multiplayer.
 2. Solo reveals a five-step Bot level bar that starts at Level 3, Medium. Colors are assigned evenly and deterministically from the idempotent create request. If Riot Bot is White, its legal opening is committed before the game appears.
-3. Multiplayer opens White's reusable private game URL and shows a separate one-use invitation URL.
+3. Multiplayer asks for a one, three, or five-day move pace, then opens White's reusable private game URL and shows a separate one-use invitation URL.
 4. Black opens that invitation on another device, enters a display name, and claims the second seat.
 5. Every human and computer move is revalidated by the server against authoritative history.
 6. The board polls for changes and refreshes on focus. A player can open their private game URL on any device and restore the correct seat.
@@ -70,6 +100,9 @@ This file and `MVP.md` are the source of truth for the current milestone.
 - Ending a waiting game records cancellation with no winner. Ending an active
   game records resignation and the opponent as winner. Both actions are
   authenticated, version guarded, idempotent, and preserve move history.
+- Joined multiplayer games derive each move deadline from the last accepted
+  mutation. Reads, moves, draw claims, and resignations all enforce expiry
+  atomically before accepting a later action.
 
 ## Identity and privacy
 
@@ -81,11 +114,13 @@ This file and `MVP.md` are the source of truth for the current milestone.
 
 ## Interface
 
-- One original voxel/block-world identity using grass, dirt, stone, wood, sand, water, and torch-light colors. It does not copy third-party game branding or assets.
+- Nine original visual themes cover the page, panels, board, and pieces. The
+  default Blockfield theme uses grass, dirt, stone, wood, sand, water, and
+  torch-light colors. None copy third-party game branding or assets.
 - Drag and drop a piece, or tap/click a piece and then a legal destination.
 - Board rotates for Black while submitted coordinates remain absolute chess squares.
 - The interface shows explicit player colors, turn, check, the checked king,
-  lost pieces, outcome, and move history.
+  lost pieces, outcome, deadline, move history, and read-only replay.
 - When a threefold or fifty-move draw is available to the player on move, the interface offers an explicit claim.
 - Synthesized move, capture, check, result, and invalid-action sounds are on by default and can be muted.
 - Initial loads, refreshes, repeated polling responses, and join-only version changes do not replay move sounds.
@@ -96,4 +131,6 @@ This file and `MVP.md` are the source of truth for the current milestone.
 - Events carry environment, app version, request id, normalized route, result, latency, safe metadata, and an environment-local HMAC reference for the game.
 - Unchanged three-second polls are excluded. Events are retained for 30 days with a hard cap.
 - Never record player names, bearer keys, key hashes, invitation or private links, fragments, IP addresses, user agents, FENs, raw bodies, or arbitrary exception messages.
+- Reaction events record only the selected preset key. Reaction reads are
+  excluded from telemetry just like unchanged game polling.
 - The owner-only control panel uses two-minute, environment-specific signed read grants and shows each environment separately. Failed reads remain visibly stale and never become fake zeroes.

@@ -7,6 +7,7 @@ import {
   isAiDifficulty,
   isGameMode,
   isSecret,
+  isTurnPaceDays,
   isUuid,
   normalizeDisplayName,
   requestIsSameOrigin,
@@ -41,11 +42,21 @@ export async function POST(request: Request) {
   const difficulty = mode === "solo"
     ? body.difficulty === undefined ? 3 : body.difficulty
     : null;
+  const turnPaceDays = mode === "multiplayer"
+    ? body.turnPaceDays === undefined ? 3 : body.turnPaceDays
+    : null;
+  const turnPaceMatches = (value: number | null) =>
+    value === turnPaceDays
+    || (mode === "multiplayer" && body.turnPaceDays === undefined && value === null);
   if (!displayName || !isSecret(playerToken) || !isSecret(inviteToken) || !isUuid(requestId)) {
     return apiError(400, "invalid_request", "Name, secrets, or request id are invalid");
   }
-  if (!isGameMode(mode) || (mode === "solo" && !isAiDifficulty(difficulty))) {
-    return apiError(400, "invalid_request", "Game mode or bot level is invalid");
+  if (
+    !isGameMode(mode)
+    || (mode === "solo" && !isAiDifficulty(difficulty))
+    || (mode === "multiplayer" && !isTurnPaceDays(turnPaceDays))
+  ) {
+    return apiError(400, "invalid_request", "Game mode, bot level, or turn pace is invalid");
   }
   if (playerToken === inviteToken) return apiError(400, "invalid_request", "Secrets must be different");
 
@@ -58,7 +69,8 @@ export async function POST(request: Request) {
       playerColor(existing, playerHash) !== existing.human_color ||
       existing.invite_token_hash !== inviteHash ||
       existing.game_mode !== mode ||
-      existing.ai_difficulty !== difficulty
+      existing.ai_difficulty !== difficulty ||
+      !turnPaceMatches(existing.turn_pace_days)
     ) {
       return apiError(409, "idempotency_conflict", "This request id was already used");
     }
@@ -130,9 +142,9 @@ export async function POST(request: Request) {
           now,
         ),
       db.prepare(`INSERT INTO game_settings (
-        game_id, game_mode, ai_difficulty, human_color
-      ) VALUES (?, ?, ?, ?)`)
-        .bind(id, mode, difficulty, humanColor),
+        game_id, game_mode, ai_difficulty, human_color, turn_pace_days
+      ) VALUES (?, ?, ?, ?, ?)`)
+        .bind(id, mode, difficulty, humanColor, turnPaceDays),
     ];
     if (opening && openingCandidate && computerColor) {
       writes.push(
@@ -163,7 +175,8 @@ export async function POST(request: Request) {
       playerColor(raced, playerHash) !== raced.human_color ||
       raced.invite_token_hash !== inviteHash ||
       raced.game_mode !== mode ||
-      raced.ai_difficulty !== difficulty
+      raced.ai_difficulty !== difficulty ||
+      !turnPaceMatches(raced.turn_pace_days)
     ) {
       return apiError(409, "idempotency_conflict", "Could not create this game");
     }
@@ -187,8 +200,6 @@ export async function POST(request: Request) {
       metadata: {
         color: computerColor,
         difficulty: difficulty as number,
-        from: openingCandidate.from,
-        to: openingCandidate.to,
         opening: true,
       },
     });

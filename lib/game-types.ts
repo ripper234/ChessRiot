@@ -1,6 +1,7 @@
 export type Color = "w" | "b";
 export type GameMode = "solo" | "multiplayer";
 export type AiDifficulty = 1 | 2 | 3 | 4 | 5;
+export type TurnPaceDays = 1 | 3 | 5;
 export type Promotion = "q" | "r" | "b" | "n";
 export type DrawClaim = "threefold_repetition" | "fifty_move";
 export type Termination =
@@ -13,6 +14,7 @@ export type Termination =
   | "fifty_move"
   | "seventy_five_move"
   | "cancelled"
+  | "timeout"
   | "draw";
 
 export interface StoredMove {
@@ -42,6 +44,7 @@ export interface GameSnapshot {
   id: string;
   mode: GameMode;
   aiDifficulty: AiDifficulty | null;
+  turnPaceDays?: TurnPaceDays | null;
   status: "waiting" | "active" | "completed";
   version: number;
   fen: string;
@@ -57,4 +60,5 @@ export interface GameSnapshot {
   outcome: { winner: Color | null; reason: Termination } | null;
   moves: PublicMove[];
   updatedAt: string;
+  deadlineAt?: string | null;
 }

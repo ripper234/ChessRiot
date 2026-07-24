@@ -97,6 +97,7 @@ try {
   assert.equal(created.game.status, "waiting");
   assert.equal(created.game.mode, "multiplayer");
   assert.equal(created.game.aiDifficulty, null);
+  assert.equal(created.game.turnPaceDays, 3);
 
   const createRetry = await request(runtime, "/api/games", {
     method: "POST",
@@ -130,6 +131,121 @@ try {
   assert.equal(joined.game.you.name, "Omri");
   assert.equal(joined.game.players.white.name, "Ron");
   assert.equal(joined.game.players.black.name, "Omri");
+
+  const maliciousReaction = "<script>steal-private-seat</script>";
+  const maliciousHeaderRequestId = "private-seat-key-in-request-header";
+  const maliciousBodyRequestId = "Player Name and private seat key";
+  assert.equal((await request(runtime, `/api/games/${gameId}/reactions`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${whiteToken}`,
+      "x-request-id": maliciousHeaderRequestId,
+    },
+    body: JSON.stringify({ reaction: "hi", requestId: maliciousBodyRequestId }),
+  })).status, 400);
+  assert.equal((await request(runtime, `/api/games/${gameId}/reactions`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${whiteToken}` },
+    body: JSON.stringify({ reaction: maliciousReaction, requestId: randomUUID() }),
+  })).status, 400);
+  assert.equal((await request(runtime, `/api/games/${gameId}/reactions`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${whiteToken}`, origin: "https://evil.example" },
+    body: JSON.stringify({ reaction: "hi", requestId: randomUUID() }),
+  })).status, 403);
+  assert.equal((await request(runtime, `/api/games/${gameId}/reactions`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${thirdToken}` },
+    body: JSON.stringify({ reaction: "hi", requestId: randomUUID() }),
+  })).status, 404);
+  assert.equal((await request(runtime, `/api/games/${gameId}/reactions`, {
+    headers: { authorization: `Bearer ${thirdToken}` },
+  })).status, 404);
+
+  const reactionVersionBefore = joined.game.version;
+  const whiteReactionId = randomUUID();
+  const whiteReactionResponse = await request(runtime, `/api/games/${gameId}/reactions`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${whiteToken}` },
+    body: JSON.stringify({ reaction: "hi", requestId: whiteReactionId }),
+  });
+  assert.equal(whiteReactionResponse.status, 201);
+  const whiteReaction = (await body(whiteReactionResponse)).reaction;
+  assert.equal(whiteReaction.senderColor, "w");
+  assert.equal(whiteReaction.key, "hi");
+  assert.equal(typeof whiteReaction.sequence, "number");
+  const whiteReactionRetry = await request(runtime, `/api/games/${gameId}/reactions`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${whiteToken}` },
+    body: JSON.stringify({ reaction: "hi", requestId: whiteReactionId }),
+  });
+  assert.equal(whiteReactionRetry.status, 200);
+  assert.equal((await body(whiteReactionRetry)).reaction.id, whiteReaction.id);
+  assert.equal((await request(runtime, `/api/games/${gameId}/reactions`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${whiteToken}` },
+    body: JSON.stringify({ reaction: "thanks", requestId: whiteReactionId }),
+  })).status, 409);
+  assert.equal((await request(runtime, `/api/games/${gameId}/reactions`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${whiteToken}` },
+    body: JSON.stringify({ reaction: "nice_move", requestId: randomUUID() }),
+  })).status, 429);
+
+  const blackReactionResponse = await request(runtime, `/api/games/${gameId}/reactions`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${blackToken}` },
+    body: JSON.stringify({ reaction: "good_luck", requestId: randomUUID() }),
+  });
+  assert.equal(blackReactionResponse.status, 201);
+  const blackReaction = (await body(blackReactionResponse)).reaction;
+  assert.equal(blackReaction.senderColor, "b");
+  assert.ok(blackReaction.sequence > whiteReaction.sequence);
+  const visibleReactions = await body(await request(runtime, `/api/games/${gameId}/reactions`, {
+    headers: { authorization: `Bearer ${blackToken}` },
+  }));
+  assert.deepEqual(
+    visibleReactions.reactions.map((reaction) => reaction.key),
+    ["hi", "good_luck"],
+  );
+  const versionAfterReactions = await body(await request(runtime, `/api/games/${gameId}`, {
+    headers: { authorization: `Bearer ${whiteToken}` },
+  }));
+  assert.equal(versionAfterReactions.game.version, reactionVersionBefore);
+  assert.equal(versionAfterReactions.game.plyCount, 0);
+
+  const reactionRaceWhite = secret();
+  const reactionRaceInvite = secret();
+  const reactionRaceCreated = await body(await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Reaction White",
+      mode: "multiplayer",
+      playerToken: reactionRaceWhite,
+      inviteToken: reactionRaceInvite,
+      requestId: randomUUID(),
+    }),
+  }));
+  await request(runtime, `/api/invitations/${reactionRaceInvite}/join`, {
+    method: "POST",
+    body: JSON.stringify({ displayName: "Reaction Black", playerToken: secret() }),
+  });
+  const concurrentReactionResponses = await Promise.all([
+    request(runtime, `/api/games/${reactionRaceCreated.game.id}/reactions`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${reactionRaceWhite}` },
+      body: JSON.stringify({ reaction: "nice_move", requestId: randomUUID() }),
+    }),
+    request(runtime, `/api/games/${reactionRaceCreated.game.id}/reactions`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${reactionRaceWhite}` },
+      body: JSON.stringify({ reaction: "thanks", requestId: randomUUID() }),
+    }),
+  ]);
+  assert.deepEqual(
+    concurrentReactionResponses.map((response) => response.status).sort(),
+    [201, 429],
+  );
 
   const joinRetry = await request(runtime, `/api/invitations/${inviteToken}/join`, {
     method: "POST",
@@ -194,6 +310,40 @@ try {
   assert.equal(mate.data.game.outcome.reason, "checkmate");
   assert.equal(mate.data.game.outcome.winner, "b");
   assert.equal(mate.data.game.moves.length, 4);
+  const completedReactionRetry = await request(runtime, `/api/games/${gameId}/reactions`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${whiteToken}` },
+    body: JSON.stringify({ reaction: "hi", requestId: whiteReactionId }),
+  });
+  assert.equal(completedReactionRetry.status, 200);
+  assert.equal((await body(completedReactionRetry)).reaction.id, whiteReaction.id);
+  const reactionDatabase = await runtime.getD1Database("DB");
+  await reactionDatabase
+    .prepare("UPDATE game_reactions SET created_at = ? WHERE game_id = ?")
+    .bind(new Date(Date.now() - 6_000).toISOString(), gameId)
+    .run();
+  const completedReaction = await request(runtime, `/api/games/${gameId}/reactions`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${whiteToken}` },
+    body: JSON.stringify({ reaction: "good_game", requestId: randomUUID() }),
+  });
+  assert.equal(completedReaction.status, 201);
+  assert.equal((await body(completedReaction)).reaction.key, "good_game");
+  await reactionDatabase
+    .prepare("UPDATE games SET finished_at = ?, updated_at = ? WHERE id = ?")
+    .bind(
+      new Date(Date.now() - 16 * 60 * 1_000).toISOString(),
+      new Date(Date.now() - 16 * 60 * 1_000).toISOString(),
+      gameId,
+    )
+    .run();
+  const expiredCompletedReaction = await request(runtime, `/api/games/${gameId}/reactions`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${whiteToken}` },
+    body: JSON.stringify({ reaction: "thanks", requestId: randomUUID() }),
+  });
+  assert.equal(expiredCompletedReaction.status, 409);
+  assert.equal((await body(expiredCompletedReaction)).error.code, "reactions_closed");
 
   const mateRetry = await move(blackToken, "d8", "h4", 4, mateRequestId);
   assert.equal(mateRetry.response.status, 200);
@@ -218,6 +368,10 @@ try {
   });
   assert.equal(afterRestart.status, 200);
   const persisted = await body(afterRestart);
+  const persistedReactions = await body(await request(runtime, `/api/games/${gameId}/reactions`, {
+    headers: { authorization: `Bearer ${whiteToken}` },
+  }));
+  assert.equal(persistedReactions.reactions.length, 3);
   assert.equal(persisted.game.version, 5);
   assert.equal(persisted.game.outcome.reason, "checkmate");
 
@@ -327,6 +481,63 @@ try {
   assert.equal(cancelledJoin.status, 410);
   assert.equal((await body(cancelledJoin)).error.code, "invite_cancelled");
 
+  const timeoutWhite = secret();
+  const timeoutBlack = secret();
+  const timeoutInvite = secret();
+  const timeoutCreated = await body(await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Slow White",
+      mode: "multiplayer",
+      playerToken: timeoutWhite,
+      inviteToken: timeoutInvite,
+      requestId: randomUUID(),
+    }),
+  }));
+  const timeoutJoined = await body(await request(
+    runtime,
+    `/api/invitations/${timeoutInvite}/join`,
+    {
+      method: "POST",
+      body: JSON.stringify({ displayName: "Patient Black", playerToken: timeoutBlack }),
+    },
+  ));
+  assert.match(timeoutJoined.game.deadlineAt, /^\d{4}-\d{2}-\d{2}T/);
+  const timeoutDatabase = await runtime.getD1Database("DB");
+  await timeoutDatabase
+    .prepare("UPDATE games SET updated_at = ? WHERE id = ?")
+    .bind("2026-07-20T00:00:00.000Z", timeoutCreated.game.id)
+    .run();
+  const expiredTurnReaction = await request(
+    runtime,
+    `/api/games/${timeoutCreated.game.id}/reactions`,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${timeoutWhite}` },
+      body: JSON.stringify({ reaction: "hi", requestId: randomUUID() }),
+    },
+  );
+  assert.equal(expiredTurnReaction.status, 409);
+  assert.equal((await body(expiredTurnReaction)).error.code, "reactions_closed");
+  const timedOutResponse = await request(runtime, `/api/games/${timeoutCreated.game.id}`, {
+    headers: { authorization: `Bearer ${timeoutWhite}` },
+  });
+  assert.equal(timedOutResponse.status, 200);
+  const timedOut = await body(timedOutResponse);
+  assert.equal(timedOut.game.status, "completed");
+  assert.deepEqual(timedOut.game.outcome, { winner: "b", reason: "timeout" });
+  assert.equal(timedOut.game.deadlineAt, null);
+  assert.equal((await request(runtime, `/api/games/${timeoutCreated.game.id}/moves`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${timeoutWhite}` },
+    body: JSON.stringify({
+      from: "e2",
+      to: "e4",
+      expectedVersion: timeoutJoined.game.version,
+      requestId: randomUUID(),
+    }),
+  })).status, 409);
+
   const checkWhite = secret();
   const checkBlack = secret();
   const checkInvite = secret();
@@ -387,6 +598,18 @@ try {
     }),
   });
   assert.equal(invalidDifficulty.status, 400);
+  const invalidTurnPace = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Ron",
+      mode: "multiplayer",
+      turnPaceDays: 2,
+      playerToken: secret(),
+      inviteToken: secret(),
+      requestId: randomUUID(),
+    }),
+  });
+  assert.equal(invalidTurnPace.status, 400);
 
   const soloToken = secret();
   const soloInvite = secret();
@@ -412,6 +635,14 @@ try {
   assert.equal(soloCreated.game.you.color, "w");
   assert.equal(soloCreated.game.players.black.name, "Riot Bot");
   assert.equal(soloCreated.game.version, 0);
+  assert.equal((await request(runtime, `/api/games/${soloGameId}/reactions`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${soloToken}` },
+    body: JSON.stringify({ reaction: "hi", requestId: randomUUID() }),
+  })).status, 409);
+  assert.equal((await request(runtime, `/api/games/${soloGameId}/reactions`, {
+    headers: { authorization: `Bearer ${soloToken}` },
+  })).status, 409);
 
   const soloInviteCannotBeClaimed = await request(runtime, `/api/invitations/${soloInvite}`);
   assert.equal(soloInviteCannotBeClaimed.status, 410);
@@ -667,6 +898,10 @@ try {
   assert.ok(overview.totals.total > 0);
   assert.ok(overview.breakdown.some((row) => row.event_name === "move.submitted"));
   assert.ok(overview.breakdown.some((row) => row.event_name === "game.ended"));
+  assert.ok(overview.breakdown.some((row) =>
+    row.event_name === "reaction.sent" && row.outcome === "success" && row.count === 4));
+  assert.ok(overview.breakdown.some((row) =>
+    row.event_name === "reaction.retry" && row.outcome === "success" && row.count === 2));
   assert.ok(overview.breakdown.every((row) => row.event_name !== "system.health_checked"));
   assert.ok(overview.breakdown.every((row) => row.event_name !== "observability.viewed"));
   assert.ok(overview.recentEvents.every((event) => !JSON.stringify(event).includes(soloToken)));
@@ -675,6 +910,24 @@ try {
   assert.equal(overview.feedback[0].page, "/g/game-id");
   assert.ok(overview.recentEvents.every((event) => !JSON.stringify(event).includes(feedbackTitle)));
   assert.ok(overview.recentEvents.every((event) => !JSON.stringify(event).includes(feedbackComment)));
+  assert.ok(overview.recentEvents.every((event) =>
+    !JSON.stringify(event).includes(maliciousReaction)));
+  assert.ok(overview.recentEvents.every((event) =>
+    !JSON.stringify(event).includes(maliciousHeaderRequestId)));
+  assert.ok(overview.recentEvents.every((event) =>
+    !JSON.stringify(event).includes(maliciousBodyRequestId)));
+  const observabilityDatabase = await runtime.getD1Database("DB");
+  const moveTelemetry = await observabilityDatabase
+    .prepare(`SELECT metadata_json FROM observability_events
+      WHERE event_name IN ('move.submitted', 'bot.move_committed')`)
+    .all();
+  assert.ok(moveTelemetry.results.length > 0);
+  for (const event of moveTelemetry.results) {
+    const metadata = JSON.parse(event.metadata_json);
+    assert.equal(Object.hasOwn(metadata, "from"), false);
+    assert.equal(Object.hasOwn(metadata, "to"), false);
+    assert.equal(Object.hasOwn(metadata, "promotion"), false);
+  }
 
   const validGrant = opsGrant();
   const tamperedGrant = validGrant.slice(0, -1) + (validGrant.endsWith("a") ? "b" : "a");

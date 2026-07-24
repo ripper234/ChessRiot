@@ -36,10 +36,21 @@ import {
   isDarkSquare,
   pieceCannotAnswerCheckMessage,
 } from "@/lib/game-presentation";
+import { classifyGameFinisher, type GameFinisher } from "@/lib/game-finishers";
+import {
+  postGameReactionWindowOpen,
+  type PublicReaction,
+  type ReactionKey,
+  reactionPreset,
+} from "@/lib/game-reactions";
 import { optimisticMoveSnapshot, shouldAcceptGameSnapshot } from "@/lib/game-snapshots";
 import type { DrawClaim, GameSnapshot, Promotion } from "@/lib/game-types";
 import { APP_VERSION } from "@/lib/version";
 import { Brand } from "./Brand";
+import { CheckmateFinisher } from "./CheckmateFinisher";
+import { ReactionPanel } from "./ReactionPanel";
+import { ReplayViewer } from "./ReplayViewer";
+import { TurnDeadline } from "./TurnDeadline";
 
 const PIECES: Record<"w" | "b", Record<PieceSymbol, string>> = {
   // Filled glyphs let CSS provide unmistakable light and dark piece colors.
@@ -53,6 +64,8 @@ const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
 const RANKS = ["8", "7", "6", "5", "4", "3", "2", "1"];
 const CONNECTION_MESSAGE = "Connection interrupted. We’ll keep trying.";
 const DIFFICULTY_LABELS = ["", "Easy", "Relaxed", "Medium", "Tough", "Brutal"];
+const REACTION_HIDDEN_KEY_PREFIX = "chessriot:reactions:hidden:";
+const FINISHER_DURATION_MS = 1_300;
 
 interface DragState {
   pointerId: number;
@@ -82,6 +95,10 @@ function outcomeText(game: GameSnapshot): string {
   if (game.outcome.reason === "resignation") {
     const winner = game.outcome.winner === "w" ? game.players.white.name : game.players.black?.name;
     return `${winner ?? "Winner"} wins by resignation`;
+  }
+  if (game.outcome.reason === "timeout") {
+    const winner = game.outcome.winner === "w" ? game.players.white.name : game.players.black?.name;
+    return `${winner ?? "Winner"} wins on time`;
   }
   if (game.outcome.reason === "cancelled") return "Game cancelled";
   const labels: Record<string, string> = {
@@ -114,6 +131,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [effects, setEffects] = useState<BoardEffect[]>([]);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [ending, setEnding] = useState(false);
+  const [reactions, setReactions] = useState<PublicReaction[]>([]);
+  const [reactionQueue, setReactionQueue] = useState<PublicReaction[]>([]);
+  const [reactionBurst, setReactionBurst] = useState<PublicReaction | null>(null);
+  const [reactionOpen, setReactionOpen] = useState(false);
+  const [reactionSending, setReactionSending] = useState<ReactionKey | null>(null);
+  const [reactionMessage, setReactionMessage] = useState("");
+  const [reactionsHidden, setReactionsHidden] = useState(false);
+  const [finisher, setFinisher] = useState<GameFinisher | null>(null);
   const latestVersion = useRef(-1);
   const previousGame = useRef<GameSnapshot | null>(null);
   const previousEffectGame = useRef<GameSnapshot | null>(null);
@@ -121,6 +146,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const dragRef = useRef<DragState | null>(null);
   const suppressClick = useRef(false);
   const effectTimer = useRef<number | null>(null);
+  const reactionCursor = useRef<number | null>(null);
+  const previousFinisherGame = useRef<GameSnapshot | null>(null);
+  const finisherTimer = useRef<number | null>(null);
+  const reactionTrigger = useRef<HTMLButtonElement | null>(null);
+  const postGameReactionsOpen = Boolean(
+    game?.status === "completed"
+    && postGameReactionWindowOpen(game.updatedAt),
+  );
 
   const acceptGame = useCallback((nextGame: GameSnapshot) => {
     if (!shouldAcceptGameSnapshot(latestVersion.current, nextGame.version)) return false;
@@ -179,6 +212,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
         setSelected(null);
         setPromotionMove(null);
         setEffects([]);
+        setReactions([]);
+        setReactionQueue([]);
+        setReactionBurst(null);
+        reactionCursor.current = null;
+        previousFinisherGame.current = null;
         dragRef.current = null;
         setDrag(null);
       }
@@ -200,9 +238,47 @@ export function GameRoom({ gameId }: { gameId: string }) {
     }
   }, [acceptGame, gameId]);
 
+  const loadReactions = useCallback(async () => {
+    const token = activeToken.current;
+    if (!token) return;
+    try {
+      const response = await fetch(`/api/games/${gameId}/reactions`, {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (!response.ok) return;
+      const data = (await response.json()) as { reactions?: PublicReaction[] };
+      if (!Array.isArray(data.reactions)) return;
+      const next = [...data.reactions].sort((a, b) => a.sequence - b.sequence);
+      setReactions(next);
+      const newest = next.at(-1)?.sequence ?? 0;
+      if (reactionCursor.current === null) {
+        reactionCursor.current = newest;
+        return;
+      }
+      const unseen = next.filter((reaction) =>
+        reaction.sequence > reactionCursor.current!
+        && reaction.senderColor !== serverGame?.you.color);
+      reactionCursor.current = Math.max(reactionCursor.current, newest);
+      if (!reactionsHidden && unseen.length > 0) {
+        setReactionQueue((current) => {
+          const known = new Set(current.map((reaction) => reaction.sequence));
+          return [...current, ...unseen.filter((reaction) => !known.has(reaction.sequence))]
+            .sort((a, b) => a.sequence - b.sequence)
+            .slice(-6);
+        });
+      }
+    } catch {
+      // Game polling remains the connection-status source of truth.
+    }
+  }, [gameId, reactionsHidden, serverGame?.you.color]);
+
   useEffect(() => {
     try {
       setInviteUrl(localStorage.getItem(inviteKey(gameId)) ?? "");
+      setReactionsHidden(
+        localStorage.getItem(`${REACTION_HIDDEN_KEY_PREFIX}${gameId}`) === "true",
+      );
     } catch {
       setInviteUrl("");
     }
@@ -229,6 +305,28 @@ export function GameRoom({ gameId }: { gameId: string }) {
       document.removeEventListener("visibilitychange", refresh);
     };
   }, [game, loadGame]);
+
+  useEffect(() => {
+    if (
+      !game
+      || game.mode !== "multiplayer"
+      || game.status === "waiting"
+      || !game.players.black
+    ) return;
+    void loadReactions();
+    if (game.status === "completed" && !postGameReactionsOpen) return;
+    const refresh = () => {
+      if (document.visibilityState === "visible") void loadReactions();
+    };
+    const timer = window.setInterval(refresh, 3_000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [game, loadReactions, postGameReactionsOpen]);
 
   useEffect(() => {
     if (
@@ -295,6 +393,52 @@ export function GameRoom({ gameId }: { gameId: string }) {
   useEffect(() => () => {
     if (effectTimer.current !== null) window.clearTimeout(effectTimer.current);
   }, []);
+
+  useEffect(() => {
+    if (reactionsHidden) {
+      setReactionQueue([]);
+      setReactionBurst(null);
+      return;
+    }
+    if (reactionBurst || reactionQueue.length === 0) return;
+    setReactionBurst(reactionQueue[0]);
+    setReactionQueue((current) => current.slice(1));
+  }, [reactionBurst, reactionQueue, reactionsHidden]);
+
+  useEffect(() => {
+    if (!reactionBurst) return;
+    const timer = window.setTimeout(() => setReactionBurst(null), 3_200);
+    return () => window.clearTimeout(timer);
+  }, [reactionBurst]);
+
+  useEffect(() => {
+    if (!serverGame) return;
+    const previous = previousFinisherGame.current;
+    previousFinisherGame.current = serverGame;
+    const nextFinisher = classifyGameFinisher(previous, serverGame);
+    if (!nextFinisher) return;
+    if (finisherTimer.current !== null) window.clearTimeout(finisherTimer.current);
+    setFinisher(nextFinisher);
+    finisherTimer.current = window.setTimeout(() => {
+      finisherTimer.current = null;
+      setFinisher(null);
+    }, FINISHER_DURATION_MS);
+  }, [serverGame]);
+
+  useEffect(() => () => {
+    if (finisherTimer.current !== null) window.clearTimeout(finisherTimer.current);
+  }, []);
+
+  useEffect(() => {
+    if (!reactionOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setReactionOpen(false);
+      reactionTrigger.current?.focus();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [reactionOpen]);
 
   useEffect(() => {
     setSelected(null);
@@ -651,6 +795,50 @@ export function GameRoom({ gameId }: { gameId: string }) {
     if (next && await unlockGameSounds()) playGameSound("move");
   }
 
+  async function sendReaction(key: ReactionKey) {
+    const token = activeToken.current;
+    if (!token || reactionSending) return;
+    setReactionSending(key);
+    setReactionMessage("");
+    try {
+      const response = await fetch(`/api/games/${gameId}/reactions`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({ reaction: key, requestId: generateUuid() }),
+      });
+      const data = (await response.json()) as {
+        reaction?: PublicReaction;
+        error?: { message?: string };
+      };
+      if (!response.ok || !data.reaction) {
+        setReactionMessage(apiMessage(data, "Could not send that reaction"));
+        return;
+      }
+      setReactions((current) => {
+        if (current.some((reaction) => reaction.id === data.reaction!.id)) return current;
+        return [...current, data.reaction!]
+          .sort((a, b) => a.sequence - b.sequence)
+          .slice(-20);
+      });
+      setReactionOpen(false);
+      reactionTrigger.current?.focus();
+    } catch {
+      setReactionMessage("Could not send that reaction");
+    } finally {
+      setReactionSending(null);
+    }
+  }
+
+  function toggleReactionsHidden() {
+    const next = !reactionsHidden;
+    setReactionsHidden(next);
+    try {
+      localStorage.setItem(`${REACTION_HIDDEN_KEY_PREFIX}${gameId}`, String(next));
+    } catch {
+      // The setting still applies in this tab when browser storage is blocked.
+    }
+  }
+
   async function endGame() {
     if (!game || game.status === "completed") return;
     const token = activeToken.current;
@@ -723,6 +911,13 @@ export function GameRoom({ gameId }: { gameId: string }) {
         ? game.turn === game.you.color ? "CHECK! Protect your king" : `${turnName} is in check`
         : game.turn === game.you.color ? "Your turn" : `${turnName}’s turn`;
   const draggedPiece = drag ? chess.get(drag.from) : null;
+  const burstPreset = reactionBurst ? reactionPreset(reactionBurst.key) : null;
+  const reactionsAvailable = Boolean(
+    game.mode === "multiplayer"
+    && game.status !== "waiting"
+    && game.players.black
+    && (game.status === "active" || postGameReactionsOpen),
+  );
 
   return (
     <main className="game-shell">
@@ -753,6 +948,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 <strong>{game.players.white.name}</strong>
               </div>
               <span className="status-lamp" data-active={game.status === "active" && game.turn === "w" ? "true" : "false"} />
+              {!reactionsHidden && reactionBurst?.senderColor === "w" && burstPreset ? (
+                <span className="reaction-bubble" role="status" aria-live="polite">
+                  <i aria-hidden="true">{burstPreset.icon}</i>{burstPreset.label}
+                </span>
+              ) : null}
             </div>
             <div className="versus">VS</div>
             <div className={`player-card black-player${game.you.color === "b" ? " you-player" : ""}`}>
@@ -762,6 +962,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 <strong>{game.players.black?.name ?? "Waiting…"}</strong>
               </div>
               <span className="status-lamp" data-active={game.status === "active" && game.turn === "b" ? "true" : "false"} />
+              {!reactionsHidden && reactionBurst?.senderColor === "b" && burstPreset ? (
+                <span className="reaction-bubble" role="status" aria-live="polite">
+                  <i aria-hidden="true">{burstPreset.icon}</i>{burstPreset.label}
+                </span>
+              ) : null}
             </div>
           </div>
 
@@ -769,7 +974,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
             <div>
               <span>WHITE PIECES LOST</span>
               <b>{lostPieces.w.length ? lostPieces.w.map((piece, index) => (
-                <i key={`w-${piece}-${index}`} aria-label={`white ${PIECE_NAMES[piece]}`}>
+                <i className="piece-w" key={`w-${piece}-${index}`} aria-label={`white ${PIECE_NAMES[piece]}`}>
                   {PIECES.w[piece]}
                 </i>
               )) : "—"}</b>
@@ -777,7 +982,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
             <div>
               <span>BLACK PIECES LOST</span>
               <b>{lostPieces.b.length ? lostPieces.b.map((piece, index) => (
-                <i key={`b-${piece}-${index}`} aria-label={`black ${PIECE_NAMES[piece]}`}>
+                <i className="piece-b" key={`b-${piece}-${index}`} aria-label={`black ${PIECE_NAMES[piece]}`}>
                   {PIECES.b[piece]}
                 </i>
               )) : "—"}</b>
@@ -790,9 +995,19 @@ export function GameRoom({ gameId }: { gameId: string }) {
             aria-live={game.check ? "assertive" : "polite"}
           >
             <span>{game.status === "completed" ? "⚑" : game.check ? "!" : "◆"}</span>
-            <div><small>{game.check && game.status !== "completed" ? "CHECK" : "MATCH STATUS"}</small><strong>{statusText}</strong></div>
+            <div>
+              <small>{game.check && game.status !== "completed" ? "CHECK" : "MATCH STATUS"}</small>
+              <strong>{statusText}</strong>
+            </div>
             {busy || botThinking ? <b>{ending ? "ENDING GAME…" : botThinking ? "RIOT BOT THINKING…" : "LOCKING MOVE…"}</b> : null}
           </div>
+          {game.deadlineAt ? (
+            <TurnDeadline
+              deadlineAt={game.deadlineAt}
+              turnPaceDays={game.turnPaceDays ?? 3}
+              yourTurn={game.turn === game.you.color}
+            />
+          ) : null}
 
           {game.claimableDraws.length > 0 ? (
             <div className="draw-claims" role="group" aria-label="Available draw claims">
@@ -813,6 +1028,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
           ) : null}
 
           <div className="board-wrap" aria-busy={busy || botThinking} data-interactive={canMove ? "true" : "false"}>
+            {finisher ? <CheckmateFinisher finisher={finisher} /> : null}
             <div className="chessboard" role="grid" aria-label="Chess board">
               {squares.map((square, index) => {
                 const piece = chess.get(square);
@@ -873,6 +1089,23 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 <p className="form-error">The invitation link is no longer stored on this device.</p>}
             </section>
           ) : null}
+          {reactionsAvailable ? (
+            <ReactionPanel
+              playerColor={game.you.color}
+              whiteName={game.players.white.name}
+              blackName={game.players.black?.name ?? "BLACK"}
+              reactions={reactions}
+              hidden={reactionsHidden}
+              open={reactionOpen}
+              busy={reactionSending}
+              message={reactionMessage}
+              postGame={game.status === "completed"}
+              triggerRef={reactionTrigger}
+              onToggleHidden={toggleReactionsHidden}
+              onToggleOpen={() => setReactionOpen((current) => !current)}
+              onSend={(key) => void sendReaction(key)}
+            />
+          ) : null}
           <section className="side-card seat-card">
             <span className="side-icon">▦</span><h2>YOUR PRIVATE GAME LINK</h2>
             <p>Works on any computer or device. Anyone with this link can play as you, so keep it private.</p>
@@ -904,6 +1137,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
               )
             ) : null}
           </section>
+          <ReplayViewer moves={game.moves} orientation={game.you.color} />
           <section className="side-card moves-card">
             <div className="side-heading"><h2>MOVE LOG</h2><span>{game.plyCount} PLY</span></div>
             {game.moves.length === 0 ? <p className="empty-moves">No moves yet. White opens the riot.</p> : (
@@ -917,7 +1151,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
           <section className="side-card rules-card"><span aria-hidden="true">i</span><div><strong>GAME INFO</strong><small>
             {game.mode === "solo" && game.aiDifficulty
               ? `Standard chess • Riot Bot level ${game.aiDifficulty} • ${DIFFICULTY_LABELS[game.aiDifficulty]}`
-              : "Standard chess • Drag or tap • Every move saved"}
+              : `Standard chess • ${game.turnPaceDays
+                ? `${game.turnPaceDays} ${game.turnPaceDays === 1 ? "day" : "days"} per move`
+                : "No turn deadline"} • Drag or tap • Every move saved`}
           </small></div></section>
         </aside>
       </section>
@@ -937,6 +1173,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
           <div className="promotion-card"><p>PROMOTE YOUR PAWN</p><div>
             {(["q", "r", "b", "n"] as Promotion[]).map((piece) => (
               <button
+                className={`piece-${game.you.color}`}
                 key={piece}
                 aria-label={`Promote to ${PIECE_NAMES[piece]}`}
                 autoFocus={piece === "q"}

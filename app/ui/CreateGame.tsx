@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useRef, useState } from "react";
-import type { AiDifficulty, GameMode, GameSnapshot } from "@/lib/game-types";
+import type {
+  AiDifficulty,
+  GameMode,
+  GameSnapshot,
+  TurnPaceDays,
+} from "@/lib/game-types";
 import {
   canUseGameStorage,
   generateSecret,
@@ -37,6 +42,7 @@ export function CreateGame() {
   const [name, setName] = useState("");
   const [mode, setMode] = useState<GameMode>("multiplayer");
   const [difficulty, setDifficulty] = useState<AiDifficulty>(3);
+  const [turnPaceDays, setTurnPaceDays] = useState<TurnPaceDays>(3);
   const [recent, setRecent] = useState<RecentGame[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -74,6 +80,7 @@ export function CreateGame() {
           displayName: cleanName,
           mode,
           ...(mode === "solo" ? { difficulty } : {}),
+          ...(mode === "multiplayer" ? { turnPaceDays } : {}),
           ...pending.current,
         }),
       });
@@ -177,7 +184,30 @@ export function CreateGame() {
               />
               <div className="difficulty-scale" aria-hidden="true"><span>LOWER</span><span>HIGHER</span></div>
             </div>
-          ) : null}
+          ) : (
+            <fieldset className="pace-fieldset" disabled={busy}>
+              <legend>Time per move</legend>
+              <div className="pace-options">
+                {([1, 3, 5] as TurnPaceDays[]).map((days) => (
+                  <label className={turnPaceDays === days ? "selected" : ""} key={days}>
+                    <input
+                      type="radio"
+                      name="turn-pace"
+                      value={days}
+                      checked={turnPaceDays === days}
+                      onChange={() => {
+                        setTurnPaceDays(days);
+                        pending.current = null;
+                      }}
+                    />
+                    <strong>{days}</strong>
+                    <small>{days === 1 ? "DAY" : "DAYS"}</small>
+                  </label>
+                ))}
+              </div>
+              <p>Missing the deadline ends the game. Three days is the default.</p>
+            </fieldset>
+          )}
           {error ? <p className="form-error" role="alert">{error}</p> : null}
           <button className="primary-button" disabled={busy || !name.trim()}>
             {busy

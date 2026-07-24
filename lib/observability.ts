@@ -1,4 +1,5 @@
 import { ensureSchema, getDatabase } from "@/db";
+import { isUuid } from "./validation";
 import { APP_VERSION } from "./version";
 import { appEnvironment, observabilityHashSecret } from "./runtime";
 
@@ -58,7 +59,7 @@ export async function recordEvent(input: ObservabilityEvent): Promise<void> {
     appVersion: APP_VERSION,
     event: input.event.slice(0, 80),
     outcome: input.outcome,
-    requestId: input.requestId?.slice(0, 80) ?? null,
+    requestId: isUuid(input.requestId) ? input.requestId : null,
     subjectHash: await hashOpaque(input.subjectId),
     route: input.route?.slice(0, 120) ?? null,
     method: input.method?.slice(0, 12) ?? null,
@@ -143,6 +144,12 @@ function routeEvent(method: string, pathname: string): string | null {
   if (method === "POST" && /^\/api\/games\/[^/]+\/end$/.test(pathname)) {
     return "game.ended";
   }
+  if (method === "POST" && /^\/api\/games\/[^/]+\/reactions$/.test(pathname)) {
+    return "reaction.sent";
+  }
+  if (method === "GET" && /^\/api\/games\/[^/]+\/reactions$/.test(pathname)) {
+    return null;
+  }
   if (method === "GET" && /^\/api\/games\/[^/]+$/.test(pathname)) return "game.loaded";
   if (method === "POST" && pathname === "/api/telemetry/client") return "client.telemetry";
   if (method === "POST" && pathname === "/api/feedback") return "feedback.submitted";
@@ -163,8 +170,9 @@ function subjectFromPath(pathname: string): string | null {
 async function requestDetails(request: Request): Promise<RequestDetails> {
   const generated = crypto.randomUUID();
   const pathname = new URL(request.url).pathname;
+  const headerRequestId = request.headers.get("x-request-id");
   const details: RequestDetails = {
-    requestId: request.headers.get("x-request-id")?.slice(0, 80) || generated,
+    requestId: isUuid(headerRequestId) ? headerRequestId : generated,
     subjectId: subjectFromPath(pathname),
     metadata: {},
     clientEvent: null,
@@ -174,13 +182,11 @@ async function requestDetails(request: Request): Promise<RequestDetails> {
     const body: unknown = await request.json();
     if (!body || typeof body !== "object" || Array.isArray(body)) return details;
     const payload = body as Record<string, unknown>;
-    if (typeof payload.requestId === "string") details.requestId = payload.requestId;
+    if (isUuid(payload.requestId)) details.requestId = payload.requestId;
     if (typeof payload.mode === "string") details.metadata.mode = payload.mode.slice(0, 20);
     if (typeof payload.difficulty === "number") details.metadata.difficulty = payload.difficulty;
-    if (typeof payload.from === "string") details.metadata.from = payload.from.slice(0, 4);
-    if (typeof payload.to === "string") details.metadata.to = payload.to.slice(0, 4);
-    if (typeof payload.promotion === "string") {
-      details.metadata.promotion = payload.promotion.slice(0, 4);
+    if (typeof payload.turnPaceDays === "number") {
+      details.metadata.turnPaceDays = payload.turnPaceDays;
     }
     if (typeof payload.claim === "string") details.metadata.claim = payload.claim.slice(0, 40);
     if (
@@ -226,6 +232,11 @@ async function responseDetails(
         version?: unknown;
         plyCount?: unknown;
       };
+      reaction?: {
+        key?: unknown;
+        senderColor?: unknown;
+        sequence?: unknown;
+      };
     };
     const metadata: Record<string, string | number | boolean | null> = {};
     if (typeof payload.game?.mode === "string") metadata.mode = payload.game.mode;
@@ -236,6 +247,13 @@ async function responseDetails(
     }
     if (typeof payload.game?.version === "number") metadata.gameVersion = payload.game.version;
     if (typeof payload.game?.plyCount === "number") metadata.plyCount = payload.game.plyCount;
+    if (typeof payload.reaction?.key === "string") metadata.reaction = payload.reaction.key;
+    if (typeof payload.reaction?.senderColor === "string") {
+      metadata.playerColor = payload.reaction.senderColor;
+    }
+    if (typeof payload.reaction?.sequence === "number") {
+      metadata.reactionSequence = payload.reaction.sequence;
+    }
     return {
       errorCode: typeof payload.error?.code === "string" ? payload.error.code : null,
       subjectId: typeof payload.game?.id === "string" ? payload.game.id : null,
@@ -267,9 +285,12 @@ export async function observeHttpRequest(
   const outcome: EventOutcome = response.status >= 500
     ? "failure"
     : response.status >= 400 ? "rejected" : "success";
-  const event = requestInfo.clientEvent && baseEvent === "client.telemetry"
+  let event = requestInfo.clientEvent && baseEvent === "client.telemetry"
     ? requestInfo.clientEvent
     : baseEvent;
+  if (baseEvent === "reaction.sent" && response.status === 200) {
+    event = "reaction.retry";
+  }
   await recordEvent({
     event,
     outcome,

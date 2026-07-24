@@ -62,6 +62,8 @@ export async function ensureSchema(): Promise<void> {
             CHECK (ai_difficulty IS NULL OR ai_difficulty BETWEEN 1 AND 5),
           human_color TEXT NOT NULL DEFAULT 'w'
             CHECK (human_color IN ('w', 'b')),
+          turn_pace_days INTEGER
+            CHECK (turn_pace_days IS NULL OR turn_pace_days IN (1, 3, 5)),
           FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE,
           CHECK (
             (game_mode = 'solo' AND ai_difficulty IS NOT NULL) OR
@@ -77,6 +79,21 @@ export async function ensureSchema(): Promise<void> {
           PRIMARY KEY (game_id, request_id),
           FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
         )`),
+        db.prepare(`CREATE TABLE IF NOT EXISTS game_reactions (
+          sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+          id TEXT NOT NULL UNIQUE,
+          game_id TEXT NOT NULL,
+          request_id TEXT NOT NULL,
+          sender_color TEXT NOT NULL CHECK (sender_color IN ('w', 'b')),
+          reaction_key TEXT NOT NULL CHECK (
+            reaction_key IN ('hi', 'good_luck', 'nice_move', 'well_played', 'good_game', 'thanks')
+          ),
+          created_at TEXT NOT NULL,
+          UNIQUE (game_id, request_id),
+          FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
+        )`),
+        db.prepare(`CREATE INDEX IF NOT EXISTS game_reactions_game_sequence_idx
+          ON game_reactions (game_id, sequence DESC)`),
         db.prepare(`CREATE TABLE IF NOT EXISTS observability_events (
           id TEXT PRIMARY KEY NOT NULL,
           occurred_at TEXT NOT NULL,
@@ -137,6 +154,25 @@ export async function ensureSchema(): Promise<void> {
             .prepare("PRAGMA table_info(game_settings)")
             .all<{ name: string }>();
           if (!(reloaded.results ?? []).some((column) => column.name === "human_color")) {
+            throw error;
+          }
+        }
+      }
+      const updatedColumns = await db
+        .prepare("PRAGMA table_info(game_settings)")
+        .all<{ name: string }>();
+      if (!(updatedColumns.results ?? []).some((column) => column.name === "turn_pace_days")) {
+        try {
+          await db
+            .prepare(`ALTER TABLE game_settings
+              ADD COLUMN turn_pace_days INTEGER
+              CHECK (turn_pace_days IS NULL OR turn_pace_days IN (1, 3, 5))`)
+            .run();
+        } catch (error) {
+          const reloaded = await db
+            .prepare("PRAGMA table_info(game_settings)")
+            .all<{ name: string }>();
+          if (!(reloaded.results ?? []).some((column) => column.name === "turn_pace_days")) {
             throw error;
           }
         }

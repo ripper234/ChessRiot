@@ -15,11 +15,13 @@
 
 ## Two-player happy path
 
-1. Browser A creates a game and receives an invitation.
+1. Browser A creates a game, chooses one, three, or five days per move, and receives an invitation.
 2. Browser B joins and Browser A observes the state change.
 3. A makes a legal move; B sees the same FEN, history, and turn.
 4. B replies; both refresh and reopen to the same authoritative state.
 5. Complete Fool's Mate and verify checkmate, Black winner, four plies, and no further moves.
+6. Backdate a live player turn beyond its selected pace, load the game, and
+   verify the waiting player loses on time before a late move can commit.
 
 ## Enforcement
 
@@ -53,7 +55,17 @@
 
 ## Interface and sound
 
-- Verify desktop and mobile layouts use the original voxel/block-world identity and keep the full board readable without browser zoom or horizontal overflow.
+- Verify the textless palette control appears on home, join, game, changelog,
+  loading, and error states, while the exact current version remains visible.
+- Open the palette by mouse and keyboard, verify exactly nine named choices,
+  select each choice, and verify a non-color selected marker.
+- Select a non-default theme, reload and navigate between home, join, game, and
+  changelog. Verify the same theme applies before paint and across a second tab.
+- Verify every theme changes the page, panels, board, captured pieces, and both
+  piece colors while preserving readable White/Black contrast.
+- Verify invalid or unavailable local storage falls back to Blockfield without
+  breaking the current page.
+- Verify desktop and mobile layouts use an original visual identity and keep the full board readable without browser zoom or horizontal overflow.
 - At 1366×768, verify the player cards, captured strip, status, and complete board fit in the viewport.
 - Verify each player name is paired with the correct readable White/Black label and YOU marker from both seats.
 - Verify captured pawns and pieces appear under the color that lost them, including en passant.
@@ -67,6 +79,23 @@
 - Drag a legal move with mouse and touch and verify exactly one move is submitted.
 - Drop off-board or on an illegal square and verify the piece snaps back with no mutation.
 - Verify tap/click and keyboard moves still work after drag-and-drop is enabled.
+- In an active joined two-player game, send each preset cheer from both seats
+  and verify both players see the same bounded stream.
+- Verify identical reaction retries are idempotent, conflicting request reuse
+  is rejected, rapid repeat reactions are rate-limited, unauthorized and Solo
+  reactions are rejected, prior reactions remain readable after completion,
+  only Good Game and Thanks work during the 15-minute post-game courtesy
+  window, later reactions are rejected, and no free-form text can be submitted.
+- Open Game Replay and verify Start, Back, Next, End, arrow keys, Home, End,
+  and Return to Live all reconstruct history without changing live state.
+- Deliver checkmate while both players are open. Verify one short finisher uses
+  the actual winning piece, does not replay on refresh, excludes non-checkmate
+  endings, and becomes static under reduced motion.
+- Verify the manifest and install icons support a standalone desktop-style
+  install. Confirm the service worker never caches game, join, or API routes.
+- Verify a new release produces a subtle blue dot until opened. Opt into move
+  notifications, background the still-open tab, make an opponent move, and
+  verify one notification. Confirm the UI does not claim closed-app push.
 
 ## Observability
 

@@ -57,6 +57,7 @@ export const gameSettings = sqliteTable("game_settings", {
   gameMode: text("game_mode").notNull().default("multiplayer"),
   aiDifficulty: integer("ai_difficulty"),
   humanColor: text("human_color").notNull().default("w"),
+  turnPaceDays: integer("turn_pace_days"),
 });
 
 export const gameActions = sqliteTable(
@@ -70,6 +71,29 @@ export const gameActions = sqliteTable(
   },
   (table) => [
     primaryKey({ columns: [table.gameId, table.requestId] }),
+  ],
+);
+
+export const gameReactions = sqliteTable(
+  "game_reactions",
+  {
+    sequence: integer("sequence").primaryKey({ autoIncrement: true }),
+    id: text("id").notNull(),
+    gameId: text("game_id").notNull(),
+    requestId: text("request_id").notNull(),
+    senderColor: text("sender_color").notNull(),
+    reactionKey: text("reaction_key").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("game_reactions_id_unique").on(table.id),
+    uniqueIndex("game_reactions_request_unique").on(table.gameId, table.requestId),
+    index("game_reactions_game_sequence_idx").on(table.gameId, table.sequence),
+    check("game_reactions_color_check", sql`${table.senderColor} IN ('w', 'b')`),
+    check(
+      "game_reactions_key_check",
+      sql`${table.reactionKey} IN ('hi', 'good_luck', 'nice_move', 'well_played', 'good_game', 'thanks')`,
+    ),
   ],
 );
 

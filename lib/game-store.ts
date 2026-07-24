@@ -1,6 +1,8 @@
 import { Chess } from "chess.js";
 import { ensureSchema, getDatabase } from "@/db";
+import { turnDeadlineAt, turnDeadlineExpired } from "./game-deadlines";
 import { claimableDraws, replayWithRepetition } from "./game-rules";
+import { recordEvent } from "./observability";
 import type {
   AiDifficulty,
   Color,
@@ -9,6 +11,7 @@ import type {
   Promotion,
   StoredMove,
   Termination,
+  TurnPaceDays,
 } from "./game-types";
 
 export interface GameRow {
@@ -35,6 +38,7 @@ export interface GameRow {
   game_mode: GameMode;
   ai_difficulty: AiDifficulty | null;
   human_color: Color;
+  turn_pace_days: TurnPaceDays | null;
 }
 
 interface MoveRow {
@@ -58,7 +62,8 @@ export async function findGameById(id: string): Promise<GameRow | null> {
       .prepare(`SELECT games.*,
         COALESCE(game_settings.game_mode, 'multiplayer') AS game_mode,
         game_settings.ai_difficulty AS ai_difficulty,
-        COALESCE(game_settings.human_color, 'w') AS human_color
+        COALESCE(game_settings.human_color, 'w') AS human_color,
+        game_settings.turn_pace_days AS turn_pace_days
         FROM games
         LEFT JOIN game_settings ON game_settings.game_id = games.id
         WHERE games.id = ?`)
@@ -74,7 +79,8 @@ export async function findGameByCreateRequest(requestId: string): Promise<GameRo
       .prepare(`SELECT games.*,
         COALESCE(game_settings.game_mode, 'multiplayer') AS game_mode,
         game_settings.ai_difficulty AS ai_difficulty,
-        COALESCE(game_settings.human_color, 'w') AS human_color
+        COALESCE(game_settings.human_color, 'w') AS human_color,
+        game_settings.turn_pace_days AS turn_pace_days
         FROM games
         LEFT JOIN game_settings ON game_settings.game_id = games.id
         WHERE games.create_request_id = ?`)
@@ -90,7 +96,8 @@ export async function findGameByInviteHash(inviteHash: string): Promise<GameRow 
       .prepare(`SELECT games.*,
         COALESCE(game_settings.game_mode, 'multiplayer') AS game_mode,
         game_settings.ai_difficulty AS ai_difficulty,
-        COALESCE(game_settings.human_color, 'w') AS human_color
+        COALESCE(game_settings.human_color, 'w') AS human_color,
+        game_settings.turn_pace_days AS turn_pace_days
         FROM games
         LEFT JOIN game_settings ON game_settings.game_id = games.id
         WHERE games.invite_token_hash = ?`)
@@ -133,6 +140,49 @@ export function computerColor(game: GameRow): Color | null {
   return game.game_mode === "solo" ? oppositeColor(game.human_color) : null;
 }
 
+export function multiplayerTurnDeadline(game: GameRow): string | null {
+  return game.game_mode === "multiplayer"
+    && game.status === "active"
+    && game.turn_pace_days
+    ? turnDeadlineAt(game.updated_at, game.turn_pace_days)
+    : null;
+}
+
+export async function expireMultiplayerTurn(game: GameRow): Promise<GameRow> {
+  if (
+    game.game_mode !== "multiplayer"
+    || game.status !== "active"
+    || !game.turn_pace_days
+    || !turnDeadlineExpired(game.updated_at, game.turn_pace_days)
+  ) {
+    return game;
+  }
+
+  const winner = oppositeColor(game.turn_color);
+  const now = new Date().toISOString();
+  const result = await getDatabase()
+    .prepare(`UPDATE games SET
+      status = 'completed', winner_color = ?, termination = 'timeout',
+      version = version + 1, last_mutation_nonce = ?, updated_at = ?, finished_at = ?
+      WHERE id = ? AND version = ? AND status = 'active'`)
+    .bind(winner, crypto.randomUUID(), now, now, game.id, game.version)
+    .run();
+  const current = await findGameById(game.id);
+  if ((result.meta.changes ?? 0) === 1) {
+    await recordEvent({
+      event: "game.completed",
+      outcome: "success",
+      subjectId: game.id,
+      metadata: {
+        mode: "multiplayer",
+        termination: "timeout",
+        winner,
+      },
+    });
+  }
+  return current ?? game;
+}
+
 export function assertAuthoritativeState(
   game: GameRow,
   moves: StoredMove[],
@@ -155,6 +205,7 @@ export function snapshot(game: GameRow, moves: StoredMove[], you: Color): GameSn
     id: game.id,
     mode: game.game_mode,
     aiDifficulty: game.ai_difficulty,
+    turnPaceDays: game.turn_pace_days,
     status: game.status,
     version: game.version,
     fen: game.current_fen,
@@ -182,5 +233,6 @@ export function snapshot(game: GameRow, moves: StoredMove[], you: Color): GameSn
       createdAt,
     })),
     updatedAt: game.updated_at,
+    deadlineAt: multiplayerTurnDeadline(game),
   };
 }

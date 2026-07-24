@@ -11,6 +11,23 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.4.0",
+    date: "2026-07-24",
+    title: "A more personal async game",
+    summary: "Themes, replay, safe reactions, install support, and real move deadlines deepen every match.",
+    changes: [
+      "Added nine original themes for the app, board, pieces, panels, and background.",
+      "Added an accessible visual picker that works from every route and synchronizes across tabs.",
+      "Added six rate-limited, preset-only multiplayer reactions, a per-game hide control, and a 15-minute Good Game or Thanks courtesy window.",
+      "Added a short theme-aware victory finisher with reduced-motion support.",
+      "Added a read-only game replay with step controls and keyboard navigation.",
+      "Added one, three, or five-day multiplayer move deadlines, defaulting to three days.",
+      "Added installable PWA support, an unseen-release dot, and opt-in open-app opponent-move notifications.",
+      "Made the exact release version visible on every route and state.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.4.0`,
+  },
+  {
     version: "0.3.5",
     date: "2026-07-24",
     title: "Instant move polish",

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="ChessRiot block rook">
+  <rect width="512" height="512" rx="88" fill="#193847"/>
+  <path fill="#63c8dd" d="M44 92h48V44h48v48H92v48H44zm328 0h48V44h48v48h-48v48h-48zM44 372h48v48h48v48H92v-48H44zm376 0h48v48h-48v48h-48v-48h48z"/>
+  <path fill="#101b1b" opacity=".42" d="M140 133h232v83l-42 43v111h60v55H122v-55h60V259l-42-43z"/>
+  <path fill="#ffd65a" d="M140 112h58v52h31v-52h54v52h31v-52h58v102l-42 42v110h60v48H122v-48h60V256l-42-42zm76 146h80v108h-80z"/>
+  <path fill="#fff8dc" opacity=".35" d="M154 126h30v52h59v-52h18v70H154z"/>
+</svg>

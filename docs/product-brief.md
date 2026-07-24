@@ -1,14 +1,22 @@
 # ChessRiot Product Brief
 
-## Canonical direction
+## Historical product direction
 
-ChessRiot is a mobile-first web app for asynchronous standard chess between people who already know each other. The agreed MVP is intentionally smaller than the long-term playful chess vision.
+This brief records the original account-based product direction. It is not the
+current implementation contract. `MVP.md` and `SPEC.md` are authoritative for
+the released product.
 
-## MVP promise
+ChessRiot is a mobile-first web app for asynchronous standard chess between people who already know each other. The original MVP was intentionally smaller than the long-term playful chess vision.
+
+The current implementation has since adopted lightweight, original visual
+themes and short move animations. These remain cosmetic only and do not change
+the standard chess rules or introduce collectible assets.
+
+## Original MVP promise
 
 Two known players can sign in with Google, choose usernames, become friends, start an asynchronous standard chess game, make legal moves over time, receive turn notifications, and review the persistent move history.
 
-## In scope for MVP
+## Originally proposed for MVP
 
 - Mobile-first responsive web app.
 - Node-based application deployable on Vercel.
@@ -22,14 +30,14 @@ Two known players can sign in with Google, choose usernames, become friends, sta
 - Notifications when it becomes a player's turn.
 - Basic active and completed game lists.
 
-## Explicitly out of MVP
+## Originally out of MVP
 
 - Coach.
 - Animations.
 - Powers or variants.
 - Matchmaking.
 - Real-time play.
-- Skins and collectible cosmetics.
+- Collectible skins and account-bound cosmetics.
 - Points and rewards.
 - Open chat.
 - Native Android build.
@@ -40,4 +48,4 @@ Two known players can sign in with Google, choose usernames, become friends, sta
 - Known users only; no random strangers in MVP.
 - No open chat between minors or strangers.
 - Do not expose email addresses unless necessary for the current user to recognize their own account.
-- Keep future coach, variants, animations, rewards, and skins out of MVP milestones.
+- Keep future coach, variants, rewards, and collectible skins out of MVP milestones.

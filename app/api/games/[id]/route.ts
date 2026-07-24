@@ -1,5 +1,6 @@
 import {
   computerColor,
+  expireMultiplayerTurn,
   findGameById,
   playerColor,
   readMoves,
@@ -22,6 +23,7 @@ export async function GET(
   if (!game) return apiError(404, "not_found", "Game not found");
   const color = playerColor(game, await hashSecret(token));
   if (!color) return apiError(404, "not_found", "Game not found");
+  game = await expireMultiplayerTurn(game);
   if (
     game.game_mode === "solo"
     && game.status === "active"

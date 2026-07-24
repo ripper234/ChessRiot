@@ -3,6 +3,7 @@ import { getDatabase } from "@/db";
 import { applyCandidate, IllegalMoveError, isPromotion, isSquare } from "@/lib/game-rules";
 import {
   assertAuthoritativeState,
+  expireMultiplayerTurn,
   findGameById,
   playerColor,
   readMoves,
@@ -65,6 +66,7 @@ export async function POST(
   if (!game) return apiError(404, "not_found", "Game not found");
   const color = playerColor(game, tokenHash);
   if (!color) return apiError(404, "not_found", "Game not found");
+  game = await expireMultiplayerTurn(game);
 
   let storedMoves = await readMoves(id);
   const repeated = storedMoves.find((move) => move.requestId === requestId);

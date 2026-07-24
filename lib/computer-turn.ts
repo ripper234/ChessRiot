@@ -110,7 +110,6 @@ export async function playPendingComputerTurn(gameId: string): Promise<void> {
       metadata: {
         color: botColor,
         difficulty: game.ai_difficulty,
-        ...(wonCommit ? { from: candidate.from, to: candidate.to } : {}),
         gameStatus: status,
       },
     });
