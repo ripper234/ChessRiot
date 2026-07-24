@@ -36,7 +36,7 @@ import {
   isDarkSquare,
   pieceCannotAnswerCheckMessage,
 } from "@/lib/game-presentation";
-import { shouldAcceptGameSnapshot } from "@/lib/game-snapshots";
+import { optimisticMoveSnapshot, shouldAcceptGameSnapshot } from "@/lib/game-snapshots";
 import type { DrawClaim, GameSnapshot, Promotion } from "@/lib/game-types";
 import { APP_VERSION } from "@/lib/version";
 import { Brand } from "./Brand";
@@ -97,7 +97,9 @@ function outcomeText(game: GameSnapshot): string {
 }
 
 export function GameRoom({ gameId }: { gameId: string }) {
-  const [game, setGame] = useState<GameSnapshot | null>(null);
+  const [serverGame, setServerGame] = useState<GameSnapshot | null>(null);
+  const [optimisticGame, setOptimisticGame] = useState<GameSnapshot | null>(null);
+  const game = optimisticGame ?? serverGame;
   const [selected, setSelected] = useState<Square | null>(null);
   const [promotionMove, setPromotionMove] = useState<{ from: Square; to: Square } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -118,11 +120,13 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const activeToken = useRef<string | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const suppressClick = useRef(false);
+  const effectTimer = useRef<number | null>(null);
 
   const acceptGame = useCallback((nextGame: GameSnapshot) => {
     if (!shouldAcceptGameSnapshot(latestVersion.current, nextGame.version)) return false;
     latestVersion.current = nextGame.version;
-    setGame(nextGame);
+    setServerGame(nextGame);
+    setOptimisticGame(null);
     rememberGame(nextGame);
     setAccess("ready");
     setMessage((current) => current === CONNECTION_MESSAGE ? "" : current);
@@ -169,6 +173,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       const seatChanged = activeToken.current !== null && activeToken.current !== token;
       if (seatChanged) {
         latestVersion.current = -1;
+        setOptimisticGame(null);
         previousGame.current = null;
         previousEffectGame.current = null;
         setSelected(null);
@@ -226,6 +231,19 @@ export function GameRoom({ gameId }: { gameId: string }) {
   }, [game, loadGame]);
 
   useEffect(() => {
+    if (
+      !game ||
+      busy ||
+      game.mode !== "solo" ||
+      game.status !== "active" ||
+      game.turn === game.you.color
+    ) return;
+    // The human move is already durable and visible. This read computes any
+    // pending Riot Bot reply without holding the human move response open.
+    void loadGame(game.version);
+  }, [busy, game, loadGame]);
+
+  useEffect(() => {
     if (!game) return;
     const previous = previousGame.current;
     previousGame.current = game;
@@ -252,13 +270,28 @@ export function GameRoom({ gameId }: { gameId: string }) {
 
   useEffect(() => {
     if (!game) return;
-    const nextEffects = boardEffects(previousEffectGame.current, game);
+    const previous = previousEffectGame.current;
+    const nextEffects = boardEffects(previous, game);
     previousEffectGame.current = game;
-    if (!nextEffects.length) return;
+    if (!nextEffects.length) {
+      if (previous && game.plyCount < previous.plyCount) {
+        if (effectTimer.current !== null) window.clearTimeout(effectTimer.current);
+        effectTimer.current = null;
+        setEffects([]);
+      }
+      return;
+    }
+    if (effectTimer.current !== null) window.clearTimeout(effectTimer.current);
     setEffects(nextEffects);
-    const timer = window.setTimeout(() => setEffects([]), 240);
-    return () => window.clearTimeout(timer);
+    effectTimer.current = window.setTimeout(() => {
+      effectTimer.current = null;
+      setEffects([]);
+    }, 240);
   }, [game]);
+
+  useEffect(() => () => {
+    if (effectTimer.current !== null) window.clearTimeout(effectTimer.current);
+  }, []);
 
   useEffect(() => {
     setSelected(null);
@@ -301,6 +334,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
   }, [game]);
 
   const canMove = Boolean(game && game.status === "active" && game.turn === game.you.color && !busy);
+  const botThinking = Boolean(
+    game &&
+    chess &&
+    game.mode === "solo" &&
+    game.status === "active" &&
+    game.turn !== game.you.color &&
+    !chess.isGameOver(),
+  );
   const lastMove = game?.moves.at(-1);
 
   function effectStyle(effect: BoardEffect): CSSProperties {
@@ -326,12 +367,24 @@ export function GameRoom({ gameId }: { gameId: string }) {
     if (!game || !canMove) return;
     const token = activeToken.current;
     if (!token) return setAccess("missing");
+    const preview = game.mode === "solo"
+      ? optimisticMoveSnapshot(game, from, to, promotion)
+      : null;
+    const authoritativeVersion = game.version;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15_000);
     setBusy(true);
     setMessage("");
+    setSelected(null);
+    setPromotionMove(null);
+    if (preview) {
+      setOptimisticGame(preview);
+    }
     try {
       const response = await fetch(`/api/games/${gameId}/moves`, {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        signal: controller.signal,
         body: JSON.stringify({
           from,
           to,
@@ -344,22 +397,30 @@ export function GameRoom({ gameId }: { gameId: string }) {
         game?: GameSnapshot;
         error?: { code?: string; message?: string };
       };
-      if (data.game) acceptGame(data.game);
+      if (data.game) {
+        acceptGame(data.game);
+        setOptimisticGame(null);
+      }
       if (!response.ok) {
+        if (!data.game) setOptimisticGame(null);
         setMessage(
           data.error?.code === "must_answer_check"
             ? illegalDestinationMessage(true)
             : apiMessage(data, "That move did not work"),
         );
         if (data.error?.code !== "stale_position") playInvalidSound();
+      } else if (!data.game) {
+        setMessage("The move response was incomplete. Refreshing the board…");
+        await loadGame(latestVersion.current);
+        if (latestVersion.current <= authoritativeVersion) setOptimisticGame(null);
       }
     } catch {
       setMessage("Could not send the move. Refreshing the board…");
       await loadGame(latestVersion.current);
+      if (latestVersion.current <= authoritativeVersion) setOptimisticGame(null);
     } finally {
+      window.clearTimeout(timeout);
       setBusy(false);
-      setSelected(null);
-      setPromotionMove(null);
     }
   }
 
@@ -727,7 +788,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
           >
             <span>{game.status === "completed" ? "⚑" : game.check ? "!" : "◆"}</span>
             <div><small>{game.check && game.status !== "completed" ? "CHECK" : "MATCH STATUS"}</small><strong>{statusText}</strong></div>
-            {busy ? <b>{ending ? "ENDING GAME…" : game.mode === "solo" ? "RIOT BOT THINKING…" : "LOCKING MOVE…"}</b> : null}
+            {busy || botThinking ? <b>{ending ? "ENDING GAME…" : botThinking ? "RIOT BOT THINKING…" : "LOCKING MOVE…"}</b> : null}
           </div>
 
           {game.claimableDraws.length > 0 ? (
@@ -748,7 +809,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
             </div>
           ) : null}
 
-          <div className="board-wrap" aria-busy={busy} data-interactive={canMove ? "true" : "false"}>
+          <div className="board-wrap" aria-busy={busy || botThinking} data-interactive={canMove ? "true" : "false"}>
             <div className="chessboard" role="grid" aria-label="Chess board">
               {squares.map((square, index) => {
                 const piece = chess.get(square);
@@ -774,7 +835,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                     className={`square ${isDarkSquare(square) ? "dark-square" : "light-square"}${isSelected ? " selected" : ""}${isLast ? " last-move" : ""}${isCheckedKing ? " king-in-check" : ""}${legal ? capture ? " capture-target" : " legal-target" : ""}${isDragOver ? " drag-over" : ""}${effect?.capture ? " capture-impact" : ""}`}
                     key={square}
                     onClick={() => tapSquare(square)}
-                    disabled={busy}
+                    disabled={busy || botThinking}
                   >
                     {showRank ? <span className="rank-label">{rank}</span> : null}
                     {showFile ? <span className="file-label">{file}</span> : null}
