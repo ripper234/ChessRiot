@@ -6,12 +6,15 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const workerPath = resolve(projectRoot, "dist/server/index.js");
 const manifestPath = resolve(projectRoot, "dist/.openai/hosting.json");
+const packagePath = resolve(projectRoot, "package.json");
 
-const [source, manifest] = await Promise.all([
+const [source, manifest, packageSource] = await Promise.all([
   readFile(workerPath, "utf8"),
   readFile(manifestPath, "utf8"),
+  readFile(packagePath, "utf8"),
 ]);
 JSON.parse(manifest);
+const packageVersion = JSON.parse(packageSource).version;
 
 // A data URL forces ESM parsing even though the generated output has no package.json.
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
@@ -28,16 +31,23 @@ const pageResponse = await workerModule.default.fetch(
   {},
 );
 const page = await pageResponse.text();
-assert.match(page, /CONTROL v0\.1\.3/);
+assert.match(page, new RegExp(`CONTROL v${packageVersion.replace(/\./g, "\\.")}`));
 assert.match(page, /AUTO CHECK · 5 MIN/);
-assert.match(page, /Last updated/);
-assert.match(page, /refreshIntervalMs = 300000/);
-assert.match(page, /probeTimeoutMs = 15000/);
-assert.match(page, /probeStylesheet/);
-assert.match(page, /mode: "no-cors"/);
-assert.match(page, /setInterval\(\(\) => void loadStatus\(\), refreshIntervalMs\)/);
-assert.doesNotMatch(page, /REFRESH STATUS/);
-assert.doesNotMatch(page, /id="refresh"/);
+assert.match(page, /OBSERVABILITY/);
+assert.match(page, /script src="\/control\.js"/);
+assert.doesNotMatch(page, /script-src 'unsafe-inline'/);
+
+const scriptResponse = await workerModule.default.fetch(
+  new Request("https://control.test/control.js"),
+  {},
+  {},
+);
+const script = await scriptResponse.text();
+assert.match(script, /\/api\/health/);
+assert.match(script, /\/api\/ops\/overview/);
+assert.match(script, /content-type": "text\/plain"/);
+assert.match(script, /setInterval\(function \(\) \{ void loadStatus\(\); \}, 300000\)/);
+assert.doesNotMatch(script, /REFRESH STATUS/);
 
 const statusResponse = await workerModule.default.fetch(
   new Request("https://control.test/api/status"),
@@ -45,36 +55,40 @@ const statusResponse = await workerModule.default.fetch(
     PROD_URL: "https://prod.test",
     STAGING_URL: "https://staging.test",
     DEV_URL: "https://dev.test",
+    PROD_OPS_READ_SECRET: "prod-secret-with-at-least-32-characters",
+    STAGING_OPS_READ_SECRET: "staging-secret-with-at-least-32-characters",
+    DEV_OPS_READ_SECRET: "dev-secret-with-at-least-32-characters",
   },
   {},
 );
 const status = await statusResponse.json();
-assert.equal(status.controlVersion, "0.1.3");
-assert.deepEqual(status.releaseAssets, {
-  "0.1.0": "/assets/index-ltKYg5gI.css",
-  "0.1.1": "/assets/index-BIvHkimP.css",
-});
+assert.equal(status.controlVersion, packageVersion);
+assert.equal(status.refreshIntervalMs, 300000);
 assert.deepEqual(
-  status.environments.map(({ key, expectedVersion, url }) => ({
+  status.environments.map(({ key, expectedVersion, url, grant }) => ({
     key,
     expectedVersion,
     url,
+    hasGrant: typeof grant === "string" && grant.includes("."),
   })),
   [
     {
       key: "production",
-      expectedVersion: "0.1.0",
+      expectedVersion: "0.2.2",
       url: "https://prod.test",
+      hasGrant: true,
     },
     {
       key: "staging",
-      expectedVersion: "0.1.1",
+      expectedVersion: "0.2.2",
       url: "https://staging.test",
+      hasGrant: true,
     },
     {
       key: "development",
-      expectedVersion: "0.1.1",
+      expectedVersion: "0.2.2",
       url: "https://dev.test",
+      hasGrant: true,
     },
   ],
 );
