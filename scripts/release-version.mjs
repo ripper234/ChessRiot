@@ -10,6 +10,7 @@ const packagePath = resolve(root, "package.json");
 const lockPath = resolve(root, "package-lock.json");
 const readmePath = resolve(root, "README.md");
 const specPath = resolve(root, "SPEC.md");
+const changelogPath = resolve(root, "lib/changelog.ts");
 const command = process.argv[2] ?? "check";
 
 function readJson(path) {
@@ -75,6 +76,21 @@ function checkConsistency(version) {
   }
   if (!spec.startsWith(`# ChessRiot v${version} specification`)) {
     throw new Error(`SPEC.md does not identify ChessRiot v${version}.`);
+  }
+
+  const changelog = readFileSync(changelogPath, "utf8");
+  const versions = [...changelog.matchAll(/^\s+version: "(\d+\.\d+\.\d+)",$/gm)]
+    .map((match) => match[1]);
+  if (versions[0] !== version) {
+    throw new Error(`The newest changelog entry must be ${version}.`);
+  }
+  if (new Set(versions).size !== versions.length) {
+    throw new Error("Changelog versions must be unique.");
+  }
+  for (let index = 1; index < versions.length; index += 1) {
+    if (compareVersions(versions[index - 1], versions[index]) <= 0) {
+      throw new Error("Changelog versions must be newest first.");
+    }
   }
 }
 
