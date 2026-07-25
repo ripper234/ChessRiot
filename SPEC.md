@@ -1,4 +1,22 @@
-# ChessRiot v0.7.0 specification
+# ChessRiot v0.8.0 specification
+
+## v0.8 release additions
+
+- `Knights move twice.` is a supported deterministic Magic Rules clause for
+  Solo and Multiplayer games.
+- A knight's optional second leg must use the same knight. Like the existing
+  rook rule, both legs commit atomically as one turn, version, history item,
+  deadline action, and repetition position. A checking first leg ends the turn
+  immediately.
+- New knight-enabled rule documents use schema v2. Existing v1 games and
+  idempotent retries for the original rule vocabulary remain valid and retain
+  their original compiled document.
+- The staged second-leg interaction is piece-neutral across tap, pointer drag,
+  native keyboard activation, move history, replay, labels, and Riot Bot play.
+- Same-origin mutation checks accept a Sites-sandboxed `Origin: null` only when
+  the browser-controlled `Sec-Fetch-Site` value is `same-origin`. Explicit
+  cross-origin values, opaque requests without that provenance, and
+  `same-site`, `cross-site`, or `none` metadata remain rejected.
 
 ## v0.7 release additions
 
@@ -8,7 +26,7 @@
   normalizes it, stores a versioned rule document, and rejects any clause it
   cannot interpret. Prompt text is never executed as code or copied into
   telemetry.
-- The initial supported rules are: rooks may move twice in one turn, pawns
+- The initial supported rules were: rooks may move twice in one turn, pawns
   cannot move onto the final rank, no castling, and no en passant.
 - A rook's optional second move uses the same rook and commits atomically with
   the first move as one turn, version, history item, deadline action, and
@@ -144,8 +162,10 @@ This file and `MVP.md` are the source of truth for the current milestone.
   compiled rules, players, hashed keys, and immutable ordered turn actions.
 - Every move carries an expected version and idempotency key.
 - A conditional update plus move insert runs atomically. Stale, illegal, wrong-turn, unauthorized, and completed-game moves do not mutate state.
-- A two-step rook action stores both legal legs in one move row and advances the
-  turn, version, ply count, deadline, and repetition counter only once.
+- A two-step rook or knight action stores both legal legs in one move row and
+  advances the turn, version, ply count, deadline, and repetition counter only
+  once. The stored schema version determines the supported double-move pieces;
+  v1 remains valid for existing rook games and v2 adds knights.
 - In Solo, the human move commits atomically as one ply and returns immediately.
   The client then requests Riot Bot's pending turn in the background. Riot Bot
   evaluates from its assigned color, uses bounded server-side search, and

@@ -1,7 +1,7 @@
 import { Chess } from "chess.js";
 import { describe, expect, it } from "vitest";
 import { chooseComputerMove } from "./computer-player";
-import { applyCandidate } from "./game-rules";
+import { applyCandidate, legalMagicMoves } from "./game-rules";
 import type { AiDifficulty } from "./game-types";
 import type { CompiledMagicRules } from "./magic-rules";
 
@@ -78,6 +78,27 @@ describe("Riot Bot", () => {
       afterFirst.move(move);
       expect(afterFirst.isCheck()).toBe(true);
     }
+    expect(() => applyCandidate(fen, [], move!, rules)).not.toThrow();
+  });
+
+  it("returns a complete legal knight action when the double-move rule is active", () => {
+    const rules: CompiledMagicRules = {
+      version: 2,
+      rules: [{ kind: "double_move", piece: "n" }],
+    };
+    const fen = "4k3/8/8/8/8/8/1N6/4K3 w - - 0 1";
+    const moves = legalMagicMoves(new Chess(fen), rules);
+    const knightIndex = moves.findIndex((move) => move.from === "b2");
+    let randomCall = 0;
+    const move = chooseComputerMove(
+      fen,
+      1,
+      "w",
+      () => randomCall++ === 0 ? (knightIndex + 0.1) / moves.length : 0,
+      rules,
+    );
+    expect(move).toMatchObject({ from: "b2" });
+    expect(move?.second?.from).toBe(move?.to);
     expect(() => applyCandidate(fen, [], move!, rules)).not.toThrow();
   });
 });

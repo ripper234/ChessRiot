@@ -15,8 +15,9 @@
 - `db/schema.ts` and `drizzle/`: durable game and move schema.
 - `worker/index.ts`: Cloudflare Worker entry and runtime binding handoff.
 
-The server is authoritative. The client submits a move, an optional same-rook
-second leg, the expected version, and an idempotency key. Each mutation
+The server is authoritative. The client submits a move, an optional second leg
+by the same Magic-enabled rook or knight, the expected version, and an
+idempotency key. Each mutation
 reconstructs the chess engine from immutable history and validates FEN, turn,
 and ply invariants before the candidate. Every completed human turn atomically
 advances one ply and returns immediately. In Solo, the client then requests the
@@ -26,9 +27,16 @@ game. A White bot opening is committed during create.
 
 Magic prompt text is normalized and compiled only through an explicit
 allowlist. The immutable versioned result, not the prose, drives legality.
-Unsupported clauses fail game creation. A valid two-step rook action is replayed
-as two chess.js moves but stored and counted as one application turn, so no
-partially committed variant state can become authoritative.
+Unsupported clauses fail game creation. A valid two-step rook or knight action
+is replayed as two chess.js moves but stored and counted as one application
+turn, so no partially committed variant state can become authoritative.
+Original v1 documents remain valid for rook games; v2 adds the knight rule
+without changing those stored games.
+
+Mutation provenance uses the exact URL origin plus browser-controlled
+`Sec-Fetch-Site`. A Sites-sandboxed opaque `Origin: null` is accepted only with
+`Sec-Fetch-Site: same-origin`; cross-site metadata and unverifiable opaque
+origins fail closed.
 
 While the human request is in flight, the client renders a display-only legal
 move preview without advancing the accepted server version or local

@@ -1,22 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { rookDraftTapDecision } from "./magic-turn-ui";
+import { magicDraftTapDecision } from "./magic-turn-ui";
 
-describe("Magic rook tap interaction", () => {
-  it("moves when the staged rook taps a legal second destination", () => {
+describe("Magic double-move interaction", () => {
+  it("moves when a staged rook or knight activates a legal second destination", () => {
     expect(
-      rookDraftTapDecision("a3", "a3", "h3", ["a4", "h3"]),
+      magicDraftTapDecision("a3", "a3", "h3", ["a4", "h3"]),
+    ).toBe("move");
+    expect(
+      magicDraftTapDecision("f3", "f3", "e5", ["d4", "e5"]),
     ).toBe("move");
   });
 
-  it("keeps the staged rook selected when it is tapped again", () => {
+  it("keeps the staged magic piece selected when it is activated again", () => {
     expect(
-      rookDraftTapDecision("a3", "a3", "a3", ["a4", "h3"]),
-    ).toBe("select_rook");
+      magicDraftTapDecision("a3", "a3", "a3", ["a4", "h3"]),
+    ).toBe("select_piece");
   });
 
   it("rejects switching pieces or tapping an illegal destination", () => {
     expect(
-      rookDraftTapDecision("a3", "a3", "b2", ["a4", "h3"]),
+      magicDraftTapDecision("a3", "a3", "b2", ["a4", "h3"]),
     ).toBe("reject");
   });
 });

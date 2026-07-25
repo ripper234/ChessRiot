@@ -37,6 +37,19 @@ describe("Magic Rules compiler", () => {
     ]);
   });
 
+  it("compiles the knight example into a v2 deterministic rule", () => {
+    const result = compileMagicPrompt("Knights move twice.");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.compiled).toEqual({
+      version: 2,
+      rules: [{ kind: "double_move", piece: "n" }],
+    });
+    expect(result.labels).toEqual([
+      "Knights may move twice; check ends the turn",
+    ]);
+  });
+
   it("supports safe move filters without silently accepting unknown clauses", () => {
     const supported = compileMagicPrompt("No castling; no en passant");
     expect(supported.ok).toBe(true);
@@ -57,13 +70,28 @@ describe("Magic Rules compiler", () => {
       .toMatchObject({ ok: false });
   });
 
-  it("round-trips canonical storage and fails closed on unknown versions", () => {
+  it("round-trips canonical storage, keeps v1 games readable, and fails closed on unknown versions", () => {
     const result = compileMagicPrompt("Pawns never promote");
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const serialized = serializeMagicRules(result.compiled);
     expect(parseStoredMagicRules(serialized)).toEqual(result.compiled);
-    expect(() => parseStoredMagicRules('{"version":2,"rules":[{"kind":"no_promotion"}]}'))
+    expect(parseStoredMagicRules(
+      '{"version":1,"rules":[{"kind":"double_move","piece":"r"}]}',
+    )).toEqual({
+      version: 1,
+      rules: [{ kind: "double_move", piece: "r" }],
+    });
+    expect(parseStoredMagicRules(
+      '{"version":2,"rules":[{"kind":"double_move","piece":"n"}]}',
+    )).toEqual({
+      version: 2,
+      rules: [{ kind: "double_move", piece: "n" }],
+    });
+    expect(() => parseStoredMagicRules(
+      '{"version":1,"rules":[{"kind":"double_move","piece":"n"}]}',
+    )).toThrow("Stored magic rules are invalid");
+    expect(() => parseStoredMagicRules('{"version":3,"rules":[{"kind":"no_promotion"}]}'))
       .toThrow("Stored magic rules are invalid");
   });
 });

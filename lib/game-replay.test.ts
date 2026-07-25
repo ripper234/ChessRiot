@@ -107,4 +107,49 @@ describe("game replay", () => {
       type: "r",
     });
   });
+
+  it("replays an atomic two-step knight action as one labeled turn", () => {
+    const rules: CompiledMagicRules = {
+      version: 2,
+      rules: [{ kind: "double_move", piece: "n" }],
+    };
+    const outcome = applyCandidate(
+      INITIAL_FEN,
+      [],
+      {
+        from: "g1",
+        to: "f3",
+        second: { from: "f3", to: "e5" },
+      },
+      rules,
+    );
+    const history: PublicMove[] = [{
+      ply: 1,
+      color: outcome.move.color,
+      from: outcome.move.from,
+      to: outcome.move.to,
+      promotion: null,
+      san: outcome.move.san,
+      second: {
+        from: outcome.secondMove!.from,
+        to: outcome.secondMove!.to,
+        san: outcome.secondMove!.san,
+      },
+      fenBefore: outcome.fenBefore,
+      fenAfter: outcome.fenAfter,
+      createdAt: "2026-07-25T00:00:00.000Z",
+    }];
+    const frames = buildReplayFrames(history);
+
+    expect(frames).toHaveLength(2);
+    expect(frames[1]).toMatchObject({
+      from: "g1",
+      to: "e5",
+      san: `${outcome.move.san} → ${outcome.secondMove!.san}`,
+    });
+    expect(new Chess(frames[1].fen).get("e5")).toMatchObject({
+      color: "w",
+      type: "n",
+    });
+  });
 });

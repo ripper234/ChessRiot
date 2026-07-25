@@ -2,7 +2,7 @@
 
 Play the current game at [chessriot.ripper234.chatgpt.site](https://chessriot.ripper234.chatgpt.site).
 
-ChessRiot v0.7.0 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
+ChessRiot v0.8.0 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
 
 Found something confusing or have a cool rule request? Use **Feedback** inside
 the game or [open a GitHub issue](https://github.com/ripper234/ChessRiot/issues).
@@ -18,9 +18,9 @@ progression work, and features that still need explicit rule design.
 - Resume every owned game from a paginated cross-device My Games history with
   clear turn and result states.
 - Play complete standard chess with server-authoritative legal move validation.
-- Optionally enable Magic Rules for one game. Supported prompts can give rooks
-  a second same-turn move, block promotion, disable castling, or disable en
-  passant; unsupported clauses are rejected clearly.
+- Optionally enable Magic Rules for one game. Supported prompts can give the
+  same rook or knight a second move in that turn, block promotion, disable
+  castling, or disable en passant; unsupported clauses are rejected clearly.
 - Persist the board, player names, result, and immutable move history in Cloudflare D1.
 - Keep legacy private-seat links working while account membership becomes the authoritative access path.
 - Detect check, checkmate, stalemate, castling, en passant, all four promotions, insufficient material, claimable threefold/50-move draws, and automatic fivefold/75-move draws.

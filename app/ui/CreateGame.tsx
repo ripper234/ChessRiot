@@ -283,7 +283,7 @@ export function CreateGame({ displayName }: { displayName: string }) {
                   maxLength={MAGIC_PROMPT_MAX_LENGTH}
                   rows={3}
                   disabled={busy}
-                  placeholder="Rooks move twice. Pawns never get promoted."
+                  placeholder="e.g. “Knights move twice.”"
                   onChange={(event) => {
                     setMagicPrompt(event.target.value);
                     setError("");
@@ -299,8 +299,8 @@ export function CreateGame({ displayName }: { displayName: string }) {
                   <p className="magic-error" role="alert">{magicPreview.message}</p>
                 ) : (
                   <small>
-                    Try “Rooks move twice”, “Pawns never promote”, “No castling”,
-                    or “No en passant”.
+                    Try “Knights move twice”, “Rooks move twice”, “Pawns never
+                    promote”, “No castling”, or “No en passant”.
                   </small>
                 )}
               </div>

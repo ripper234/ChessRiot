@@ -11,6 +11,20 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.8.0",
+    date: "2026-07-25",
+    title: "Knights move twice",
+    summary: "Magic knights can now move twice, and game requests work correctly inside the production sandbox.",
+    changes: [
+      "Made “Knights move twice.” a real deterministic Magic Rule for Solo and Multiplayer games.",
+      "Generalized atomic two-leg turns so the same enabled rook or knight may move again, while a checking first leg still ends the turn.",
+      "Kept existing v1 Magic Rule documents readable and unchanged while storing knight-enabled games in the compatible v2 schema.",
+      "Extended tap, drag, keyboard, replay, move history, labels, and Riot Bot play to two-step knights.",
+      "Fixed the production request-origin blocker without relaxing cross-site protection.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.8.0`,
+  },
+  {
     version: "0.7.0",
     date: "2026-07-25",
     title: "Magic Rules",

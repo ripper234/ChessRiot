@@ -37,5 +37,13 @@ export async function hashSecret(secret: string): Promise<string> {
 
 export function requestIsSameOrigin(request: Request): boolean {
   const origin = request.headers.get("origin");
-  return !origin || origin === new URL(request.url).origin;
+  const fetchSite = request.headers.get("sec-fetch-site");
+
+  // Sec-Fetch-Site is browser-controlled. When present, fail closed unless the
+  // request came from this exact origin. Sites may sandbox a same-origin app
+  // into an opaque origin, which serializes as `Origin: null`.
+  if (fetchSite && fetchSite !== "same-origin") return false;
+  if (!origin) return !fetchSite || fetchSite === "same-origin";
+  if (origin === new URL(request.url).origin) return true;
+  return origin === "null" && fetchSite === "same-origin";
 }

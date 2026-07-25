@@ -17,6 +17,10 @@ const DOUBLE_ROOK: CompiledMagicRules = {
   version: 1,
   rules: [{ kind: "double_move", piece: "r" }],
 };
+const DOUBLE_KNIGHT: CompiledMagicRules = {
+  version: 2,
+  rules: [{ kind: "double_move", piece: "n" }],
+};
 const NO_PROMOTION: CompiledMagicRules = {
   version: 1,
   rules: [{ kind: "no_promotion" }],
@@ -241,6 +245,58 @@ describe("ChessRiot rules adapter", () => {
       DOUBLE_ROOK,
     );
     expect(result.fenAfter.split(" ")[5]).toBe("13");
+  });
+
+  it("commits two moves by the same knight as one atomic ply", () => {
+    const result = applyCandidate(
+      "4k3/8/8/8/8/8/1N6/4K3 w - - 0 1",
+      [],
+      {
+        from: "b2",
+        to: "c4",
+        second: { from: "c4", to: "d6" },
+      },
+      DOUBLE_KNIGHT,
+    );
+    expect(result.move).toMatchObject({ from: "b2", to: "c4", piece: "n" });
+    expect(result.secondMove).toMatchObject({ from: "c4", to: "d6", piece: "n" });
+    expect(result.turn).toBe("b");
+    expect(result.check).toBe(true);
+    expect(new Chess(result.fenAfter).get("d6")).toMatchObject({
+      color: "w",
+      type: "n",
+    });
+  });
+
+  it("requires the same knight for the second leg and ends a checking first leg", () => {
+    expect(() => applyCandidate(
+      "4k3/8/8/8/8/8/1N6/4K1N1 w - - 0 1",
+      [],
+      {
+        from: "b2",
+        to: "c4",
+        second: { from: "g1", to: "f3" },
+      },
+      DOUBLE_KNIGHT,
+    )).toThrow(IllegalMoveError);
+
+    const checkingFen = "4k3/8/8/1N6/8/8/8/4K3 w - - 0 1";
+    expect(applyCandidate(
+      checkingFen,
+      [],
+      { from: "b5", to: "c7" },
+      DOUBLE_KNIGHT,
+    ).check).toBe(true);
+    expect(() => applyCandidate(
+      checkingFen,
+      [],
+      {
+        from: "b5",
+        to: "c7",
+        second: { from: "c7", to: "a8" },
+      },
+      DOUBLE_KNIGHT,
+    )).toThrow(IllegalMoveError);
   });
 
   it("blocks all pawn moves onto the final rank", () => {

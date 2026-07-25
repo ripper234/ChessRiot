@@ -2,6 +2,7 @@ import { Chess, type Move, type Square } from "chess.js";
 import {
   hasMagicRule,
   type CompiledMagicRules,
+  type DoubleMovePiece,
 } from "./magic-rules";
 import type {
   Color,
@@ -123,27 +124,29 @@ export function legalMagicMoves(
   });
 }
 
-export interface RookSecondStep {
+export interface MagicSecondStep {
   chess: Chess;
   moves: Move[];
+  piece: DoubleMovePiece;
 }
 
-export function rookSecondStep(
+export function magicSecondStep(
   chessAfterFirst: Chess,
-  rookSquare: Square,
+  pieceSquare: Square,
   moverColor: Color,
   rules: CompiledMagicRules | null,
-): RookSecondStep | null {
+): MagicSecondStep | null {
+  if (chessAfterFirst.isCheck()) return null;
+  const piece = chessAfterFirst.get(pieceSquare);
   if (
-    !hasMagicRule(rules, "double_move", "r")
-    || chessAfterFirst.isCheck()
+    (piece?.type !== "r" && piece?.type !== "n")
+    || piece.color !== moverColor
+    || !hasMagicRule(rules, "double_move", piece.type)
   ) return null;
-  const rook = chessAfterFirst.get(rookSquare);
-  if (rook?.type !== "r" || rook.color !== moverColor) return null;
   const chess = new Chess(forceSameTurn(chessAfterFirst.fen(), moverColor));
-  const moves = legalMagicMoves(chess, rules, rookSquare)
-    .filter((move) => move.piece === "r" && move.from === rookSquare);
-  return moves.length > 0 ? { chess, moves } : null;
+  const moves = legalMagicMoves(chess, rules, pieceSquare)
+    .filter((move) => move.piece === piece.type && move.from === pieceSquare);
+  return moves.length > 0 ? { chess, moves, piece: piece.type } : null;
 }
 
 function applyActionToPosition(
@@ -174,15 +177,17 @@ function applyActionToPosition(
 
   let secondMove: Move | null = null;
   if (candidate.second) {
-    if (move.piece !== "r") throw new IllegalMoveError("Only a rook can move twice");
-    const secondStep = rookSecondStep(chess, move.to, move.color, rules);
+    if (move.piece !== "r" && move.piece !== "n") {
+      throw new IllegalMoveError("Only an enabled magic piece can move twice");
+    }
+    const secondStep = magicSecondStep(chess, move.to, move.color, rules);
     if (!secondStep || candidate.second.from !== move.to) {
-      throw new IllegalMoveError("That rook cannot move twice from there");
+      throw new IllegalMoveError("That piece cannot move twice from there");
     }
     const selectedSecond = secondStep.moves.find((candidateMove) =>
       candidateMove.from === candidate.second?.from
       && candidateMove.to === candidate.second?.to);
-    if (!selectedSecond) throw new IllegalMoveError("The second rook move is not legal");
+    if (!selectedSecond) throw new IllegalMoveError("The second magic move is not legal");
     try {
       secondMove = secondStep.chess.move({
         from: selectedSecond.from,
@@ -190,7 +195,7 @@ function applyActionToPosition(
       });
       chess = secondStep.chess;
     } catch {
-      throw new IllegalMoveError("The second rook move is not legal");
+      throw new IllegalMoveError("The second magic move is not legal");
     }
   }
   chess = normalizeActionCounters(chess, fenBefore, move, secondMove);

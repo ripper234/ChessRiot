@@ -1,5 +1,5 @@
 import { Chess, type Move, type PieceSymbol, type Square } from "chess.js";
-import { legalMagicMoves, rookSecondStep } from "./game-rules";
+import { legalMagicMoves, magicSecondStep } from "./game-rules";
 import type { CompiledMagicRules } from "./magic-rules";
 import type { AiDifficulty, Color, Promotion } from "./game-types";
 
@@ -117,10 +117,10 @@ function asComputerMove(
     to: move.to,
     ...(move.promotion ? { promotion: move.promotion as Promotion } : {}),
   };
-  if (move.piece !== "r") return candidate;
+  if (move.piece !== "r" && move.piece !== "n") return candidate;
   const afterFirst = new Chess(rootFen);
   afterFirst.move(move);
-  const secondStep = rookSecondStep(afterFirst, move.to, move.color, rules);
+  const secondStep = magicSecondStep(afterFirst, move.to, move.color, rules);
   if (!secondStep) return candidate;
   const ordered = [...secondStep.moves]
     .sort((left, right) => movePriority(right) - movePriority(left));

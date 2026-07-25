@@ -27,15 +27,19 @@
 
 1. Create Solo and Multiplayer games with Magic Rules off and verify both use
    standard chess with no Magic banner.
-2. Enable the box, enter `Rooks move twice. Pawns never get promoted.`, and
+2. Enable the box, verify its placeholder is
+   `e.g. “Knights move twice.”`, enter
+   `Knights move twice. Rooks move twice. Pawns never get promoted.`, and
    verify the interpreted rules before creating the game.
 3. Verify the invitation shows the same rules before Black joins and the live
    game, My Games card, move history, and replay retain them after refresh.
 4. Clear a rook path, stage its first legal move, then finish the turn once.
-   Repeat and move that same rook a second time. Verify the latter stores both
-   legs but advances only one version, ply, deadline, and repetition position.
-5. Verify the second rook move cannot use a different rook. Verify a first rook
-   move that gives check ends the turn immediately.
+   Repeat and move that same rook a second time. Repeat through tap, pointer
+   drag, and native keyboard activation with a knight. Verify each two-leg
+   action stores both legs but advances only one version, ply, deadline, and
+   repetition position.
+5. Verify a second leg cannot switch to a different rook or knight. Verify a
+   first rook or knight move that gives check ends the turn immediately.
 6. Verify pawns cannot enter the final rank, castling is absent under no
    castling, and en passant is absent under no en passant.
 7. Verify Riot Bot follows all active Magic Rules.
@@ -51,6 +55,10 @@
 - A different payload with an already-used request id conflicts.
 - Concurrent authenticated reads during a pending Riot Bot turn return the
   single committed bot version rather than a transient pre-bot snapshot.
+- Accept a sandboxed `Origin: null` mutation only with
+  `Sec-Fetch-Site: same-origin`. Reject the same opaque origin with missing,
+  `same-site`, `cross-site`, or `none` metadata, plus explicit host, scheme, or
+  port mismatches.
 
 ## Rules
 

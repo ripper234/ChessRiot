@@ -2,7 +2,7 @@
 
 ## Backlog chat cards
 
-| ID | Feature | Status in v0.6.0 |
+| ID | Feature | Status in v0.8.0 |
 |---|---|---|
 | CR-001 | Always-visible exact version | Shipped globally with a changelog link. |
 | CR-002 | In-app feedback and GitHub contribution path | Shipped with isolated per-environment storage. |
@@ -14,6 +14,7 @@
 | CR-008 | Desktop install, move alerts, and time limits | Open-app alerts now monitor all account games across devices, alongside the installable PWA and selectable one, three, or five-day move deadlines. Closed-app push still needs server push credentials and subscription infrastructure. |
 | CR-009 | A winning piece defeats the king on checkmate | Shipped as a short, theme-aware, reduced-motion-safe finisher. |
 | CR-010 | Subtle release updates and optional louder alerts | Shipped as an unseen-release blue dot plus opt-in browser alerts while the app remains open. |
+| CR-011 | Per-game Magic Rules | Shipped with immutable, allowlisted rules for atomic two-step rooks or knights, no promotion, no castling, and no en passant. Unsupported prose is rejected. |
 
 This is the durable product backlog recovered from
 [GitHub issue #11](https://github.com/ripper234/ChessRiot/issues/11) and
@@ -30,7 +31,7 @@ This is the durable product backlog recovered from
 | 7 | Kid-safe preset emote and reaction wheel | Shipped in v0.4.0 | Six authenticated presets, no free text, rate limiting, bounded history, hide control, privacy-safe telemetry, and a 15-minute post-game courtesy window. |
 | 8 | Victory poses and finishers per skin or theme | First version shipped in v0.4.0 | The theme-aware victory finisher is live. Unique finishers can grow with the future skin catalog. |
 | 9 | Daily and weekly missions for soft currency | Blocked | Define currency, reset rules, mission definitions, and anti-abuse handling. |
-| 10 | Friend challenges with custom rule toggles and shared streaks | Partial foundation | Account-bound invitations exist. A friend graph, custom rules, and shared-streak rules remain undefined. |
+| 10 | Friend challenges with custom rule toggles and shared streaks | Partial foundation | Account-bound invitations and five safe per-game Magic Rules exist. A friend graph, broader rule catalog, and shared-streak rules remain undefined. |
 
 ## Additional evidenced backlog
 
@@ -66,3 +67,12 @@ the default and must not silently inherit variant mechanics.
 - Account-session move monitoring across every owned multiplayer game, without
   depending on a legacy private-seat token on the current device.
 - Explicit Switch Account entrypoint through the trusted ChatGPT sign-out flow.
+
+## Shipped backlog wins in v0.8.0
+
+- `Knights move twice.` is a real server-enforced rule, not placeholder copy.
+- The existing atomic rook-turn mechanism now supports the same knight moving
+  a second legal time, including Riot Bot, touch, pointer, keyboard, history,
+  and replay.
+- Existing v1 Magic Rules remain valid; knight-enabled games use the v2 stored
+  schema without mutating older games.

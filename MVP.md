@@ -9,8 +9,8 @@
 - Two separate devices or browsers
 - Create, invite, and join
 - Standard legal rules and complete endings by default
-- Optional per-game Magic Rules for two-step rook turns, no promotion, no
-  castling, and no en passant, with unsupported prompts rejected
+- Optional per-game Magic Rules for atomic two-step rook or knight turns, no
+  promotion, no castling, and no en passant, with unsupported prompts rejected
 - Durable game state and move history
 - Legacy private-seat migration into account membership
 - Turn enforcement and stale-write protection

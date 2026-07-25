@@ -44,9 +44,9 @@ import {
   reactionPreset,
 } from "@/lib/game-reactions";
 import { optimisticMoveSnapshot, shouldAcceptGameSnapshot } from "@/lib/game-snapshots";
-import { legalMagicMoves, rookSecondStep } from "@/lib/game-rules";
-import { hasMagicRule } from "@/lib/magic-rules";
-import { rookDraftTapDecision } from "@/lib/magic-turn-ui";
+import { legalMagicMoves, magicSecondStep } from "@/lib/game-rules";
+import { hasMagicRule, type DoubleMovePiece } from "@/lib/magic-rules";
+import { magicDraftTapDecision } from "@/lib/magic-turn-ui";
 import type { DrawClaim, GameSnapshot, Promotion } from "@/lib/game-types";
 import { APP_VERSION } from "@/lib/version";
 import { Brand } from "./Brand";
@@ -82,10 +82,11 @@ interface DragState {
   over: Square | null;
 }
 
-interface RookDraft {
+interface MagicDraft {
   from: Square;
   to: Square;
-  rookSquare: Square;
+  pieceSquare: Square;
+  piece: DoubleMovePiece;
   fen: string;
 }
 
@@ -140,7 +141,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const game = optimisticGame ?? serverGame;
   const [selected, setSelected] = useState<Square | null>(null);
   const [promotionMove, setPromotionMove] = useState<{ from: Square; to: Square } | null>(null);
-  const [rookDraft, setRookDraft] = useState<RookDraft | null>(null);
+  const [magicDraft, setMagicDraft] = useState<MagicDraft | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [access, setAccess] = useState<"loading" | "ready" | "denied" | "error">("loading");
@@ -505,7 +506,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   useEffect(() => {
     setSelected(null);
     setPromotionMove(null);
-    setRookDraft(null);
+    setMagicDraft(null);
     setConfirmEnd(false);
     dragRef.current = null;
     setDrag(null);
@@ -525,10 +526,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
       ? new Chess(
         openingIntro
           ? game.initialFen
-          : rookDraft?.fen ?? game.fen,
+          : magicDraft?.fen ?? game.fen,
       )
       : null,
-    [game, openingIntro, rookDraft],
+    [game, openingIntro, magicDraft],
   );
   const legalMoves = useMemo<Move[]>(() => {
     if (!chess || !selected) return [];
@@ -610,7 +611,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     setMessage("");
     setSelected(null);
     setPromotionMove(null);
-    setRookDraft(null);
+    setMagicDraft(null);
     if (preview) {
       setOptimisticGame(preview);
     }
@@ -706,23 +707,23 @@ export function GameRoom({ gameId }: { gameId: string }) {
     if (targetMoves.length === 0) {
       setSelected(from);
       setMessage(
-        rookDraft
-          ? "Move the same rook again, or finish the turn."
+        magicDraft
+          ? `Move the same ${PIECE_NAMES[magicDraft.piece]} again, or finish the turn.`
           : illegalDestinationMessage(game.check),
       );
       playInvalidSound();
       return;
     }
-    if (rookDraft) {
-      if (from !== rookDraft.rookSquare) {
-        setSelected(rookDraft.rookSquare);
-        setMessage("Move the same rook again, or finish the turn.");
+    if (magicDraft) {
+      if (from !== magicDraft.pieceSquare) {
+        setSelected(magicDraft.pieceSquare);
+        setMessage(`Move the same ${PIECE_NAMES[magicDraft.piece]} again, or finish the turn.`);
         playInvalidSound();
         return;
       }
       void sendMove(
-        rookDraft.from,
-        rookDraft.to,
+        magicDraft.from,
+        magicDraft.to,
         undefined,
         { from, to },
       );
@@ -734,26 +735,27 @@ export function GameRoom({ gameId }: { gameId: string }) {
     }
     const firstMove = targetMoves[0];
     if (
-      firstMove?.piece === "r"
-      && hasMagicRule(game.magicRules, "double_move", "r")
+      (firstMove?.piece === "r" || firstMove?.piece === "n")
+      && hasMagicRule(game.magicRules, "double_move", firstMove.piece)
     ) {
       const afterFirst = new Chess(game.fen);
       afterFirst.move(firstMove);
-      const continuation = rookSecondStep(
+      const continuation = magicSecondStep(
         afterFirst,
         firstMove.to,
         firstMove.color,
         game.magicRules ?? null,
       );
       if (continuation) {
-        setRookDraft({
+        setMagicDraft({
           from,
           to,
-          rookSquare: firstMove.to,
+          pieceSquare: firstMove.to,
+          piece: continuation.piece,
           fen: continuation.chess.fen(),
         });
         setSelected(firstMove.to);
-        setMessage("Move that rook again, or finish the turn.");
+        setMessage(`Move that ${PIECE_NAMES[continuation.piece]} again, or finish the turn.`);
         return;
       }
     }
@@ -772,20 +774,20 @@ export function GameRoom({ gameId }: { gameId: string }) {
       return;
     }
     const targetMoves = selected ? legalMoves.filter((move) => move.to === square) : [];
-    if (rookDraft) {
-      const decision = rookDraftTapDecision(
-        rookDraft.rookSquare,
+    if (magicDraft) {
+      const decision = magicDraftTapDecision(
+        magicDraft.pieceSquare,
         selected,
         square,
         legalMoves.map((move) => move.to),
       );
       if (decision === "move" && targetMoves.length > 0) {
-        tryBoardMove(rookDraft.rookSquare, square);
+        tryBoardMove(magicDraft.pieceSquare, square);
         return;
       }
-      setSelected(rookDraft.rookSquare);
+      setSelected(magicDraft.pieceSquare);
       if (decision === "reject") {
-        setMessage("Move the same rook again, or finish the turn.");
+        setMessage(`Move the same ${PIECE_NAMES[magicDraft.piece]} again, or finish the turn.`);
         playInvalidSound();
       }
       return;
@@ -821,7 +823,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   function startPieceDrag(event: ReactPointerEvent<HTMLSpanElement>, square: Square) {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     if (!chess || !game || !canMove || chess.get(square)?.color !== game.you.color) return;
-    if (rookDraft && square !== rookDraft.rookSquare) return;
+    if (magicDraft && square !== magicDraft.pieceSquare) return;
     if (soundOn) void unlockGameSounds();
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -1037,8 +1039,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
       ? "White opens"
     : game.status === "completed"
       ? outcomeText(game)
-      : rookDraft
-        ? "Magic turn: move that rook again or finish"
+      : magicDraft
+        ? `Magic turn: move that ${PIECE_NAMES[magicDraft.piece]} again or finish`
       : game.check
         ? game.turn === game.you.color ? "CHECK! Protect your king" : `${turnName} is in check`
         : game.turn === game.you.color ? "Your turn" : `${turnName}’s turn`;
@@ -1123,9 +1125,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
             role={game.check ? "alert" : "status"}
             aria-live={game.check ? "assertive" : "polite"}
           >
-            <span>{game.status === "completed" ? "⚑" : rookDraft ? "✦" : game.check ? "!" : "◆"}</span>
+            <span>{game.status === "completed" ? "⚑" : magicDraft ? "✦" : game.check ? "!" : "◆"}</span>
             <div>
-              <small>{rookDraft ? "MAGIC MOVE" : game.check && game.status !== "completed" ? "CHECK" : "MATCH STATUS"}</small>
+              <small>{magicDraft ? "MAGIC MOVE" : game.check && game.status !== "completed" ? "CHECK" : "MATCH STATUS"}</small>
               <strong>{statusText}</strong>
             </div>
             {busy || botThinking ? <b>{ending ? "ENDING GAME…" : openingIntro ? "WHITE OPENING…" : botThinking ? "RIOT BOT THINKING…" : "LOCKING MOVE…"}</b> : null}
@@ -1139,13 +1141,17 @@ export function GameRoom({ gameId }: { gameId: string }) {
               </div>
             </div>
           ) : null}
-          {rookDraft ? (
-            <div className="magic-turn-actions" role="group" aria-label="Finish or cancel the rook magic move">
+          {magicDraft ? (
+            <div
+              className="magic-turn-actions"
+              role="group"
+              aria-label={`Finish or cancel the ${PIECE_NAMES[magicDraft.piece]} magic move`}
+            >
               <button
                 type="button"
                 className="primary-button"
                 disabled={busy}
-                onClick={() => void sendMove(rookDraft.from, rookDraft.to)}
+                onClick={() => void sendMove(magicDraft.from, magicDraft.to)}
               >
                 FINISH TURN
               </button>
@@ -1154,7 +1160,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 className="quiet-button"
                 disabled={busy}
                 onClick={() => {
-                  setRookDraft(null);
+                  setMagicDraft(null);
                   setSelected(null);
                   setMessage("");
                 }}

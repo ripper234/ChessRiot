@@ -167,6 +167,31 @@ try {
   assert.equal((await body(anonymousCreate)).error.code, "account_required");
   assert.equal((await request(runtime, "/api/me/games", { anonymous: true })).status, 401);
 
+  const opaqueSameOriginCreate = await request(runtime, "/api/games", {
+    anonymous: true,
+    method: "POST",
+    headers: {
+      origin: "null",
+      "sec-fetch-site": "same-origin",
+      "sec-fetch-mode": "cors",
+    },
+    body: JSON.stringify({}),
+  });
+  assert.equal(opaqueSameOriginCreate.status, 401);
+  assert.equal((await body(opaqueSameOriginCreate)).error.code, "account_required");
+  const opaqueCrossSiteCreate = await request(runtime, "/api/games", {
+    anonymous: true,
+    method: "POST",
+    headers: {
+      origin: "null",
+      "sec-fetch-site": "cross-site",
+      "sec-fetch-mode": "cors",
+    },
+    body: JSON.stringify({}),
+  });
+  assert.equal(opaqueCrossSiteCreate.status, 403);
+  assert.equal((await body(opaqueCrossSiteCreate)).error.code, "wrong_origin");
+
   const whiteToken = secret();
   const blackToken = secret();
   const thirdToken = secret();
@@ -429,7 +454,7 @@ try {
   const magicBlack = secret();
   const magicInvite = secret();
   const magicCreateRequestId = randomUUID();
-  const magicPrompt = "Rooks move twice. Pawns never get promoted.";
+  const magicPrompt = "Knights move twice. Rooks move twice. Pawns never get promoted.";
   const magicCreateResponse = await request(runtime, "/api/games", {
     method: "POST",
     body: JSON.stringify({
@@ -445,7 +470,9 @@ try {
   const magicCreated = await body(magicCreateResponse);
   const magicGameId = magicCreated.game.id;
   assert.equal(magicCreated.game.magicRules.prompt, magicPrompt);
+  assert.equal(magicCreated.game.magicRules.version, 2);
   assert.deepEqual(magicCreated.game.magicRules.labels, [
+    "Knights may move twice; check ends the turn",
     "Rooks may move twice; check ends the turn",
     "Pawns cannot move onto the final rank",
   ]);
@@ -561,6 +588,23 @@ try {
     from: "a3",
     to: "h3",
     san: "Rh3",
+  });
+  assert.equal((await playMagicMove(magicBlack, "g8", "f6", 4)).response.status, 200);
+  const atomicKnightTurn = await playMagicMove(
+    magicWhite,
+    "g1",
+    "f3",
+    5,
+    { from: "f3", to: "e5" },
+  );
+  assert.equal(atomicKnightTurn.response.status, 200);
+  assert.equal(atomicKnightTurn.data.game.version, 6);
+  assert.equal(atomicKnightTurn.data.game.plyCount, 5);
+  assert.equal(atomicKnightTurn.data.game.turn, "b");
+  assert.deepEqual(atomicKnightTurn.data.game.moves[4].second, {
+    from: "f3",
+    to: "e5",
+    san: "Ne5",
   });
   const magicGames = await body(await request(runtime, "/api/me/games", {
     headers: { authorization: `Bearer ${magicWhite}` },
