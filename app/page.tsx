@@ -21,7 +21,7 @@ export default async function HomePage() {
           <div className="voxel-card account-card">
             <span className="card-kicker">PLAY SECURELY</span>
             <h1>Your board is waiting</h1>
-            <p>Sign in, pass one quick human check, and your games stay with your account.</p>
+            <p>Sign in and your games stay with your account.</p>
             <Link className="primary-button" href={chatGPTSignInPath("/")}>
               SIGN IN TO PLAY  →
             </Link>

@@ -4,8 +4,8 @@
 
 - Human versus human asynchronous chess
 - Solo chess against Riot Bot with five levels
-- Sign in with ChatGPT, server-verified CAPTCHA, account-bound game membership,
-  and a cross-device game list
+- Sign in with ChatGPT, account-bound game membership, and a cross-device game
+  list
 - Two separate devices or browsers
 - Create, invite, and join
 - Standard legal rules and complete endings by default

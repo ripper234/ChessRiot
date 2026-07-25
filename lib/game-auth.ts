@@ -39,7 +39,7 @@ export async function authorizeGameRequest(
       ok: false,
       status: 401,
       code: "account_required",
-      message: "Sign in and complete the human check",
+      message: "Sign in to continue",
     };
   }
 

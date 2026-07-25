@@ -1,4 +1,15 @@
-# ChessRiot v0.8.0 specification
+# ChessRiot v0.8.1 specification
+
+## v0.8.1 release additions
+
+- The separate human-check screen, Turnstile verification request, and
+  CAPTCHA-bound application session are removed.
+- A trusted Sites Sign in with ChatGPT identity is sufficient for playable
+  APIs. Account ids remain HMAC-derived, game access remains membership-bound,
+  and account rate limits remain enforced.
+- Existing `/verify` entry points now send signed-in players directly to their
+  requested safe in-app path. The retired CAPTCHA API returns no playable
+  route.
 
 ## v0.8 release additions
 
@@ -144,7 +155,7 @@ This file and `MVP.md` are the source of truth for the current milestone.
 
 ## Flow
 
-1. The player signs in with ChatGPT, completes the human check, then chooses Solo or Multiplayer.
+1. The player signs in with ChatGPT, then chooses Solo or Multiplayer.
 2. The player may enable Magic Rules and enter a supported rule paragraph. With
    the box off, the game uses standard chess.
 3. Solo reveals a five-step Bot level bar that starts at Level 3, Medium. Colors are assigned evenly and deterministically from the idempotent create request. If Riot Bot is White, its legal opening is committed before the game appears.
@@ -186,12 +197,12 @@ This file and `MVP.md` are the source of truth for the current milestone.
 
 ## Identity and privacy
 
-- A trusted Sign in with ChatGPT identity and a valid signed CAPTCHA session are required for every playable API.
+- A trusted Sign in with ChatGPT identity is required for every playable API.
 - Account ids are HMAC-derived from the canonical hosting identity. Raw email addresses are not stored in game or observability rows.
 - Each account may own only one color in a game. Membership, not a browser token, is authoritative for current games.
 - Historical player keys remain 256-bit bearer secrets carried in a `#seat=` URL fragment. The server stores SHA-256 hashes only, and a verified account may use a correct key to claim only an unbound legacy seat.
 - URL fragments are never sent in HTTP requests or referrers. Invitation links remain one-use and require a verified account to inspect or claim.
-- CAPTCHA verification happens server-side. Tokens are single-use and expire according to the provider; test keys are limited to Development.
+- Account-scoped write limits remain active without an additional human-check gate.
 
 ## Interface
 

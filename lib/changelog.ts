@@ -11,6 +11,18 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.8.1",
+    date: "2026-07-25",
+    title: "Direct sign-in",
+    summary: "Players now enter ChessRiot immediately after sign-in, without a separate human-check screen.",
+    changes: [
+      "Removed the Turnstile screen, verification request, and CAPTCHA-bound application session.",
+      "Kept trusted hosting identity, account-bound game membership, request-origin checks, and account rate limits.",
+      "Retired the old CAPTCHA endpoint and redirected existing verification entry points safely into the game.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.8.1`,
+  },
+  {
     version: "0.8.0",
     date: "2026-07-25",
     title: "Knights move twice",

@@ -1,5 +1,16 @@
 # Acceptance tests
 
+## Sign-in
+
+1. Sign in with ChatGPT and verify the new-game screen opens immediately with
+   no human-check screen, Turnstile request, or ChessRiot access cookie.
+2. Create and reopen a Solo game using only the trusted hosting identity.
+3. Verify a signed-out request remains blocked, unrelated accounts cannot read
+   the game, origin checks still reject cross-site mutations, and account rate
+   limits remain active.
+4. Open an old `/verify?failed=1&return_to=%2F` link while signed in and verify
+   it redirects safely to the game without showing the retired check.
+
 ## Solo happy path
 
 1. Enter a name, choose Solo, and verify Bot level starts at Level 3, Medium.

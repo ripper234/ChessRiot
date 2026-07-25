@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
@@ -7,27 +6,14 @@ const packageJson = JSON.parse(
   readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 );
 const accountIdSecret = "render-account-id-secret";
-const sessionSigningSecret = "render-session-secret";
 
 function signedPlayerHeaders(name = "Render Player") {
   const email = "render-player@players.chessriot.test";
-  const accountId = createHmac("sha256", accountIdSecret)
-    .update(email)
-    .digest("base64url");
-  const payload = Buffer.from(JSON.stringify({
-    v: 1,
-    sub: accountId,
-    exp: Math.floor(Date.now() / 1000) + 3_600,
-  })).toString("base64url");
-  const signature = createHmac("sha256", sessionSigningSecret)
-    .update(payload)
-    .digest("base64url");
   return {
     accept: "text/html",
     "oai-authenticated-user-email": email,
     "oai-authenticated-user-full-name": encodeURIComponent(name),
     "oai-authenticated-user-full-name-encoding": "percent-encoded-utf-8",
-    cookie: `__Host-chessriot-access=${payload}.${signature}`,
   };
 }
 
@@ -35,8 +21,6 @@ function renderEnv() {
   return {
     CHESSRIOT_ENV: "test",
     ACCOUNT_ID_SECRET: accountIdSecret,
-    SESSION_SIGNING_SECRET: sessionSigningSecret,
-    TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
     ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) },
   };
 }
@@ -55,6 +39,7 @@ test("requires an account before showing the game creator", async () => {
   assert.match(signedOutHtml, /Your board is waiting/);
   assert.match(signedOutHtml, /SIGN IN TO PLAY/);
   assert.doesNotMatch(signedOutHtml, /Play chess/);
+  assert.doesNotMatch(signedOutHtml, /human check|captcha|turnstile/i);
 
   const response = await worker.fetch(
     new Request("http://localhost/", { headers: signedPlayerHeaders() }),
@@ -93,6 +78,36 @@ test("requires an account before showing the game creator", async () => {
   }
   assert.match(html, /Send feedback/);
   assert.match(html, /view issues or send a pull request on GitHub/);
+  assert.doesNotMatch(html, /human check|captcha|turnstile/i);
+});
+
+test("retires the human-check route and sends signed-in players straight back", async () => {
+  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
+  workerUrl.searchParams.set("test", `verify-${process.pid}-${Date.now()}`);
+  const { default: worker } = await import(workerUrl.href);
+  const context = { waitUntil() {}, passThroughOnException() {} };
+  const env = renderEnv();
+
+  const verifyResponse = await worker.fetch(
+    new Request("http://localhost/verify?return_to=%2F", {
+      headers: signedPlayerHeaders(),
+      redirect: "manual",
+    }),
+    env,
+    context,
+  );
+  assert.ok([303, 307, 308].includes(verifyResponse.status));
+  assert.equal(new URL(verifyResponse.headers.get("location"), "http://localhost").pathname, "/");
+
+  const retiredRoute = await worker.fetch(
+    new Request("http://localhost/api/auth/captcha", {
+      method: "POST",
+      headers: signedPlayerHeaders(),
+    }),
+    env,
+    context,
+  );
+  assert.equal(retiredRoute.status, 404);
 });
 
 test("renders the newest-first public changelog", async () => {

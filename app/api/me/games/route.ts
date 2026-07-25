@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request): Promise<Response> {
   const account = await requireApiAccount(request);
-  if (!account) return apiError(401, "account_required", "Sign in and complete the human check");
+  if (!account) return apiError(401, "account_required", "Sign in to continue");
   const search = new URL(request.url).searchParams;
   const rawCursor = search.get("cursor");
   const cursor = parseAccountGamesCursor(rawCursor);

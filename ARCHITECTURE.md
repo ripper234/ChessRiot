@@ -6,7 +6,7 @@
   schema.
 - `lib/computer-player.ts`: bounded server-side move search for Riot Bot.
 - `lib/computer-turn.ts`: recovery path for a pending Solo computer turn.
-- `lib/account-auth.ts`: trusted identity binding, signed player session, and server-side CAPTCHA verification.
+- `lib/account-auth.ts`: trusted hosting identity and opaque account-id derivation.
 - `lib/accounts.ts`: durable account summaries and account-scoped rate limits.
 - `lib/game-auth.ts`: account membership authorization and legacy seat migration.
 - `lib/observability.ts`: central request observation, safe event storage, correlation, and retention.
@@ -45,9 +45,9 @@ arrives as the next version. Rejection or transport failure reconciles the
 preview against the server before rolling it back.
 
 Player authority is account-scoped and game-specific. Sites supplies the trusted
-Sign in with ChatGPT identity, Turnstile is verified by the Worker, and a
-short-lived signed HttpOnly cookie binds those two checks. D1 membership rows
-map an opaque HMAC account id to exactly one color per game.
+Sign in with ChatGPT identity. D1 membership rows map an opaque HMAC account id
+to exactly one color per game. Account-scoped limits remain active without a
+separate human-check gate.
 
 Historical private game URLs still carry their bearer key in the fragment,
 which is not sent as part of the HTTP URL. After a verified account presents a

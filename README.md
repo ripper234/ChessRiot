@@ -2,7 +2,7 @@
 
 Play the current game at [chessriot.ripper234.chatgpt.site](https://chessriot.ripper234.chatgpt.site).
 
-ChessRiot v0.8.0 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
+ChessRiot v0.8.1 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
 
 Found something confusing or have a cool rule request? Use **Feedback** inside
 the game or [open a GitHub issue](https://github.com/ripper234/ChessRiot/issues).
@@ -12,7 +12,7 @@ progression work, and features that still need explicit rule design.
 
 ## What works
 
-- Sign in with ChatGPT, complete a server-verified human check, then choose Solo or Multiplayer.
+- Sign in with ChatGPT, then choose Solo or Multiplayer.
 - Play Riot Bot at one of five levels, starting at Level 3, Medium, as either color. If the bot is White, it opens automatically.
 - Create a multiplayer game with one, three, or five days per move, then share one private invitation link. Missing the deadline loses the game.
 - Resume every owned game from a paginated cross-device My Games history with
@@ -47,11 +47,9 @@ No arbitrary executable rule prompts, AI coach, closed-app push or email
 notifications, free-form chat, friend graph, matchmaking, ratings, rewards,
 collectible skins, or payments. Google sign-in and Telegram release
 announcements remain disabled until their external credentials are configured
-and the corresponding code is explicitly enabled. CAPTCHA and account
-throttles protect application resources, while volumetric denial-of-service
-protection remains the hosting edge’s responsibility. Development uses
-Cloudflare’s published test CAPTCHA keys; any later Staging or Production
-promotion must configure real environment-specific keys first.
+and the corresponding code is explicitly enabled. Account-scoped throttles
+protect application resources, while volumetric denial-of-service protection
+remains the hosting edge’s responsibility.
 
 ## Versioning
 
@@ -71,7 +69,7 @@ Prepare releases with `npm run release:patch`, `npm run release:minor`, or `npm 
 
 ## Stack
 
-Vinext/React, Cloudflare Workers and D1, TypeScript, chess.js, Sites Sign in with ChatGPT, and server-verified Cloudflare Turnstile.
+Vinext/React, Cloudflare Workers and D1, TypeScript, chess.js, and Sites Sign in with ChatGPT.
 
 ## Checks
 

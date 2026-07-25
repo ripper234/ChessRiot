@@ -15,7 +15,6 @@ const requestIdForColor = (color) => {
 };
 const opsSecret = "local-ops-read-secret-for-e2e-tests";
 const accountIdSecret = "local-account-id-secret-for-e2e-tests";
-const sessionSigningSecret = "local-session-secret-for-e2e-tests";
 const accountBySeatToken = new Map();
 
 function accountForLabel(label) {
@@ -37,22 +36,10 @@ function accountForUnknownSeat(token) {
 
 function signedAccountHeaders(account) {
   const email = account.email.normalize("NFKC").trim().toLowerCase();
-  const accountId = createHmac("sha256", accountIdSecret)
-    .update(email)
-    .digest("base64url");
-  const payload = Buffer.from(JSON.stringify({
-    v: 1,
-    sub: accountId,
-    exp: Math.floor(Date.now() / 1000) + 3_600,
-  })).toString("base64url");
-  const signature = createHmac("sha256", sessionSigningSecret)
-    .update(payload)
-    .digest("base64url");
   return {
     "oai-authenticated-user-email": email,
     "oai-authenticated-user-full-name": encodeURIComponent(account.displayName),
     "oai-authenticated-user-full-name-encoding": "percent-encoded-utf-8",
-    cookie: `__Host-chessriot-access=${payload}.${signature}`,
   };
 }
 
@@ -99,9 +86,6 @@ function createRuntime() {
       OBSERVABILITY_HASH_SECRET: "local-observability-hash-secret-for-e2e",
       OPS_READ_SECRET: opsSecret,
       ACCOUNT_ID_SECRET: accountIdSecret,
-      SESSION_SIGNING_SECRET: sessionSigningSecret,
-      TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
-      TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
     },
     defaultPersistRoot: persistRoot,
     d1Persist: true,
@@ -191,6 +175,12 @@ try {
   });
   assert.equal(opaqueCrossSiteCreate.status, 403);
   assert.equal((await body(opaqueCrossSiteCreate)).error.code, "wrong_origin");
+
+  const retiredCaptchaRoute = await request(runtime, "/api/auth/captcha", {
+    method: "POST",
+    body: new URLSearchParams(),
+  });
+  assert.equal(retiredCaptchaRoute.status, 404);
 
   const whiteToken = secret();
   const blackToken = secret();

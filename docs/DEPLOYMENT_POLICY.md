@@ -27,6 +27,30 @@ parallel automatic Production deployment from repository pushes.
 - Preserve each environment’s isolated data and runtime configuration.
 - Keep arbitrary-version deploys and rollbacks behind the advanced manual flow.
 
+## Two development lanes
+
+- Small, low-risk changes land on `main` and deploy automatically to
+  Development after the full release gate.
+- Complicated or high-risk work stays on `feature/*` and receives an isolated,
+  opt-in Preview. A feature branch alone does not deploy anything.
+- A Preview can be reviewed and updated, but never promoted directly to
+  Staging or Production.
+- Merging the reviewed branch creates a normal stable release on `main`, which
+  is then verified independently in Development.
+
+## Preview environment invariants
+
+- Each Preview has isolated runtime configuration and data. It receives no
+  Staging or Production secrets and sends no release announcements.
+- Preview builds display a visible `PREVIEW` label, branch, prerelease version,
+  and exact commit.
+- Control keeps previews collapsed under `Feature Previews (N)` and shows only
+  active previews unless history is requested.
+- Preview health starts at `— / Checking…` and is populated only by a fresh
+  check.
+- Closing a Preview removes its runtime resources while retaining a small audit
+  record.
+
 ## Control-panel behavior
 
 - Development displays automatic deployment status and has no primary deploy

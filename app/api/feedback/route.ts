@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   if (!requestIsSameOrigin(request)) return apiError(403, "wrong_origin", "Request origin is not allowed");
   const account = await requireApiAccount(request);
   if (!account) {
-    return apiError(401, "account_required", "Sign in and complete the human check");
+    return apiError(401, "account_required", "Sign in to continue");
   }
   const rate = await enforceAccountRateLimit(
     account.id,

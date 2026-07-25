@@ -12,7 +12,7 @@ export async function GET(
 ) {
   const account = await requireApiAccount(request);
   if (!account) {
-    return apiError(401, "account_required", "Sign in and complete the human check");
+    return apiError(401, "account_required", "Sign in to continue");
   }
   const rate = await enforceAccountRateLimit(
     account.id,
