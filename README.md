@@ -2,6 +2,10 @@
 
 ChessRiot v0.6.0 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
 
+[Play the production game](https://chessriot.ripper234.chatgpt.site) · [View the source](https://github.com/ripper234/ChessRiot)
+
+Have feedback or a cool feature request? Use **Send feedback** inside the game, or [open a GitHub request](https://github.com/ripper234/ChessRiot/issues/new).
+
 See the durable [product backlog](BACKLOG.md) for shipped foundations, blocked
 progression work, and features that still need explicit rule design.
 
