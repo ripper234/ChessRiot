@@ -25,63 +25,89 @@ function renderEnv() {
   };
 }
 
-test("requires an account before showing the game creator", async () => {
+test("renders an identity-independent public homepage and guest play route", async () => {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
   const { default: worker } = await import(workerUrl.href);
+  const context = { waitUntil() {}, passThroughOnException() {} };
   const signedOutResponse = await worker.fetch(
     new Request("http://localhost/", { headers: { accept: "text/html" } }),
     renderEnv(),
-    { waitUntil() {}, passThroughOnException() {} },
+    context,
   );
   assert.equal(signedOutResponse.status, 200);
   const signedOutHtml = await signedOutResponse.text();
-  assert.match(signedOutHtml, /Your board is waiting/);
-  assert.match(signedOutHtml, /SIGN IN TO PLAY/);
+  assert.match(signedOutHtml, /REAL CHESS/);
+  assert.match(signedOutHtml, /TOTAL PLAY/);
+  assert.match(signedOutHtml, /href="\/app"/);
+  assert.match(signedOutHtml, /<html(?![^>]*data-theme)[^>]*>/i);
+  assert.doesNotMatch(signedOutHtml, /SIGN IN|Playing as|SWITCH ACCOUNT/i);
   assert.doesNotMatch(signedOutHtml, /Play chess/);
+  assert.doesNotMatch(signedOutHtml, /aria-label="Choose visual theme"/);
   assert.doesNotMatch(signedOutHtml, /human check|captcha|turnstile/i);
 
-  const response = await worker.fetch(
-    new Request("http://localhost/", { headers: signedPlayerHeaders() }),
+  const signedInResponse = await worker.fetch(
+    new Request("http://localhost/", { headers: signedPlayerHeaders("Ron Gross") }),
     renderEnv(),
-    { waitUntil() {}, passThroughOnException() {} },
+    context,
+  );
+  assert.equal(signedInResponse.status, 200);
+  assert.equal(await signedInResponse.text(), signedOutHtml);
+
+  const appHostResponse = await worker.fetch(
+    new Request("http://app.localhost/", {
+      headers: { accept: "text/html", host: "app.localhost" },
+    }),
+    renderEnv(),
+    context,
+  );
+  assert.equal(appHostResponse.status, 200);
+  const appHostHtml = await appHostResponse.text();
+  assert.match(appHostHtml, /Play chess/);
+  assert.doesNotMatch(appHostHtml, /class="public-shell"/);
+  assert.doesNotMatch(appHostHtml, /SIGN IN|Playing as|SWITCH ACCOUNT/i);
+  assert.match(appHostHtml, /<html(?![^>]*data-theme)[^>]*>/i);
+
+  const response = await worker.fetch(
+    new Request("http://localhost/app", { headers: { accept: "text/html" } }),
+    renderEnv(),
+    context,
   );
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /ChessRiot/);
   assert.match(html, /Play chess/);
+  assert.match(html, /Your display name/);
   assert.doesNotMatch(html, /MOVE BOLDLY/);
   assert.doesNotMatch(html, /LEGAL CHESS|DRAG TO MOVE|SAVES EVERY MOVE/);
   assert.match(html, /WHAT&#x27;S NEW|WHAT'S NEW/);
-  assert.match(html, /SWITCH ACCOUNT/);
+  assert.doesNotMatch(html, /SIGN IN|Playing as|SWITCH ACCOUNT/i);
   assert.match(html, new RegExp(`v${packageJson.version.replaceAll(".", "\\.")}`));
-  assert.match(html, /aria-label="Choose visual theme"/);
-  assert.match(html, /App updates and notifications/);
+  assert.doesNotMatch(html, /aria-label="Choose visual theme"/);
+  assert.match(html, /App updates/);
   assert.match(html, /manifest\.webmanifest/);
   assert.match(html, /Time per move/);
   assert.match(html, /Three days is the default/);
-  assert.match(html, /localStorage\.getItem/);
-  for (const theme of [
-    "Classic",
-    "Ocean",
-    "Blockfield",
-    "Toybox",
-    "Arena Pop",
-    "High Fantasy",
-    "Arcane Cards",
-    "Iron Legions",
-    "Shadow Shogun",
-    "Neon Grid",
-    "Mono",
-  ]) {
-    assert.match(html, new RegExp(theme));
-  }
   assert.match(html, /Send feedback/);
   assert.match(html, /view issues or send a pull request on GitHub/);
   assert.doesNotMatch(html, /human check|captcha|turnstile/i);
+
+  const gameResponse = await worker.fetch(
+    new Request("http://localhost/g/00000000-0000-4000-8000-000000000000", {
+      headers: { accept: "text/html" },
+    }),
+    renderEnv(),
+    context,
+  );
+  assert.equal(gameResponse.status, 200);
+  const gameHtml = await gameResponse.text();
+  assert.match(gameHtml, /<html(?![^>]*data-theme)[^>]*>/i);
+  assert.match(gameHtml, /aria-label="Choose visual theme"/);
+  assert.match(gameHtml, /Classic/);
+  assert.match(gameHtml, /Blockfield/);
 });
 
-test("retires the human-check route and sends signed-in players straight back", async () => {
+test("retires the old verification and human-check routes", async () => {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `verify-${process.pid}-${Date.now()}`);
   const { default: worker } = await import(workerUrl.href);
@@ -89,15 +115,12 @@ test("retires the human-check route and sends signed-in players straight back", 
   const env = renderEnv();
 
   const verifyResponse = await worker.fetch(
-    new Request("http://localhost/verify?return_to=%2F", {
-      headers: signedPlayerHeaders(),
-      redirect: "manual",
-    }),
+    new Request("http://localhost/verify?return_to=%2F", { redirect: "manual" }),
     env,
     context,
   );
   assert.ok([303, 307, 308].includes(verifyResponse.status));
-  assert.equal(new URL(verifyResponse.headers.get("location"), "http://localhost").pathname, "/");
+  assert.equal(new URL(verifyResponse.headers.get("location"), "http://localhost").pathname, "/app");
 
   const retiredRoute = await worker.fetch(
     new Request("http://localhost/api/auth/captcha", {
@@ -122,7 +145,9 @@ test("renders the newest-first public changelog", async () => {
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /WHAT.*NEW/);
-  assert.ok(html.indexOf(`v${packageJson.version}`) < html.indexOf("v0.3.5"));
+  const currentVersionIndex = html.indexOf(`v${packageJson.version}`);
+  assert.ok(currentVersionIndex >= 0);
+  assert.ok(currentVersionIndex < html.indexOf("v0.3.5"));
   assert.ok(html.indexOf("v0.3.5") < html.indexOf("v0.3.4"));
   assert.ok(html.indexOf("v0.3.3") < html.indexOf("v0.3.2"));
   assert.ok(html.indexOf("v0.3.2") < html.indexOf("v0.3.1"));

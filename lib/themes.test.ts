@@ -40,9 +40,10 @@ describe("visual themes", () => {
     expect(normalizeTheme(null)).toBe(DEFAULT_THEME);
   });
 
-  it("bootstraps only whitelisted local theme ids before paint", () => {
+  it("bootstraps only whitelisted local theme ids on active game routes", () => {
     expect(THEME_BOOTSTRAP_SCRIPT).toContain("localStorage.getItem");
+    expect(THEME_BOOTSTRAP_SCRIPT).toContain('location.pathname.startsWith("/g/")');
     for (const theme of THEMES) expect(THEME_BOOTSTRAP_SCRIPT).toContain(theme.id);
-    expect(THEME_BOOTSTRAP_SCRIPT).toContain("allowed.includes(value)");
+    expect(THEME_BOOTSTRAP_SCRIPT).toContain("allowed.includes(stored)");
   });
 });

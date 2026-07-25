@@ -3,13 +3,14 @@ import {
   accountPlayerColor,
   addGameMembership,
   findGameByInviteHash,
+  membershipAccountId,
   playerColor,
   readMoves,
   snapshot,
 } from "@/lib/game-store";
 import { apiError, json, readJson } from "@/lib/http";
 import { hashSecret, isSecret, normalizeDisplayName, requestIsSameOrigin } from "@/lib/validation";
-import { enforceAccountRateLimit, requireApiAccount } from "@/lib/accounts";
+import { enforceAccountRateLimit, resolveGuestApiAccount } from "@/lib/accounts";
 
 export const dynamic = "force-dynamic";
 
@@ -18,23 +19,19 @@ export async function POST(
   context: { params: Promise<{ inviteToken: string }> },
 ) {
   if (!requestIsSameOrigin(request)) return apiError(403, "wrong_origin", "Request origin is not allowed");
-  const account = await requireApiAccount(request);
-  if (!account) return apiError(401, "account_required", "Sign in to continue");
-  const rate = await enforceAccountRateLimit(account.id, "invitation_join", 20, 60 * 60);
-  if (!rate.allowed) {
-    return json(
-      { error: { code: "rate_limited", message: "Too many join attempts. Try again later." } },
-      { status: 429, headers: { "retry-after": String(rate.retryAfter) } },
-    );
-  }
   const { inviteToken } = await context.params;
   const body = await readJson(request);
-  const displayName = normalizeDisplayName(account.displayName);
+  const displayName = normalizeDisplayName(body?.displayName);
+  const guestToken = body?.guestToken;
   const playerToken = body?.playerToken;
-  if (!isSecret(inviteToken) || !displayName || !isSecret(playerToken)) {
+  if (
+    !isSecret(inviteToken)
+    || !displayName
+    || !isSecret(guestToken)
+    || !isSecret(playerToken)
+  ) {
     return apiError(400, "invalid_request", "Invitation, name, or player secret is invalid");
   }
-
   await ensureSchema();
   const [inviteHash, playerHash] = await Promise.all([hashSecret(inviteToken), hashSecret(playerToken)]);
   let game = await findGameByInviteHash(inviteHash);
@@ -42,18 +39,38 @@ export async function POST(
   if (game.termination === "cancelled") {
     return apiError(410, "invite_cancelled", "This game was cancelled");
   }
-  const existingAccountColor = await accountPlayerColor(game, account.id);
-  if (existingAccountColor === "w") {
+  if (game.white_token_hash === playerHash) {
     return apiError(409, "same_player", "The creator cannot claim the second seat");
   }
-  if (game.white_token_hash === playerHash) {
+  if (
+    game.status !== "waiting"
+    && game.black_token_hash !== playerHash
+  ) {
+    return apiError(409, "invite_claimed", "This invitation has already been claimed");
+  }
+  const account = await resolveGuestApiAccount({
+    token: guestToken,
+    displayName,
+  });
+  const rate = await enforceAccountRateLimit(account.id, "invitation_join", 20, 60 * 60);
+  if (!rate.allowed) {
+    return json(
+      { error: { code: "rate_limited", message: "Too many join attempts. Try again later." } },
+      { status: 429, headers: { "retry-after": String(rate.retryAfter) } },
+    );
+  }
+  const existingAccountColor = await accountPlayerColor(game, account.id);
+  if (existingAccountColor === "w") {
     return apiError(409, "same_player", "The creator cannot claim the second seat");
   }
   if (
     game.black_token_hash === playerHash ||
     existingAccountColor === "b"
   ) {
-    if (existingAccountColor !== "b") {
+    if (
+      existingAccountColor !== "b"
+      && !(await membershipAccountId(game.id, "b"))
+    ) {
       await addGameMembership(game.id, "b", account.id, new Date().toISOString());
     }
     return json({ game: snapshot(game, await readMoves(game.id), "b") });

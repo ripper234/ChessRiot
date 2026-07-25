@@ -1,15 +1,21 @@
 # Acceptance tests
 
-## Sign-in
+## Public home and guest access
 
-1. Sign in with ChatGPT and verify the new-game screen opens immediately with
-   no human-check screen, Turnstile request, or ChessRiot access cookie.
-2. Create and reopen a Solo game using only the trusted hosting identity.
-3. Verify a signed-out request remains blocked, unrelated accounts cannot read
-   the game, origin checks still reject cross-site mutations, and account rate
-   limits remain active.
-4. Open an old `/verify?failed=1&return_to=%2F` link while signed in and verify
-   it redirects safely to the game without showing the retired check.
+1. Open `/` with and without Sites identity headers and verify the rendered
+   HTML is identical, fixed-style, and contains no name, theme picker, sign-in
+   prompt, CAPTCHA request, or ChessRiot access cookie.
+2. Save a non-default theme, reload `/`, and verify the public homepage remains
+   visually unchanged.
+3. Open `/app` without identity headers, enter a name, create a Solo game, and
+   verify the private seat link can reopen it in a storage-empty browser.
+4. Create a Multiplayer game as a guest, review the invitation in another
+   browser, join with a second name, and complete one move from each private
+   seat.
+5. Verify missing or wrong seat tokens remain blocked, origin checks still
+   reject cross-site mutations, and identity-scoped rate limits remain active.
+6. Open an old `/verify?failed=1&return_to=%2F` link and verify it redirects
+   safely to `/app` without showing a retired check.
 
 ## Solo happy path
 
@@ -20,7 +26,7 @@
    the bot reply animates, the move log shows two plies, and the turn returns to
    White.
 5. Close or refresh after the human ply but before the bot ply and verify the
-   next authenticated load completes the pending bot turn.
+   next authorized load completes the pending bot turn.
 6. Reopen the private link and verify the same board, level, history, and turn.
 7. Complete a Solo game and verify Riot Bot does not move after checkmate or another terminal result.
 
@@ -43,7 +49,7 @@
    `Knights move twice. Rooks move twice. Pawns never get promoted.`, and
    verify the interpreted rules before creating the game.
 3. Verify the invitation shows the same rules before Black joins and the live
-   game, My Games card, move history, and replay retain them after refresh.
+   game, recent-game card, move history, and replay retain them after refresh.
 4. Clear a rook path, stage its first legal move, then finish the turn once.
    Repeat and move that same rook a second time. Repeat through tap, pointer
    drag, and native keyboard activation with a knight. Verify each two-leg
@@ -64,7 +70,7 @@
 - Reject an illegal move, wrong player, missing or wrong key, stale version, reused invite, and post-completion move.
 - Retrying an identical request id is idempotent.
 - A different payload with an already-used request id conflicts.
-- Concurrent authenticated reads during a pending Riot Bot turn return the
+- Concurrent authorized reads during a pending Riot Bot turn return the
   single committed bot version rather than a transient pre-bot snapshot.
 - Accept a sandboxed `Origin: null` mutation only with
   `Sec-Fetch-Site: same-origin`. Reject the same opaque origin with missing,
@@ -97,14 +103,15 @@
 
 ## Interface and sound
 
-- Verify the textless palette control appears on home, join, game, changelog,
-  loading, and error states, while the exact current version remains visible.
-- Open the palette by mouse and keyboard, verify exactly nine named choices,
+- Verify the public homepage is fixed and identity-independent. Verify the
+  palette control appears only on active `/g/*` routes.
+- Open the palette by mouse and keyboard, verify exactly 11 named choices,
   select each choice, and verify a non-color selected marker.
-- Select a non-default theme, reload and navigate between home, join, game, and
-  changelog. Verify the same theme applies before paint and across a second tab.
-- Verify every theme changes the page, panels, board, captured pieces, and both
-  piece colors while preserving readable White/Black contrast.
+- Select a non-default theme and reload the game. Verify it applies before
+  paint and across a second tab, then navigate to `/`, `/app`, `/join/*`, and
+  `/changelog` and verify those fixed pages do not inherit it.
+- Verify every theme changes active game panels, board, captured pieces, and
+  both piece colors while preserving readable White/Black contrast.
 - Verify invalid or unavailable local storage falls back to Blockfield without
   breaking the current page.
 - Verify desktop and mobile layouts use an original visual identity and keep the full board readable without browser zoom or horizontal overflow.
@@ -112,7 +119,9 @@
 - Verify each player name is paired with the correct readable White/Black label and YOU marker from both seats.
 - Verify captured pawns and pieces appear under the color that lost them, including en passant.
 - Verify the checked king square and CHECK banner are visually prominent without relying on sound.
-- Verify block depth and shaded-face treatments are coherent across the home, invitation, board, private-link, and error states.
+- Verify the fixed public, create, invitation, changelog, and error states are
+  coherent, while themed block depth and shaded-face treatments stay inside
+  the active game.
 - Verify runtime text, requests, and assets contain no third-party block-game branding.
 - Play one distinct cue for a move, capture, check, win, loss, draw, and invalid action.
 - Do not play on first load, refresh, join-only state changes, repeated polls, or an out-of-order snapshot.
@@ -135,9 +144,8 @@
   endings, and becomes static under reduced motion.
 - Verify the manifest and install icons support a standalone desktop-style
   install. Confirm the service worker never caches game, join, or API routes.
-- Verify a new release produces a subtle blue dot until opened. Opt into move
-  notifications, background the still-open tab, make an opponent move, and
-  verify one notification. Confirm the UI does not claim closed-app push.
+- Verify a new release produces a subtle blue dot until opened. Confirm the
+  update dialog does not advertise dormant account-wide move alerts.
 
 ## Observability
 

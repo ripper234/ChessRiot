@@ -1,4 +1,23 @@
-# ChessRiot v0.8.1 specification
+# ChessRiot v0.8.2 specification
+
+## v0.8.2 release additions
+
+- `/` is a fixed public homepage. It does not read hosting identity, local
+  theme selection, or game data, so every visitor receives the same design.
+- `/app` is the new-game entry point. A player enters a display name and can
+  create Solo or Multiplayer games without a sign-in or CAPTCHA screen.
+- Private seat links are the portable authority for guest play. Existing
+  verified account memberships remain compatible, but no account is required
+  for a newly created or joined game.
+- Invitations can be reviewed before joining. Joining binds the supplied
+  private seat token to one game color and never exposes it in the request URL
+  or referrer.
+- Visual themes load and render only on active `/g/*` game routes. Public,
+  create, invitation, changelog, loading, and error pages keep one fixed style.
+- The app-host routing boundary is ready: `/app` works now, and a future owned
+  `app.<domain>` hostname may route its root directly to the same create flow.
+- All user-facing sign-in prompts and retired CAPTCHA paths are absent from the
+  packaged application.
 
 ## v0.8.1 release additions
 
@@ -155,15 +174,19 @@ This file and `MVP.md` are the source of truth for the current milestone.
 
 ## Flow
 
-1. The player signs in with ChatGPT, then chooses Solo or Multiplayer.
-2. The player may enable Magic Rules and enter a supported rule paragraph. With
+1. The player opens the fixed public homepage and selects Play now, or opens
+   `/app` directly.
+2. The player enters a display name and chooses Solo or Multiplayer. No account
+   or human check is required.
+3. The player may enable Magic Rules and enter a supported rule paragraph. With
    the box off, the game uses standard chess.
-3. Solo reveals a five-step Bot level bar that starts at Level 3, Medium. Colors are assigned evenly and deterministically from the idempotent create request. If Riot Bot is White, its legal opening is committed before the game appears.
-4. Multiplayer asks for a one, three, or five-day move pace, then opens White's reusable private game URL and shows a separate one-use invitation URL.
-5. Black opens that invitation on another device, signs in if needed, reviews
-   any Magic Rules, and claims the second seat for that account.
-6. Every human and computer move is revalidated by the server against authoritative history.
-7. The board polls for changes and refreshes on focus. A player can resume any owned game from their account list on another device.
+4. Solo reveals a five-step Bot level bar that starts at Level 3, Medium. Colors are assigned evenly and deterministically from the idempotent create request. If Riot Bot is White, its legal opening is committed before the game appears.
+5. Multiplayer asks for a one, three, or five-day move pace, then opens White's reusable private game URL and shows a separate one-use invitation URL.
+6. Black opens that invitation on another device, reviews any Magic Rules,
+   enters a display name, and claims the second private seat.
+7. Every human and computer move is revalidated by the server against authoritative history.
+8. The board polls for changes and refreshes on focus. A player resumes from
+   the recent-games list on that device or from the private seat link.
 
 ## Rules and persistence
 
@@ -197,16 +220,25 @@ This file and `MVP.md` are the source of truth for the current milestone.
 
 ## Identity and privacy
 
-- A trusted Sign in with ChatGPT identity is required for every playable API.
-- Account ids are HMAC-derived from the canonical hosting identity. Raw email addresses are not stored in game or observability rows.
-- Each account may own only one color in a game. Membership, not a browser token, is authoritative for current games.
-- Historical player keys remain 256-bit bearer secrets carried in a `#seat=` URL fragment. The server stores SHA-256 hashes only, and a verified account may use a correct key to claim only an unbound legacy seat.
-- URL fragments are never sent in HTTP requests or referrers. Invitation links remain one-use and require a verified account to inspect or claim.
-- Account-scoped write limits remain active without an additional human-check gate.
+- Newly created guest games use 256-bit bearer secrets carried in a `#seat=`
+  URL fragment. The server stores SHA-256 hashes only.
+- A valid private seat token authorizes exactly one color. D1 membership keeps
+  that authorization game-specific and prevents one identity from owning both
+  seats.
+- If Sites supplies a verified hosting identity, existing account membership
+  remains a compatible authorization path. The interface never requires or
+  advertises that identity.
+- URL fragments are never sent in HTTP requests or referrers. Invitation links
+  remain one-use, may be reviewed publicly, and require the correct invite
+  token to claim.
+- Guest and verified identities receive fixed-window application rate limits.
+  Riot Bot work keeps its per-game/version lease. No CAPTCHA is used.
 
 ## Interface
 
-- Eleven original visual themes cover the page, panels, board, and pieces. The
+- The public homepage, create flow, invitations, changelog, loading, and error
+  states use one fixed visual system regardless of identity or stored theme.
+- Eleven original visual themes cover active game panels, board, and pieces. The
   default Blockfield theme uses grass, dirt, stone, wood, sand, water, and
   torch-light colors. Seven themes include generated, wholly original
   illustrations. None copy third-party game branding or assets.

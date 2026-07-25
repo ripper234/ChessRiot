@@ -32,6 +32,14 @@ const forbiddenRuntimeMarkers = [
   "TURNSTILE_SECRET_KEY",
   "SESSION_SIGNING_SECRET",
   "That check expired or failed",
+  "SIGN IN TO PLAY",
+  "SIGN IN",
+  "Sign in",
+  "sign in",
+  "sign-in",
+  "Sign in to continue",
+  "/signin-with-chatgpt",
+  "/signout-with-chatgpt",
 ];
 
 async function textArtifacts(directory) {

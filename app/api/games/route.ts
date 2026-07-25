@@ -22,7 +22,7 @@ import { ensureSchema, getDatabase } from "@/db";
 import type { Color } from "@/lib/game-types";
 import type { AiDifficulty } from "@/lib/game-types";
 import { recordEvent } from "@/lib/observability";
-import { enforceAccountRateLimit, requireApiAccount } from "@/lib/accounts";
+import { enforceAccountRateLimit, resolveGuestApiAccount } from "@/lib/accounts";
 import {
   compileMagicPrompt,
   serializeMagicRules,
@@ -43,22 +43,23 @@ function humanName(game: Awaited<ReturnType<typeof findGameByCreateRequest>>): s
 
 export async function POST(request: Request) {
   if (!requestIsSameOrigin(request)) return apiError(403, "wrong_origin", "Request origin is not allowed");
-  const account = await requireApiAccount(request);
-  if (!account) return apiError(401, "account_required", "Sign in to continue");
-  const rate = await enforceAccountRateLimit(account.id, "game_create", 10, 60 * 60);
-  if (!rate.allowed) {
-    return json(
-      { error: { code: "rate_limited", message: "Too many games created. Try again later." } },
-      { status: 429, headers: { "retry-after": String(rate.retryAfter) } },
-    );
-  }
   const body = await readJson(request);
   if (!body) return apiError(400, "invalid_request", "Invalid JSON request");
 
-  const displayName = normalizeDisplayName(account.displayName);
+  const displayName = normalizeDisplayName(body.displayName);
+  const guestToken = body.guestToken;
   const playerToken = body.playerToken;
   const inviteToken = body.inviteToken;
   const requestId = body.requestId;
+  if (
+    !displayName
+    || !isSecret(guestToken)
+    || !isSecret(playerToken)
+    || !isSecret(inviteToken)
+    || !isUuid(requestId)
+  ) {
+    return apiError(400, "invalid_request", "Name, secrets, or request id are invalid");
+  }
   const mode = body.mode === undefined ? "multiplayer" : body.mode;
   const difficulty = mode === "solo"
     ? body.difficulty === undefined ? 3 : body.difficulty
@@ -80,9 +81,6 @@ export async function POST(request: Request) {
   const turnPaceMatches = (value: number | null) =>
     value === turnPaceDays
     || (mode === "multiplayer" && body.turnPaceDays === undefined && value === null);
-  if (!displayName || !isSecret(playerToken) || !isSecret(inviteToken) || !isUuid(requestId)) {
-    return apiError(400, "invalid_request", "Name, secrets, or request id are invalid");
-  }
   if (
     !isGameMode(mode)
     || (mode === "solo" && !isAiDifficulty(difficulty))
@@ -91,6 +89,18 @@ export async function POST(request: Request) {
     return apiError(400, "invalid_request", "Game mode, bot level, or turn pace is invalid");
   }
   if (playerToken === inviteToken) return apiError(400, "invalid_request", "Secrets must be different");
+
+  const account = await resolveGuestApiAccount({
+    token: guestToken,
+    displayName,
+  });
+  const rate = await enforceAccountRateLimit(account.id, "game_create", 10, 60 * 60);
+  if (!rate.allowed) {
+    return json(
+      { error: { code: "rate_limited", message: "Too many games created. Try again later." } },
+      { status: 429, headers: { "retry-after": String(rate.retryAfter) } },
+    );
+  }
 
   await ensureSchema();
   const [playerHash, inviteHash] = await Promise.all([hashSecret(playerToken), hashSecret(inviteToken)]);

@@ -1,6 +1,7 @@
 import { ensureSchema, getDatabase } from "../db";
 import type { Color, GameMode, Termination } from "./game-types";
 import {
+  guestAccountForToken,
   verifiedRequestAccount,
   type PlayerAccount,
 } from "./account-auth";
@@ -81,6 +82,14 @@ export async function requireApiAccount(
   return account;
 }
 
+export async function resolveGuestApiAccount(
+  guest: { token: string; displayName: string },
+): Promise<PlayerAccount> {
+  const account = await guestAccountForToken(guest.token, guest.displayName);
+  await upsertAccount(account);
+  return account;
+}
+
 export async function enforceAccountRateLimit(
   accountId: string,
   scope: string,
@@ -92,7 +101,12 @@ export async function enforceAccountRateLimit(
   const windowStart = Math.floor(nowSeconds / windowSeconds) * windowSeconds;
   const expiresAt = windowStart + windowSeconds;
   const key = `${accountId}:${scope}:${windowStart}`;
-  const row = await getDatabase()
+  const database = getDatabase();
+  await database
+    .prepare("DELETE FROM rate_limit_windows WHERE expires_at < ?")
+    .bind(nowSeconds)
+    .run();
+  const row = await database
     .prepare(`INSERT INTO rate_limit_windows (
         key, account_id, scope, window_start, hit_count, expires_at
       ) VALUES (?, ?, ?, ?, 1, ?)

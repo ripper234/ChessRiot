@@ -16,6 +16,16 @@ const requestIdForColor = (color) => {
 const opsSecret = "local-ops-read-secret-for-e2e-tests";
 const accountIdSecret = "local-account-id-secret-for-e2e-tests";
 const accountBySeatToken = new Map();
+const guestIdentityByLabel = new Map();
+
+function guestIdentityForLabel(label) {
+  const key = String(label || "E2E Player");
+  const existing = guestIdentityByLabel.get(key);
+  if (existing) return existing;
+  const created = secret();
+  guestIdentityByLabel.set(key, created);
+  return created;
+}
 
 function accountForLabel(label) {
   const clean = String(label || "Player").normalize("NFKC").trim() || "Player";
@@ -103,18 +113,25 @@ async function request(runtime, path, init = {}) {
   if (!headers.has("origin")) headers.set("origin", origin);
   if (requestInit.body && !headers.has("content-type")) headers.set("content-type", "application/json");
 
-  if (!anonymous) {
-    let parsedBody = null;
-    if (
-      typeof requestInit.body === "string"
-      && headers.get("content-type")?.includes("application/json")
-    ) {
-      try {
-        parsedBody = JSON.parse(requestInit.body);
-      } catch {
-        parsedBody = null;
+  let parsedBody = null;
+  if (
+    typeof requestInit.body === "string"
+    && headers.get("content-type")?.includes("application/json")
+  ) {
+    try {
+      parsedBody = JSON.parse(requestInit.body);
+      if (parsedBody?.playerToken && !parsedBody.guestToken) {
+        parsedBody.guestToken = guestIdentityForLabel(
+          accountEmail || parsedBody.displayName || accountName,
+        );
+        requestInit.body = JSON.stringify(parsedBody);
       }
+    } catch {
+      parsedBody = null;
     }
+  }
+
+  if (!anonymous) {
     const bearer = headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
     let account = accountEmail
       ? { email: accountEmail, displayName: accountName || accountEmail.split("@")[0] }
@@ -147,8 +164,8 @@ try {
     method: "POST",
     body: JSON.stringify({}),
   });
-  assert.equal(anonymousCreate.status, 401);
-  assert.equal((await body(anonymousCreate)).error.code, "account_required");
+  assert.equal(anonymousCreate.status, 400);
+  assert.equal((await body(anonymousCreate)).error.code, "invalid_request");
   assert.equal((await request(runtime, "/api/me/games", { anonymous: true })).status, 401);
 
   const opaqueSameOriginCreate = await request(runtime, "/api/games", {
@@ -161,8 +178,8 @@ try {
     },
     body: JSON.stringify({}),
   });
-  assert.equal(opaqueSameOriginCreate.status, 401);
-  assert.equal((await body(opaqueSameOriginCreate)).error.code, "account_required");
+  assert.equal(opaqueSameOriginCreate.status, 400);
+  assert.equal((await body(opaqueSameOriginCreate)).error.code, "invalid_request");
   const opaqueCrossSiteCreate = await request(runtime, "/api/games", {
     anonymous: true,
     method: "POST",
@@ -181,6 +198,131 @@ try {
     body: new URLSearchParams(),
   });
   assert.equal(retiredCaptchaRoute.status, 404);
+
+  const invalidInviteDatabase = await runtime.getD1Database("DB");
+  const rateRowsBeforeInvalidInvite = await invalidInviteDatabase
+    .prepare("SELECT COUNT(*) AS count FROM rate_limit_windows")
+    .first();
+  const accountsBeforeInvalidInvite = await invalidInviteDatabase
+    .prepare("SELECT COUNT(*) AS count FROM accounts")
+    .first();
+  const nonexistentInvite = secret();
+  assert.equal((await request(runtime, `/api/invitations/${nonexistentInvite}`, {
+    anonymous: true,
+  })).status, 404);
+  assert.equal((await request(runtime, `/api/invitations/${nonexistentInvite}/join`, {
+    anonymous: true,
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "No Game",
+      guestToken: secret(),
+      playerToken: secret(),
+    }),
+  })).status, 404);
+  const rateRowsAfterInvalidInvite = await invalidInviteDatabase
+    .prepare("SELECT COUNT(*) AS count FROM rate_limit_windows")
+    .first();
+  const accountsAfterInvalidInvite = await invalidInviteDatabase
+    .prepare("SELECT COUNT(*) AS count FROM accounts")
+    .first();
+  assert.equal(rateRowsAfterInvalidInvite.count, rateRowsBeforeInvalidInvite.count);
+  assert.equal(accountsAfterInvalidInvite.count, accountsBeforeInvalidInvite.count);
+
+  const guestWhiteToken = secret();
+  const guestBlackToken = secret();
+  const guestWhiteIdentity = secret();
+  const guestBlackIdentity = secret();
+  const guestInviteToken = secret();
+  const guestCreateRequestId = randomUUID();
+  const guestCreateResponse = await request(runtime, "/api/games", {
+    anonymous: true,
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Guest White",
+      guestToken: guestWhiteIdentity,
+      mode: "multiplayer",
+      playerToken: guestWhiteToken,
+      inviteToken: guestInviteToken,
+      requestId: guestCreateRequestId,
+    }),
+  });
+  assert.equal(guestCreateResponse.status, 201);
+  const guestCreated = await body(guestCreateResponse);
+  const guestGameId = guestCreated.game.id;
+
+  const guestCreateRetryWithAmbientIdentity = await request(runtime, "/api/games", {
+    method: "POST",
+    accountEmail: "ambient-account@players.chessriot.test",
+    body: JSON.stringify({
+      displayName: "Guest White",
+      guestToken: guestWhiteIdentity,
+      mode: "multiplayer",
+      playerToken: guestWhiteToken,
+      inviteToken: guestInviteToken,
+      requestId: guestCreateRequestId,
+    }),
+  });
+  assert.equal(guestCreateRetryWithAmbientIdentity.status, 200);
+  assert.equal((await body(guestCreateRetryWithAmbientIdentity)).game.id, guestGameId);
+
+  const guestInviteResponse = await request(
+    runtime,
+    `/api/invitations/${guestInviteToken}`,
+    { anonymous: true },
+  );
+  assert.equal(guestInviteResponse.status, 200);
+  assert.equal((await body(guestInviteResponse)).creatorName, "Guest White");
+
+  const sameGuestJoinResponse = await request(
+    runtime,
+    `/api/invitations/${guestInviteToken}/join`,
+    {
+      anonymous: true,
+      method: "POST",
+      body: JSON.stringify({
+        displayName: "Guest White Again",
+        guestToken: guestWhiteIdentity,
+        playerToken: guestBlackToken,
+      }),
+    },
+  );
+  assert.equal(sameGuestJoinResponse.status, 409);
+  assert.equal((await body(sameGuestJoinResponse)).error.code, "same_player");
+
+  const guestJoinResponse = await request(
+    runtime,
+    `/api/invitations/${guestInviteToken}/join`,
+    {
+      anonymous: true,
+      method: "POST",
+      body: JSON.stringify({
+        displayName: "Guest Black",
+        guestToken: guestBlackIdentity,
+        playerToken: guestBlackToken,
+      }),
+    },
+  );
+  assert.equal(guestJoinResponse.status, 200);
+
+  const guestWhiteGameResponse = await request(runtime, `/api/games/${guestGameId}`, {
+    anonymous: true,
+    headers: { authorization: `Bearer ${guestWhiteToken}` },
+  });
+  assert.equal(guestWhiteGameResponse.status, 200);
+  const guestWhiteGame = await body(guestWhiteGameResponse);
+  const guestMoveResponse = await request(runtime, `/api/games/${guestGameId}/moves`, {
+    anonymous: true,
+    method: "POST",
+    headers: { authorization: `Bearer ${guestWhiteToken}` },
+    body: JSON.stringify({
+      from: "e2",
+      to: "e4",
+      expectedVersion: guestWhiteGame.game.version,
+      requestId: randomUUID(),
+    }),
+  });
+  assert.equal(guestMoveResponse.status, 200);
+  assert.equal((await body(guestMoveResponse)).game.plyCount, 1);
 
   const whiteToken = secret();
   const blackToken = secret();
@@ -210,7 +352,7 @@ try {
     runtime,
     `/api/invitations/${inviteToken}`,
     { anonymous: true },
-  )).status, 401);
+  )).status, 200);
 
   const createRetry = await request(runtime, "/api/games", {
     method: "POST",
@@ -245,56 +387,37 @@ try {
   assert.equal(joined.game.players.white.name, "Ron");
   assert.equal(joined.game.players.black.name, "Omri");
 
-  const secondWhiteToken = secret();
-  const secondInviteToken = secret();
-  const secondGameResponse = await request(runtime, "/api/games", {
-    method: "POST",
-    body: JSON.stringify({
-      displayName: "Ron",
-      mode: "multiplayer",
-      playerToken: secondWhiteToken,
-      inviteToken: secondInviteToken,
-      requestId: randomUUID(),
-    }),
-  });
-  assert.equal(secondGameResponse.status, 201);
-  const secondGame = (await body(secondGameResponse)).game;
-
-  const firstGamesPageResponse = await request(runtime, "/api/me/games?limit=1", {
+  const ambientAccountGamesResponse = await request(runtime, "/api/me/games?limit=1", {
     headers: { authorization: `Bearer ${whiteToken}` },
   });
-  assert.equal(firstGamesPageResponse.status, 200);
-  const firstGamesPage = await body(firstGamesPageResponse);
-  assert.equal(firstGamesPage.games.length, 1);
-  assert.equal(firstGamesPage.games[0].color, "w");
-  assert.equal(firstGamesPage.games[0].turn, "w");
-  assert.equal(firstGamesPage.games[0].plyCount, 0);
-  assert.equal(firstGamesPage.games[0].outcome, null);
-  assert.equal(typeof firstGamesPage.nextCursor, "string");
+  assert.equal(ambientAccountGamesResponse.status, 200);
+  assert.deepEqual((await body(ambientAccountGamesResponse)).games, []);
 
-  const secondGamesPageResponse = await request(
-    runtime,
-    `/api/me/games?limit=1&cursor=${encodeURIComponent(firstGamesPage.nextCursor)}`,
-    { headers: { authorization: `Bearer ${whiteToken}` } },
-  );
-  assert.equal(secondGamesPageResponse.status, 200);
-  const secondGamesPage = await body(secondGamesPageResponse);
-  assert.deepEqual(
-    new Set([...firstGamesPage.games, ...secondGamesPage.games].map((game) => game.id)),
-    new Set([gameId, secondGame.id]),
-  );
-  assert.equal(
-    [...firstGamesPage.games, ...secondGamesPage.games]
-      .find((game) => game.id === gameId)?.opponent,
-    "Omri",
-  );
-  assert.equal(secondGamesPage.nextCursor, null);
+  const legacyAccountEmail = "legacy-member@players.chessriot.test";
+  await request(runtime, "/api/me/games", {
+    accountEmail: legacyAccountEmail,
+    accountName: "Legacy Member",
+  });
+  const legacyAccountId = createHmac("sha256", accountIdSecret)
+    .update(legacyAccountEmail)
+    .digest("base64url");
+  const membershipDatabase = await runtime.getD1Database("DB");
+  await membershipDatabase
+    .prepare(`UPDATE game_memberships SET account_id = ?
+      WHERE game_id = ? AND color = 'w'`)
+    .bind(legacyAccountId, gameId)
+    .run();
+  const legacyBareGame = await request(runtime, `/api/games/${gameId}`, {
+    accountEmail: legacyAccountEmail,
+    accountName: "Legacy Member",
+  });
+  assert.equal(legacyBareGame.status, 200);
+  assert.equal((await body(legacyBareGame)).game.you.color, "w");
+  assert.equal((await request(runtime, `/api/games/${gameId}`, {
+    accountEmail: "not-the-member@players.chessriot.test",
+    accountName: "Not The Member",
+  })).status, 404);
 
-  const blackGames = await body(await request(runtime, "/api/me/games?view=watch", {
-    headers: { authorization: `Bearer ${blackToken}` },
-  }));
-  assert.deepEqual(blackGames.games.map((game) => game.id), [gameId]);
-  assert.equal(blackGames.games[0].color, "b");
   assert.equal((await request(runtime, "/api/me/games?cursor=broken", {
     headers: { authorization: `Bearer ${whiteToken}` },
   })).status, 400);
@@ -596,11 +719,6 @@ try {
     to: "e5",
     san: "Ne5",
   });
-  const magicGames = await body(await request(runtime, "/api/me/games", {
-    headers: { authorization: `Bearer ${magicWhite}` },
-  }));
-  assert.equal(magicGames.games.find((game) => game.id === magicGameId)?.isMagic, true);
-
   const move = async (
     token,
     from,
@@ -1210,33 +1328,40 @@ try {
   const feedbackTitle = "Make captures feel chunkier";
   const feedbackComment = "A short burst is enough.";
   const feedbackRequestId = randomUUID();
+  const feedbackGuestToken = secret();
   assert.equal((await request(runtime, "/api/feedback", {
+    anonymous: true,
     method: "POST",
     body: JSON.stringify({
       title: "",
       comment: feedbackComment,
       page: "/g/private-game?secret=never-store-this",
       requestId: randomUUID(),
+      guestToken: feedbackGuestToken,
     }),
   })).status, 400);
   const feedbackResponse = await request(runtime, "/api/feedback", {
+    anonymous: true,
     method: "POST",
     body: JSON.stringify({
       title: feedbackTitle,
       comment: feedbackComment,
       page: "/g/game-id?ignored=yes",
       requestId: feedbackRequestId,
+      guestToken: feedbackGuestToken,
     }),
   });
   assert.equal(feedbackResponse.status, 201);
   assert.equal((await body(feedbackResponse)).status, "received");
   const feedbackRetry = await request(runtime, "/api/feedback", {
+    anonymous: true,
     method: "POST",
     body: JSON.stringify({
       title: feedbackTitle,
       comment: feedbackComment,
       page: "/g/game-id",
       requestId: feedbackRequestId,
+      guestToken: feedbackGuestToken,
     }),
   });
   assert.equal(feedbackRetry.status, 200);

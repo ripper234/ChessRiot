@@ -4,6 +4,7 @@ import { isSecret } from "./validation";
 const RECENT_KEY = "chessriot:recent";
 const STORAGE_TEST_KEY = "chessriot:storage-test";
 const SEAT_FRAGMENT_KEY = "seat";
+const GUEST_IDENTITY_KEY = "chessriot:guest-identity";
 
 export function generateSecret(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
@@ -18,6 +19,18 @@ export function generateUuid(): string {
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
   const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+export function guestIdentityToken(): string {
+  try {
+    const existing = localStorage.getItem(GUEST_IDENTITY_KEY);
+    if (isSecret(existing)) return existing;
+    const created = generateSecret();
+    localStorage.setItem(GUEST_IDENTITY_KEY, created);
+    return created;
+  } catch {
+    return generateSecret();
+  }
 }
 
 export function playerKey(gameId: string): string {

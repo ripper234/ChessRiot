@@ -6,6 +6,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
   canUseGameStorage,
   generateSecret,
+  guestIdentityToken,
   playerKey,
   privateGamePath,
   rememberGame,
@@ -29,12 +30,11 @@ type InviteState =
 
 export function JoinGame({
   inviteToken,
-  displayName,
 }: {
   inviteToken: string;
-  displayName: string;
 }) {
   const router = useRouter();
+  const [name, setName] = useState("");
   const [invite, setInvite] = useState<InviteState>({ kind: "loading" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -80,6 +80,11 @@ export function JoinGame({
 
   useEffect(() => {
     let cancelled = false;
+    try {
+      setName(localStorage.getItem("chessriot:displayName") ?? "");
+    } catch {
+      setName("");
+    }
     void loadInvite(() => cancelled);
     return () => { cancelled = true; };
   }, [loadInvite]);
@@ -87,6 +92,8 @@ export function JoinGame({
   async function join(event: FormEvent) {
     event.preventDefault();
     if (invite.kind !== "waiting") return;
+    const cleanName = name.trim();
+    if (!cleanName) return;
     if (!canUseGameStorage()) {
       setError("Allow browser storage so this invitation can be restored.");
       return;
@@ -98,7 +105,11 @@ export function JoinGame({
       const response = await fetch(`/api/invitations/${inviteToken}/join`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ playerToken: playerToken.current }),
+        body: JSON.stringify({
+          displayName: cleanName,
+          guestToken: guestIdentityToken(),
+          playerToken: playerToken.current,
+        }),
       });
       const data = (await response.json()) as {
         game?: GameSnapshot;
@@ -112,11 +123,8 @@ export function JoinGame({
         setInvite({ kind: "cancelled", gameId: invite.gameId });
         return;
       }
-      if (response.status === 401) {
-        window.location.assign(`/verify?return_to=${encodeURIComponent(window.location.pathname)}`);
-        return;
-      }
       if (!response.ok || !data.game) throw new Error(data.error?.message ?? "Could not join this game");
+      localStorage.setItem("chessriot:displayName", cleanName);
       localStorage.setItem(playerKey(data.game.id), playerToken.current);
       rememberGame(data.game);
       router.replace(privateGamePath(data.game.id, playerToken.current));
@@ -143,30 +151,43 @@ export function JoinGame({
                 <span>{invite.magicRules.labels.join(" · ")}</span>
               </div>
             ) : null}
-            <p className="signed-in-note">Joining as <strong>{displayName}</strong></p>
+            <label htmlFor="join-display-name">Your display name</label>
+            <input
+              id="join-display-name"
+              value={name}
+              maxLength={24}
+              autoComplete="nickname"
+              placeholder="Omri"
+              disabled={busy}
+              onChange={(event) => {
+                setName(event.target.value);
+                setError("");
+                playerToken.current = null;
+              }}
+            />
             {error ? <p className="form-error" role="alert">{error}</p> : null}
-            <button className="primary-button" disabled={busy}>
+            <button className="primary-button" disabled={busy || !name.trim()}>
               {busy ? "CLAIMING SEAT…" : "JOIN AS BLACK  →"}
             </button>
-            <p className="fine-print">This seat will be linked to your ChessRiot account.</p>
+            <p className="fine-print">Keep this private link to return to your seat.</p>
           </form>
         ) : null}
         {invite.kind === "claimed" ? (
           <div className="voxel-card state-card">
             <span className="big-glyph">⚑</span><h1>SEAT ALREADY CLAIMED</h1>
-            <p>That invitation has already been used.</p><Link className="secondary-button" href="/">START ANOTHER GAME</Link>
+            <p>That invitation has already been used.</p><Link className="secondary-button" href="/app">START ANOTHER GAME</Link>
           </div>
         ) : null}
         {invite.kind === "cancelled" ? (
           <div className="voxel-card state-card">
             <span className="big-glyph">×</span><h1>GAME CANCELLED</h1>
-            <p>The creator ended this game before it started.</p><Link className="secondary-button" href="/">START ANOTHER GAME</Link>
+            <p>The creator ended this game before it started.</p><Link className="secondary-button" href="/app">START ANOTHER GAME</Link>
           </div>
         ) : null}
         {invite.kind === "missing" ? (
           <div className="voxel-card state-card">
             <span className="big-glyph">?</span><h1>INVITATION NOT FOUND</h1>
-            <p>Ask the game creator for a fresh link.</p><Link className="secondary-button" href="/">GO HOME</Link>
+            <p>Ask the game creator for a fresh link.</p><Link className="secondary-button" href="/app">GO TO PLAY</Link>
           </div>
         ) : null}
         {invite.kind === "error" ? (

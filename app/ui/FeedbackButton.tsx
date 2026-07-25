@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useRef, useState } from "react";
-import { generateUuid } from "@/lib/client-storage";
+import { generateUuid, guestIdentityToken } from "@/lib/client-storage";
 
 export function FeedbackButton() {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -34,6 +34,7 @@ export function FeedbackButton() {
           comment: comment.trim() || null,
           page: window.location.pathname,
           requestId: generateUuid(),
+          guestToken: guestIdentityToken(),
         }),
       });
       if (!response.ok) throw new Error("submit_failed");

@@ -6,9 +6,9 @@
   schema.
 - `lib/computer-player.ts`: bounded server-side move search for Riot Bot.
 - `lib/computer-turn.ts`: recovery path for a pending Solo computer turn.
-- `lib/account-auth.ts`: trusted hosting identity and opaque account-id derivation.
-- `lib/accounts.ts`: durable account summaries and account-scoped rate limits.
-- `lib/game-auth.ts`: account membership authorization and legacy seat migration.
+- `lib/account-auth.ts`: trusted hosting identity and stable guest-id derivation.
+- `lib/accounts.ts`: durable identity summaries and identity-scoped rate limits.
+- `lib/game-auth.ts`: hybrid account-membership and private-seat authorization.
 - `lib/observability.ts`: central request observation, safe event storage, correlation, and retention.
 - `lib/ops-auth.ts`: short-lived signed observability-read grant verification.
 - `lib/game-store.ts`: D1 reads and public snapshot shaping.
@@ -21,7 +21,7 @@ idempotency key. Each mutation
 reconstructs the chess engine from immutable history and validates FEN, turn,
 and ply invariants before the candidate. Every completed human turn atomically
 advances one ply and returns immediately. In Solo, the client then requests the
-pending Riot Bot turn in the background. Every authenticated game read runs the
+pending Riot Bot turn in the background. Every authorized game read runs the
 same pending-turn recovery, so refresh or browser closure cannot strand the
 game. A White bot opening is committed during create.
 
@@ -44,23 +44,24 @@ persistence. The one-ply authoritative response replaces it, then the bot reply
 arrives as the next version. Rejection or transport failure reconciles the
 preview against the server before rolling it back.
 
-Player authority is account-scoped and game-specific. Sites supplies the trusted
-Sign in with ChatGPT identity. D1 membership rows map an opaque HMAC account id
-to exactly one color per game. Account-scoped limits remain active without a
-separate human-check gate.
+Player authority is identity-scoped and game-specific. New guest games derive
+a stable opaque guest id from a browser-local identity secret that is distinct
+from every private seat secret. Existing Sites identity headers remain
+supported, but the UI does not require them. D1 membership rows map either
+identity type to exactly one color per game. Identity-scoped limits remain
+active without a separate human-check gate.
 
-Historical private game URLs still carry their bearer key in the fragment,
-which is not sent as part of the HTTP URL. After a verified account presents a
-valid legacy key, it may atomically claim that still-unbound seat. New and
-migrated games can then be resumed from a bare game URL through account
-membership alone.
+Private game URLs carry their bearer key in the fragment, which is not sent as
+part of the HTTP URL. A valid token authorizes only its matching color. When a
+seat already has an account membership, the same valid token acts through that
+existing membership so v0.8.1 games remain playable without a sign-in prompt.
 
 In Multiplayer, the creator is White and the invitee is Black. In Solo, the
 human may be White or Black. The unowned bot seat uses an unreachable stored
-hash and never receives an account membership, so only the human account can
+hash and never receives a membership, so only the human player can
 authorize the game.
 
-Mutating routes enforce fixed-window account limits. Riot Bot work uses a
+Mutating routes enforce fixed-window identity limits. Riot Bot work uses a
 short per-game/version D1 lease, then revalidates the authoritative version
 before searching or committing. These controls reduce application-resource
 abuse and duplicate compute; the Sites/Cloudflare edge remains responsible for

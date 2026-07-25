@@ -1,13 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import "./globals.css";
 import "./themes.css";
-import { APP_VERSION } from "@/lib/version";
-import { DEFAULT_THEME, THEME_BOOTSTRAP_SCRIPT } from "@/lib/themes";
-import { AppUpdates } from "./ui/AppUpdates";
+import { THEME_BOOTSTRAP_SCRIPT } from "@/lib/themes";
 import { ClientTelemetry } from "./ui/ClientTelemetry";
-import { FeedbackButton } from "./ui/FeedbackButton";
-import { ThemePicker } from "./ui/ThemePicker";
+import { RouteChrome } from "./ui/RouteChrome";
 
 export const metadata: Metadata = {
   title: "ChessRiot | Real chess. Total play.",
@@ -27,15 +23,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" data-theme={DEFAULT_THEME} suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }} /></head>
       <body>
         <ClientTelemetry />
         {children}
-        <AppUpdates />
-        <ThemePicker />
-        <Link className="global-version" href="/changelog">v{APP_VERSION}</Link>
-        <FeedbackButton />
+        <RouteChrome />
       </body>
     </html>
   );

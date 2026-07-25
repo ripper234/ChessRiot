@@ -68,7 +68,7 @@ self.addEventListener("notificationclick", (event) => {
         return navigated?.focus();
       }
       if (existing) return existing.focus();
-      return self.clients.openWindow(typeof path === "string" ? path : "/");
+      return self.clients.openWindow(typeof path === "string" ? path : "/app");
     }),
   );
 });

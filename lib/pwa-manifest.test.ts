@@ -26,7 +26,7 @@ describe("installable app assets", () => {
   it("provides standalone metadata and install icons", () => {
     const manifest = readManifest();
     expect(manifest.display).toBe("standalone");
-    expect(manifest.start_url).toBe("/");
+    expect(manifest.start_url).toBe("/app");
     expect(manifest.scope).toBe("/");
     expect(manifest.icons.map((icon) => icon.sizes)).toEqual([
       "192x192",
@@ -47,4 +47,3 @@ describe("installable app assets", () => {
     expect(source).not.toContain('cache.add("/join/');
   });
 });
-

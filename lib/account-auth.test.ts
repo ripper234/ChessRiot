@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   accountIdForEmail,
+  guestAccountForToken,
   verifiedAccountFromHeaders,
 } from "./account-auth";
 
@@ -44,6 +45,16 @@ describe("trusted account identity", () => {
     );
     await expect(accountIdForEmail("other@example.com")).resolves.not.toBe(
       await accountIdForEmail("player@example.com"),
+    );
+  });
+
+  it("derives stable, isolated guest accounts from private browser tokens", async () => {
+    const token = "A".repeat(43);
+    await expect(guestAccountForToken(token, "Ron")).resolves.toEqual(
+      await guestAccountForToken(token, "Ron"),
+    );
+    expect((await guestAccountForToken(token, "Ron")).id).not.toBe(
+      (await guestAccountForToken("B".repeat(43), "Ron")).id,
     );
   });
 });

@@ -95,6 +95,7 @@ export function normalizeTheme(value: unknown): ThemeId {
 const allowedThemeIds = JSON.stringify(THEMES.map((theme) => theme.id));
 
 export const THEME_BOOTSTRAP_SCRIPT =
-  `(()=>{try{const value=localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});` +
-  `const allowed=${allowedThemeIds};if(allowed.includes(value))document.documentElement.dataset.theme=value;` +
-  "}catch{}})();";
+  `(()=>{if(!location.pathname.startsWith("/g/"))return;` +
+  `let value=${JSON.stringify(DEFAULT_THEME)};try{const stored=localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});` +
+  `const allowed=${allowedThemeIds};if(allowed.includes(stored))value=stored;}catch{}` +
+  `document.documentElement.dataset.theme=value;})();`;

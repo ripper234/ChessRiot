@@ -2,7 +2,7 @@
 
 Play the current game at [chessriot.ripper234.chatgpt.site](https://chessriot.ripper234.chatgpt.site).
 
-ChessRiot v0.8.1 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
+ChessRiot v0.8.2 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
 
 Found something confusing or have a cool rule request? Use **Feedback** inside
 the game or [open a GitHub issue](https://github.com/ripper234/ChessRiot/issues).
@@ -12,42 +12,45 @@ progression work, and features that still need explicit rule design.
 
 ## What works
 
-- Sign in with ChatGPT, then choose Solo or Multiplayer.
+- Open `/app`, enter a display name, then choose Solo or Multiplayer without a
+  sign-in or CAPTCHA gate.
+- Use an identity-independent public homepage at `/`; saved game themes and
+  hosting login state cannot change it.
 - Play Riot Bot at one of five levels, starting at Level 3, Medium, as either color. If the bot is White, it opens automatically.
 - Create a multiplayer game with one, three, or five days per move, then share one private invitation link. Missing the deadline loses the game.
-- Resume every owned game from a paginated cross-device My Games history with
-  clear turn and result states.
+- Resume recent games on the same device or use a private seat link on another
+  device.
 - Play complete standard chess with server-authoritative legal move validation.
 - Optionally enable Magic Rules for one game. Supported prompts can give the
   same rook or knight a second move in that turn, block promotion, disable
   castling, or disable en passant; unsupported clauses are rejected clearly.
 - Persist the board, player names, result, and immutable move history in Cloudflare D1.
-- Keep legacy private-seat links working while account membership becomes the authoritative access path.
+- Protect each seat with a private 256-bit bearer secret while preserving
+  existing account memberships and older private links.
 - Detect check, checkmate, stalemate, castling, en passant, all four promotions, insufficient material, claimable threefold/50-move draws, and automatic fivefold/75-move draws.
-- Choose from 11 original visual themes, including seven original illustrated backgrounds, with optional synthesized move, capture, check, and game-ending sounds.
+- Choose from 11 original visual themes during a game, including seven original illustrated backgrounds, with optional synthesized move, capture, check, and game-ending sounds.
 - Drag and drop pieces with mouse or touch, while tap, click, and keyboard input still work. Your legal move appears immediately while Riot Bot thinks, and short move and capture animations make both plies visible.
 - See explicit White and Black player cards, captured pieces, a highlighted checked king, and check-specific move guidance.
 - Step through any game from the start with a read-only, keyboard-accessible replay viewer.
 - See a short checkmate finisher using the actual winning piece, with reduced-motion support.
 - End an active game by resignation, cancel a waiting game, or start a separate new game without deleting history.
-- Start from one compact new-game screen with no marketing detour.
+- Start from one compact new-game screen at `/app`.
 - Open a newest-first public changelog from the home screen or any active game.
 - Send a titled feedback item without leaving the current flow; each environment stores its own owner-review pool.
 - Send one-tap preset cheers during two-player games, plus Good Game or Thanks for 15 minutes after play, without opening unrestricted chat.
-- Install the online game as a desktop-style PWA, see a subtle dot for unseen
-  releases, and optionally receive account-aware opponent-move notifications
-  for all multiplayer games while the app remains open.
-- Switch accounts through the trusted ChatGPT sign-out flow.
-- See the exact release version from every route and state.
+- Install the online game as a desktop-style PWA and see a subtle dot for
+  unseen releases.
+- See the exact release version throughout the game app.
 - Inspect privacy-safe, isolated health and activity data for all three environments in the owner control panel.
 
 ## Current limits
 
 No arbitrary executable rule prompts, AI coach, closed-app push or email
 notifications, free-form chat, friend graph, matchmaking, ratings, rewards,
-collectible skins, or payments. Google sign-in and Telegram release
+collectible skins, or payments. Cross-device account history, Google sign-in,
+and Telegram release
 announcements remain disabled until their external credentials are configured
-and the corresponding code is explicitly enabled. Account-scoped throttles
+and the corresponding code is explicitly enabled. Guest-scoped throttles
 protect application resources, while volumetric denial-of-service protection
 remains the hosting edge’s responsibility.
 
@@ -69,7 +72,7 @@ Prepare releases with `npm run release:patch`, `npm run release:minor`, or `npm 
 
 ## Stack
 
-Vinext/React, Cloudflare Workers and D1, TypeScript, chess.js, and Sites Sign in with ChatGPT.
+Vinext/React, Cloudflare Workers and D1, TypeScript, and chess.js.
 
 ## Checks
 

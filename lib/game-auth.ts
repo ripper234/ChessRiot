@@ -1,7 +1,14 @@
-import { verifiedRequestAccount, type PlayerAccount } from "./account-auth";
+import {
+  guestAccountForToken,
+  verifiedRequestAccount,
+  type PlayerAccount,
+} from "./account-auth";
+import { upsertAccount } from "./accounts";
 import {
   accountPlayerColor,
   findGameById,
+  membershipAccountId,
+  playerColor,
   type GameRow,
 } from "./game-store";
 import type { Color } from "./game-types";
@@ -18,31 +25,21 @@ export type GameAuthorization =
   | {
       ok: false;
       status: 401 | 404;
-      code: "account_required" | "not_found";
+      code: "private_link_required" | "not_found";
       message: string;
     };
 
 /**
- * Authorizes a verified account for one of a game's player seats.
+ * Authorizes either a verified account membership or a private seat key.
  *
- * Existing account memberships are sufficient on their own. A legacy seat
- * token may be supplied once to claim an unbound seat for the signed-in
- * account, preserving access to games created before accounts were required.
+ * Account memberships preserve cross-device access when a hosting identity is
+ * available. The private seat key remains a complete capability so public
+ * guest play never depends on an interactive account gate.
  */
 export async function authorizeGameRequest(
   request: Request,
   gameId: string,
 ): Promise<GameAuthorization> {
-  const account = await verifiedRequestAccount(request);
-  if (!account) {
-    return {
-      ok: false,
-      status: 401,
-      code: "account_required",
-      message: "Sign in to continue",
-    };
-  }
-
   const game = await findGameById(gameId);
   if (!game) {
     return {
@@ -54,19 +51,54 @@ export async function authorizeGameRequest(
   }
 
   const token = bearerToken(request);
-  const color = await accountPlayerColor(
-    game,
-    account.id,
-    token ? await hashSecret(token) : null,
-  );
-  if (!color) {
+  const tokenHash = token ? await hashSecret(token) : null;
+  const account = await verifiedRequestAccount(request);
+  if (account) {
+    const color = await accountPlayerColor(game, account.id, tokenHash);
+    if (color) return { ok: true, account, game, color };
+  }
+
+  const tokenColor = tokenHash ? playerColor(game, tokenHash) : null;
+  if (token && tokenColor) {
+    const existingAccountId = await membershipAccountId(game.id, tokenColor);
+    const displayName = tokenColor === "w"
+      ? game.white_name
+      : game.black_name ?? "Player 2";
+    const seatAccount = existingAccountId
+      ? { id: existingAccountId, displayName }
+      : await guestAccountForToken(token, displayName);
+    if (!existingAccountId) {
+      await upsertAccount(seatAccount);
+      const claimed = await accountPlayerColor(
+        game,
+        seatAccount.id,
+        tokenHash,
+      );
+      if (claimed !== tokenColor) {
+        return {
+          ok: false,
+          status: 404,
+          code: "not_found",
+          message: "Game not found",
+        };
+      }
+    }
+    return { ok: true, account: seatAccount, game, color: tokenColor };
+  }
+
+  if (!account) {
     return {
       ok: false,
-      status: 404,
-      code: "not_found",
-      message: "Game not found",
+      status: 401,
+      code: "private_link_required",
+      message: "Open the private game link for your seat",
     };
   }
 
-  return { ok: true, account, game, color };
+  return {
+    ok: false,
+    status: 404,
+    code: "not_found",
+    message: "Game not found",
+  };
 }

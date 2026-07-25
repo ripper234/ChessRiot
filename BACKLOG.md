@@ -2,18 +2,18 @@
 
 ## Backlog chat cards
 
-| ID | Feature | Status in v0.8.1 |
+| ID | Feature | Status in v0.8.2 |
 |---|---|---|
-| CR-001 | Always-visible exact version | Shipped globally with a changelog link. |
+| CR-001 | Always-visible exact version | Shipped throughout the game app with a changelog link. The fixed public homepage intentionally omits runtime chrome. |
 | CR-002 | In-app feedback and GitHub contribution path | Shipped with isolated per-environment storage. |
 | CR-003 | Short move and capture animation | Shipped with reduced-motion support. |
-| CR-004 | Textless picker for visual themes | Expanded to 11 original themes, seven with original illustrated backgrounds. |
-| CR-005 | Portable user login | Sign in with ChatGPT and legacy-seat migration are shipped. The unreliable human-check gate was removed in v0.8.1. |
-| CR-006 | All games for the logged-in user | Completed in v0.6.0 with a paginated cross-device My Games list, turn states, and results. |
+| CR-004 | Textless picker for visual themes | Expanded to 11 original themes and limited to active games so public and setup pages remain fixed. |
+| CR-005 | Portable user login | Guest private-seat links are live. Provider login remains disabled until it can add portability without blocking play. |
+| CR-006 | All games for the logged-in user | The account-backed history remains in storage but is not exposed in guest mode. The current device shows recent private-seat games. |
 | CR-007 | Step-by-step game replay | Shipped with Start, Back, Next, End, and keyboard controls. |
-| CR-008 | Desktop install, move alerts, and time limits | Open-app alerts now monitor all account games across devices, alongside the installable PWA and selectable one, three, or five-day move deadlines. Closed-app push still needs server push credentials and subscription infrastructure. |
+| CR-008 | Desktop install, move alerts, and time limits | Install support and selectable one, three, or five-day move deadlines are live. Account-wide alerts are dormant in guest mode; closed-app push still needs subscription infrastructure. |
 | CR-009 | A winning piece defeats the king on checkmate | Shipped as a short, theme-aware, reduced-motion-safe finisher. |
-| CR-010 | Subtle release updates and optional louder alerts | Shipped as an unseen-release blue dot plus opt-in browser alerts while the app remains open. |
+| CR-010 | Subtle release updates and optional louder alerts | The unseen-release blue dot is shipped. Account-wide move alerts are dormant in guest mode. |
 | CR-011 | Per-game Magic Rules | Shipped with immutable, allowlisted rules for atomic two-step rooks or knights, no promotion, no castling, and no en passant. Unsupported prose is rejected. |
 | CR-012 | Isolated branch preview environments | Planned. Complicated features use opt-in `feature/*` previews, collapsed by default in Control, before merging to Development. |
 

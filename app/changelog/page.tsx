@@ -8,7 +8,7 @@ export default function ChangelogPage() {
     <main className="changelog-shell">
       <header className="topbar">
         <Brand />
-        <Link className="home-link" href="/">PLAY</Link>
+        <Link className="home-link" href="/app">PLAY</Link>
       </header>
       <section className="changelog-page">
         <div className="changelog-heading">

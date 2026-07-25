@@ -1,8 +1,8 @@
 import { ensureSchema, getDatabase } from "@/db";
 import { apiError, json, readJson } from "@/lib/http";
-import { enforceAccountRateLimit, requireApiAccount } from "@/lib/accounts";
+import { enforceAccountRateLimit, resolveGuestApiAccount } from "@/lib/accounts";
 import { appEnvironment } from "@/lib/runtime";
-import { requestIsSameOrigin, isUuid } from "@/lib/validation";
+import { requestIsSameOrigin, isSecret, isUuid } from "@/lib/validation";
 import { APP_VERSION } from "@/lib/version";
 
 export const dynamic = "force-dynamic";
@@ -20,10 +20,21 @@ function cleanPage(value: unknown): string {
 
 export async function POST(request: Request) {
   if (!requestIsSameOrigin(request)) return apiError(403, "wrong_origin", "Request origin is not allowed");
-  const account = await requireApiAccount(request);
-  if (!account) {
-    return apiError(401, "account_required", "Sign in to continue");
+  const body = await readJson(request);
+  if (!body) return apiError(400, "invalid_request", "Invalid JSON request");
+  const title = cleanText(body.title, 120);
+  const comment = body.comment === null || body.comment === undefined || body.comment === ""
+    ? null
+    : cleanText(body.comment, 2_000);
+  const requestId = body.requestId;
+  const guestToken = body.guestToken;
+  if (!title || (body.comment && !comment) || !isUuid(requestId) || !isSecret(guestToken)) {
+    return apiError(400, "invalid_feedback", "Feedback title, comment, or request id is invalid");
   }
+  const account = await resolveGuestApiAccount({
+    token: guestToken,
+    displayName: "Guest player",
+  });
   const rate = await enforceAccountRateLimit(
     account.id,
     "feedback",
@@ -35,16 +46,6 @@ export async function POST(request: Request) {
       { error: { code: "rate_limited", message: "Too much feedback was submitted. Try again later." } },
       { status: 429, headers: { "retry-after": String(rate.retryAfter) } },
     );
-  }
-  const body = await readJson(request);
-  if (!body) return apiError(400, "invalid_request", "Invalid JSON request");
-  const title = cleanText(body.title, 120);
-  const comment = body.comment === null || body.comment === undefined || body.comment === ""
-    ? null
-    : cleanText(body.comment, 2_000);
-  const requestId = body.requestId;
-  if (!title || (body.comment && !comment) || !isUuid(requestId)) {
-    return apiError(400, "invalid_feedback", "Feedback title, comment, or request id is invalid");
   }
 
   await ensureSchema();

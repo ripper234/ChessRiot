@@ -60,6 +60,20 @@ export async function accountIdForEmail(email: string): Promise<string | null> {
   return secret ? hmac(secret, canonicalEmail(email)) : null;
 }
 
+export async function guestAccountForToken(
+  token: string,
+  displayName: string,
+): Promise<PlayerAccount> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(`chessriot-guest:${token}`),
+  );
+  return {
+    id: `guest_${bytesToBase64Url(new Uint8Array(digest))}`,
+    displayName,
+  };
+}
+
 function displayNameFromHeaders(headers: Pick<Headers, "get">, email: string): string {
   const encoded = headers.get(NAME_HEADER);
   if (encoded && headers.get(NAME_ENCODING_HEADER) === PERCENT_ENCODED_UTF8) {

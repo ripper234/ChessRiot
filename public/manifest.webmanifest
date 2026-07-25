@@ -3,7 +3,7 @@
   "name": "ChessRiot",
   "short_name": "ChessRiot",
   "description": "Play bold asynchronous chess with someone you know or Riot Bot.",
-  "start_url": "/",
+  "start_url": "/app",
   "scope": "/",
   "display": "standalone",
   "background_color": "#193847",

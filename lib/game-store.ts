@@ -189,6 +189,19 @@ export async function accountPlayerColor(
   return legacyColor;
 }
 
+export async function membershipAccountId(
+  gameId: string,
+  color: Color,
+): Promise<string | null> {
+  await ensureSchema();
+  const membership = await getDatabase()
+    .prepare(`SELECT account_id FROM game_memberships
+      WHERE game_id = ? AND color = ?`)
+    .bind(gameId, color)
+    .first<{ account_id: string }>();
+  return membership?.account_id ?? null;
+}
+
 export async function addGameMembership(
   gameId: string,
   color: Color,

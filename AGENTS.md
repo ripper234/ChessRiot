@@ -7,10 +7,14 @@
 - Every changed deployment must use a new, higher SemVer version. Run `npm run release:patch` by default, or `release:minor` for a coherent new user capability, before the deployment checkpoint. Never reuse or decrease a deployed version.
 - Run lint, typecheck, unit tests, and relevant end-to-end tests.
 - Never commit secrets.
-- Every playable API requires the trusted Sign in with ChatGPT identity headers.
+- Play must never require or advertise sign-in. New games use private seat
+  capabilities; existing verified account memberships remain a compatible
+  authorization path.
 - Do not add a CAPTCHA or separate human-check gate without an explicit product decision and a tested branch preview.
-- Preserve account membership as the primary game authorization path. Legacy seat keys may only claim an unbound historical membership after login and must never let one account own both seats.
-- Keep account-scoped write limits and the per-game/version Riot Bot lease on all expensive or mutating paths. Volumetric DDoS protection remains an edge responsibility.
+- Preserve game-specific membership plus private-seat authorization. A valid
+  token may act through an existing membership, but no identity may own both
+  seats.
+- Keep identity-scoped write limits and the per-game/version Riot Bot lease on all expensive or mutating paths. Volumetric DDoS protection remains an edge responsibility.
 - Prefer small, reviewable milestones over one giant implementation.
 - GitHub is the canonical source. A deployable release must correspond to an immutable Git commit and release branch or tag.
 - Promote the same tested source state through Development, Staging, and Production. Never make environment-specific source edits; isolate only data, access, and runtime configuration.

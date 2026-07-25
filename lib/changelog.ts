@@ -11,10 +11,24 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.8.2",
+    date: "2026-07-25",
+    title: "One front door",
+    summary: "ChessRiot now has one fixed public homepage and direct guest play with no login gate.",
+    changes: [
+      "Made the public homepage identical for every visitor, independent of hosting identity and saved game theme.",
+      "Moved new-game setup to /app and enabled guest Solo and Multiplayer creation with a display name.",
+      "Made private seat links authoritative for guest play while preserving existing account memberships and older games.",
+      "Limited themes to active games so public, setup, invitation, changelog, loading, and error pages keep one consistent style.",
+      "Removed all user-facing login prompts and kept the retired CAPTCHA path absent.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.8.2`,
+  },
+  {
     version: "0.8.1",
     date: "2026-07-25",
-    title: "Direct sign-in",
-    summary: "Players now enter ChessRiot immediately after sign-in, without a separate human-check screen.",
+    title: "Direct entry",
+    summary: "Players now enter ChessRiot immediately, without a separate human-check screen.",
     changes: [
       "Removed the Turnstile screen, verification request, and CAPTCHA-bound application session.",
       "Kept trusted hosting identity, account-bound game membership, request-origin checks, and account rate limits.",
@@ -68,9 +82,9 @@ export const RELEASES: ReleaseNote[] = [
     version: "0.5.0",
     date: "2026-07-24",
     title: "Secure accounts and a bigger board",
-    summary: "Account login, a human check, a board-first layout, and original illustrated themes make ChessRiot safer and more immersive.",
+    summary: "Account access, a human check, a board-first layout, and original illustrated themes make ChessRiot safer and more immersive.",
     changes: [
-      "Required a signed-in ChessRiot account and server-verified CAPTCHA before any game can be created or played.",
+      "Required a ChessRiot account and server-verified CAPTCHA before any game could be created or played.",
       "Added account-bound game access, per-account rate limits, and bot-turn leases to reduce automated abuse and duplicate AI work.",
       "Made the board fill the available desktop or mobile viewport and collapsed secondary match tools.",
       "Showed the starting position before animating Riot Bot’s White opening when the player starts as Black.",

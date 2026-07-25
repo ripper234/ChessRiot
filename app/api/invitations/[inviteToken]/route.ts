@@ -1,6 +1,6 @@
 import { findGameByInviteHash, gameMagicRules } from "@/lib/game-store";
 import { apiError, json } from "@/lib/http";
-import { enforceAccountRateLimit, requireApiAccount } from "@/lib/accounts";
+import { enforceAccountRateLimit } from "@/lib/accounts";
 import { hashSecret, isSecret } from "@/lib/validation";
 import { publicMagicRules } from "@/lib/magic-rules";
 
@@ -10,12 +10,13 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ inviteToken: string }> },
 ) {
-  const account = await requireApiAccount(request);
-  if (!account) {
-    return apiError(401, "account_required", "Sign in to continue");
-  }
+  const { inviteToken } = await context.params;
+  if (!isSecret(inviteToken)) return apiError(404, "not_found", "Invitation not found");
+  const inviteHash = await hashSecret(inviteToken);
+  const game = await findGameByInviteHash(inviteHash);
+  if (!game) return apiError(404, "not_found", "Invitation not found");
   const rate = await enforceAccountRateLimit(
-    account.id,
+    `invite_${inviteHash}`,
     "invitation_preview",
     120,
     60 * 60,
@@ -26,10 +27,6 @@ export async function GET(
       { status: 429, headers: { "retry-after": String(rate.retryAfter) } },
     );
   }
-  const { inviteToken } = await context.params;
-  if (!isSecret(inviteToken)) return apiError(404, "not_found", "Invitation not found");
-  const game = await findGameByInviteHash(await hashSecret(inviteToken));
-  if (!game) return apiError(404, "not_found", "Invitation not found");
   if (game.termination === "cancelled") {
     return json(
       { state: "cancelled", gameId: game.id },

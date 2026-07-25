@@ -340,42 +340,40 @@
   --display: var(--mono);
 }
 
-html[data-theme] body {
+html[data-theme] .game-shell {
   background: var(--theme-page);
   background-attachment: var(--theme-page-attachment);
   background-position: var(--theme-page-position);
   background-size: var(--theme-page-size);
   transition: background 160ms ease, color 160ms ease;
 }
-html[data-theme] .topbar { background: var(--theme-topbar); }
-html[data-theme] .voxel-card,
-html[data-theme] .side-card,
-html[data-theme] .release-card,
-html[data-theme] .feedback-dialog {
+html[data-theme] .game-shell .topbar { background: var(--theme-topbar); }
+html[data-theme] .game-shell .voxel-card,
+html[data-theme] .game-shell .side-card {
   border-color: var(--theme-card-border);
   background: var(--theme-card);
 }
-html[data-theme] .board-wrap {
+html[data-theme] .game-shell .board-wrap {
   border-color: var(--theme-frame-border);
   background: var(--theme-frame);
 }
-html[data-theme] .light-square {
+html[data-theme] .game-shell .light-square {
   background:
     linear-gradient(135deg, rgba(255,255,255,.12) 0 14%, transparent 14% 86%, rgba(0,0,0,.08) 86%),
     var(--board-light);
 }
-html[data-theme] .dark-square {
+html[data-theme] .game-shell .dark-square {
   background:
     linear-gradient(135deg, rgba(255,255,255,.08) 0 14%, transparent 14% 86%, rgba(0,0,0,.12) 86%),
     var(--board-dark);
 }
-html[data-theme] .piece-w,
-html[data-theme] .player-piece.piece-w {
+html[data-theme] .game-shell .piece-w,
+html[data-theme] .game-shell .player-piece.piece-w {
   color: var(--theme-piece-white);
   -webkit-text-stroke-color: var(--theme-piece-white-stroke);
 }
-html[data-theme] .piece-b,
-html[data-theme] .player-piece.piece-b {
+html[data-theme] .game-shell .piece-b,
+html[data-theme] .game-shell .player-piece.piece-b {
   color: var(--theme-piece-black);
   -webkit-text-stroke-color: var(--theme-piece-black-stroke);
 }
@@ -559,5 +557,5 @@ html[data-theme] .player-piece.piece-b {
   .global-version { bottom: max(15px, env(safe-area-inset-bottom)); }
 }
 @media (prefers-reduced-motion: reduce) {
-  html[data-theme] body { transition: none; }
+  html[data-theme] .game-shell { transition: none; }
 }

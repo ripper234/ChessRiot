@@ -229,24 +229,48 @@ export function GameRoom({ gameId }: { gameId: string }) {
     const hash = window.location.hash;
     const hashHasSeat = hasSeatTokenInHash(hash);
     const linkedToken = readSeatTokenFromHash(hash);
-    if (hashHasSeat && !linkedToken) setMessage("The old seat key in this link is invalid. Trying your account instead.");
-    let token = linkedToken ?? activeToken.current;
-    if (!token) {
-      try {
-        token = localStorage.getItem(playerKey(gameId));
-      } catch {
-        token = null;
-      }
-    }
-    if (token) activeToken.current = token;
+    let usingSavedAccess = hashHasSeat && !linkedToken;
+    if (hashHasSeat && !linkedToken) setMessage("The private seat key in this link is invalid. Trying saved access instead.");
+    const previousToken = activeToken.current;
+    let savedToken: string | null = null;
     try {
-      const suffix = sinceVersion === undefined ? "" : `?sinceVersion=${sinceVersion}`;
-      const response = await fetch(`/api/games/${gameId}${suffix}`, {
-        headers: requestHeaders(token),
-        cache: "no-store",
-      });
+      savedToken = localStorage.getItem(playerKey(gameId));
+    } catch {
+      savedToken = null;
+    }
+    const candidates: Array<string | null> = [];
+    for (const candidate of [linkedToken, previousToken, savedToken]) {
+      if (candidate && !candidates.includes(candidate)) candidates.push(candidate);
+    }
+    candidates.push(null);
+    try {
+      let response: Response | null = null;
+      let token: string | null = null;
+      for (let index = 0; index < candidates.length; index += 1) {
+        token = candidates[index];
+        const seatCandidateChanged = token !== previousToken;
+        const suffix = sinceVersion === undefined || seatCandidateChanged
+          ? ""
+          : `?sinceVersion=${sinceVersion}`;
+        response = await fetch(`/api/games/${gameId}${suffix}`, {
+          headers: requestHeaders(token),
+          cache: "no-store",
+        });
+        const canTrySavedAccess = (response.status === 401 || response.status === 404)
+          && index < candidates.length - 1;
+        if (!canTrySavedAccess) break;
+        if (token === linkedToken && linkedToken !== previousToken) {
+          usingSavedAccess = true;
+          setMessage("That private seat link did not match. Trying saved access instead.");
+        }
+      }
+      if (!response) {
+        setAccess("error");
+        return;
+      }
       if (response.status === 204) {
-        setMessage((current) => current === CONNECTION_MESSAGE ? "" : current);
+        setMessage((current) =>
+          usingSavedAccess || current === CONNECTION_MESSAGE ? "" : current);
         return;
       }
       const data = (await response.json()) as {
@@ -254,8 +278,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
         error?: { code?: string };
       };
       if (response.status === 401) {
-        const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-        window.location.assign(`/verify?return_to=${encodeURIComponent(returnTo)}`);
+        setAccess("denied");
         return;
       }
       if (!response.ok || !data.game) {
@@ -264,7 +287,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
         else setMessage(CONNECTION_MESSAGE);
         return;
       }
-      const seatChanged = activeToken.current !== null && activeToken.current !== token;
+      const seatChanged = previousToken !== token;
       if (seatChanged) {
         latestVersion.current = -1;
         setOptimisticGame(null);
@@ -281,12 +304,12 @@ export function GameRoom({ gameId }: { gameId: string }) {
         dragRef.current = null;
         setDrag(null);
       }
+      activeToken.current = token;
       if (token) {
-        activeToken.current = token;
         try {
           localStorage.setItem(playerKey(gameId), token);
         } catch {
-          // Account membership remains authoritative when storage is unavailable.
+          // The private link still protects the seat if storage is unavailable.
         }
         const path = privateGamePath(gameId, token);
         if (window.location.pathname + window.location.hash !== path) {
@@ -294,6 +317,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
         }
       }
       if (latestVersion.current < 0) beginOpeningIntro(data.game);
+      if (usingSavedAccess) setMessage("");
       acceptGame(data.game);
     } catch {
       if (latestVersion.current < 0) setAccess("error");
@@ -634,8 +658,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
         error?: { code?: string; message?: string };
       };
       if (response.status === 401) {
-        const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-        window.location.assign(`/verify?return_to=${encodeURIComponent(returnTo)}`);
+        setOptimisticGame(null);
+        setAccess("denied");
         return;
       }
       if (data.game) {
@@ -1023,9 +1047,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
   if (access === "denied") {
     return (
       <main className="join-shell"><header className="topbar"><Brand /></header><section className="join-stage">
-        <div className="voxel-card state-card"><span className="big-glyph">⌁</span><h1>GAME NOT IN YOUR ACCOUNT</h1>
-          <p>This account does not own a seat in that game. Open its invitation link or switch accounts.</p>
-          <Link className="secondary-button" href="/">GO HOME</Link>
+        <div className="voxel-card state-card"><span className="big-glyph">⌁</span><h1>PRIVATE SEAT LINK NEEDED</h1>
+          <p>Open the private game link for your seat, or ask the other player for a new invitation.</p>
+          <Link className="secondary-button" href="/app">GO TO PLAY</Link>
         </div>
       </section></main>
     );
@@ -1068,7 +1092,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
             <span aria-hidden="true">{soundOn ? "◖))" : "◖×"}</span>
             <b>{soundOn ? "SOUND ON" : "MUTED"}</b>
           </button>
-          <Link href="/" className="home-link">NEW GAME</Link>
+          <Link href="/app" className="home-link">NEW GAME</Link>
           <Link href="/changelog" className="home-link">v{APP_VERSION}</Link>
         </div>
       </header>
@@ -1282,7 +1306,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
             <div className="game-tools-content">
               <section className="side-card actions-card">
                 <h2>GAME ACTIONS</h2>
-                <Link className="secondary-button" href="/">NEW GAME</Link>
+                <Link className="secondary-button" href="/app">NEW GAME</Link>
                 {game.status !== "completed" ? (
                   confirmEnd ? (
                     <div className="end-confirm" role="alert">
