@@ -4,9 +4,11 @@ import {
   gameIdFromPathname,
   hasUnseenRelease,
   newestOpponentMoveAfter,
+  opponentMovedSince,
   parseEnabledPreference,
   releaseTarget,
   shouldNotifyForOpponentMove,
+  type WatchedAccountGame,
 } from "./pwa";
 
 function move(ply: number, color: "w" | "b"): PublicMove {
@@ -67,5 +69,50 @@ describe("opponent move notification state", () => {
     expect(shouldNotifyForOpponentMove(game, 1, false)).toBe(true);
     expect(shouldNotifyForOpponentMove(game, 4, false)).toBe(false);
   });
-});
 
+  it("detects an opponent move from account-wide game summaries", () => {
+    const baseline: WatchedAccountGame = {
+      id: "game-1",
+      mode: "multiplayer",
+      status: "active",
+      color: "b",
+      opponent: "Ron",
+      turn: "w",
+      plyCount: 0,
+      updatedAt: "2026-07-24T00:00:00.000Z",
+    };
+    expect(opponentMovedSince(undefined, baseline)).toBe(false);
+    expect(opponentMovedSince(baseline, {
+      ...baseline,
+      turn: "b",
+      plyCount: 1,
+      updatedAt: "2026-07-24T00:01:00.000Z",
+    })).toBe(true);
+    expect(opponentMovedSince(baseline, {
+      ...baseline,
+      color: "w",
+      turn: "b",
+      plyCount: 1,
+      updatedAt: "2026-07-24T00:01:00.000Z",
+    })).toBe(false);
+  });
+
+  it("does not treat solo bot moves as asynchronous opponent alerts", () => {
+    const baseline: WatchedAccountGame = {
+      id: "solo-1",
+      mode: "solo",
+      status: "active",
+      color: "b",
+      opponent: "Riot Bot",
+      turn: "w",
+      plyCount: 0,
+      updatedAt: "2026-07-24T00:00:00.000Z",
+    };
+    expect(opponentMovedSince(baseline, {
+      ...baseline,
+      turn: "b",
+      plyCount: 1,
+      updatedAt: "2026-07-24T00:01:00.000Z",
+    })).toBe(false);
+  });
+});

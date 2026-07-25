@@ -9,6 +9,7 @@ function snapshot(moves: PublicMove[]): GameSnapshot {
     aiDifficulty: null,
     status: "active",
     version: moves.length,
+    initialFen: "",
     fen: "",
     turn: moves.length % 2 === 0 ? "w" : "b",
     plyCount: moves.length,

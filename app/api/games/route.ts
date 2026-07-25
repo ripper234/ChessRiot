@@ -1,6 +1,12 @@
 import { chooseComputerMove } from "@/lib/computer-player";
 import { applyCandidate, INITIAL_FEN } from "@/lib/game-rules";
-import { findGameByCreateRequest, playerColor, readMoves, snapshot } from "@/lib/game-store";
+import {
+  accountPlayerColor,
+  findGameByCreateRequest,
+  playerColor,
+  readMoves,
+  snapshot,
+} from "@/lib/game-store";
 import { apiError, json, readJson } from "@/lib/http";
 import {
   hashSecret,
@@ -16,6 +22,7 @@ import { ensureSchema, getDatabase } from "@/db";
 import type { Color } from "@/lib/game-types";
 import type { AiDifficulty } from "@/lib/game-types";
 import { recordEvent } from "@/lib/observability";
+import { enforceAccountRateLimit, requireApiAccount } from "@/lib/accounts";
 
 export const dynamic = "force-dynamic";
 
@@ -31,10 +38,19 @@ function humanName(game: Awaited<ReturnType<typeof findGameByCreateRequest>>): s
 
 export async function POST(request: Request) {
   if (!requestIsSameOrigin(request)) return apiError(403, "wrong_origin", "Request origin is not allowed");
+  const account = await requireApiAccount(request);
+  if (!account) return apiError(401, "account_required", "Sign in and complete the human check");
+  const rate = await enforceAccountRateLimit(account.id, "game_create", 10, 60 * 60);
+  if (!rate.allowed) {
+    return json(
+      { error: { code: "rate_limited", message: "Too many games created. Try again later." } },
+      { status: 429, headers: { "retry-after": String(rate.retryAfter) } },
+    );
+  }
   const body = await readJson(request);
   if (!body) return apiError(400, "invalid_request", "Invalid JSON request");
 
-  const displayName = normalizeDisplayName(body.displayName);
+  const displayName = normalizeDisplayName(account.displayName);
   const playerToken = body.playerToken;
   const inviteToken = body.inviteToken;
   const requestId = body.requestId;
@@ -64,9 +80,11 @@ export async function POST(request: Request) {
   const [playerHash, inviteHash] = await Promise.all([hashSecret(playerToken), hashSecret(inviteToken)]);
   const existing = await findGameByCreateRequest(requestId);
   if (existing) {
+    const existingColor = await accountPlayerColor(existing, account.id, playerHash);
     if (
       humanName(existing) !== displayName ||
       playerColor(existing, playerHash) !== existing.human_color ||
+      existingColor !== existing.human_color ||
       existing.invite_token_hash !== inviteHash ||
       existing.game_mode !== mode ||
       existing.ai_difficulty !== difficulty ||
@@ -145,6 +163,10 @@ export async function POST(request: Request) {
         game_id, game_mode, ai_difficulty, human_color, turn_pace_days
       ) VALUES (?, ?, ?, ?, ?)`)
         .bind(id, mode, difficulty, humanColor, turnPaceDays),
+      db.prepare(`INSERT INTO game_memberships (
+        game_id, color, account_id, claimed_at
+      ) VALUES (?, ?, ?, ?)`)
+        .bind(id, humanColor, account.id, now),
     ];
     if (opening && openingCandidate && computerColor) {
       writes.push(
@@ -173,6 +195,7 @@ export async function POST(request: Request) {
       !raced ||
       humanName(raced) !== displayName ||
       playerColor(raced, playerHash) !== raced.human_color ||
+      await accountPlayerColor(raced, account.id, playerHash) !== raced.human_color ||
       raced.invite_token_hash !== inviteHash ||
       raced.game_mode !== mode ||
       raced.ai_difficulty !== difficulty ||

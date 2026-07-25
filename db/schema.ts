@@ -60,6 +60,53 @@ export const gameSettings = sqliteTable("game_settings", {
   turnPaceDays: integer("turn_pace_days"),
 });
 
+export const accounts = sqliteTable("accounts", {
+  id: text("id").primaryKey().notNull(),
+  displayName: text("display_name").notNull(),
+  createdAt: text("created_at").notNull(),
+  lastSeenAt: text("last_seen_at").notNull(),
+  lastCaptchaAt: text("last_captcha_at").notNull(),
+});
+
+export const gameMemberships = sqliteTable(
+  "game_memberships",
+  {
+    gameId: text("game_id").notNull(),
+    color: text("color").notNull(),
+    accountId: text("account_id").notNull(),
+    claimedAt: text("claimed_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.gameId, table.color] }),
+    uniqueIndex("game_memberships_game_account_unique")
+      .on(table.gameId, table.accountId),
+    index("game_memberships_account_idx").on(table.accountId, table.claimedAt),
+    check("game_memberships_color_check", sql`${table.color} IN ('w', 'b')`),
+  ],
+);
+
+export const rateLimitWindows = sqliteTable(
+  "rate_limit_windows",
+  {
+    key: text("key").primaryKey().notNull(),
+    accountId: text("account_id").notNull(),
+    scope: text("scope").notNull(),
+    windowStart: integer("window_start").notNull(),
+    hitCount: integer("hit_count").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+  },
+  (table) => [
+    index("rate_limit_expiry_idx").on(table.expiresAt),
+  ],
+);
+
+export const botTurnLeases = sqliteTable("bot_turn_leases", {
+  gameId: text("game_id").primaryKey().notNull(),
+  gameVersion: integer("game_version").notNull(),
+  nonce: text("nonce").notNull(),
+  leaseUntil: text("lease_until").notNull(),
+});
+
 export const gameActions = sqliteTable(
   "game_actions",
   {

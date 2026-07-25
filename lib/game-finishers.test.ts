@@ -70,6 +70,7 @@ function snapshot(overrides: Partial<GameSnapshot> = {}): GameSnapshot {
     aiDifficulty: null,
     status: "active",
     version: 3,
+    initialFen: new Chess().fen(),
     fen: new Chess().fen(),
     turn: "w",
     plyCount: 0,

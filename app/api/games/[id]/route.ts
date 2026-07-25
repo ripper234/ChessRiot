@@ -2,13 +2,13 @@ import {
   computerColor,
   expireMultiplayerTurn,
   findGameById,
-  playerColor,
   readMoves,
   snapshot,
+  type GameRow,
 } from "@/lib/game-store";
+import { authorizeGameRequest } from "@/lib/game-auth";
 import { playPendingComputerTurn } from "@/lib/computer-turn";
-import { apiError, bearerToken, json } from "@/lib/http";
-import { hashSecret } from "@/lib/validation";
+import { apiError, json } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
@@ -16,13 +16,17 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const token = bearerToken(request);
-  if (!token) return apiError(404, "not_found", "Game not found");
   const { id } = await context.params;
-  let game = await findGameById(id);
-  if (!game) return apiError(404, "not_found", "Game not found");
-  const color = playerColor(game, await hashSecret(token));
-  if (!color) return apiError(404, "not_found", "Game not found");
+  const authorization = await authorizeGameRequest(request, id);
+  if (!authorization.ok) {
+    return apiError(
+      authorization.status,
+      authorization.code,
+      authorization.message,
+    );
+  }
+  const { color } = authorization;
+  let game: GameRow | null = authorization.game;
   game = await expireMultiplayerTurn(game);
   if (
     game.game_mode === "solo"

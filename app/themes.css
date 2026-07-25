@@ -1,8 +1,11 @@
 :root,
 :root[data-theme="blockfield"] {
   --theme-page:
-    linear-gradient(90deg, transparent 0 25%, rgba(255,255,255,.06) 25% 50%, transparent 50% 75%, rgba(0,0,0,.05) 75%) 0 0 / 64px 64px,
-    linear-gradient(180deg, #285363 0 48%, #315c42 48% 52%, #5e422d 52% 100%);
+    linear-gradient(180deg, rgba(9,18,24,.36), rgba(9,17,18,.82)),
+    url("/themes/blockfield.webp");
+  --theme-page-size: cover, cover;
+  --theme-page-position: center, center;
+  --theme-page-attachment: scroll, scroll;
   --theme-topbar: rgba(24,36,35,.94);
   --theme-card: linear-gradient(145deg, rgba(76,93,91,.97), rgba(37,50,49,.98));
   --theme-card-border: var(--stone-dark);
@@ -30,6 +33,9 @@
   --board-light: #f0d9b5;
   --board-dark: #b58863;
   --theme-page: linear-gradient(145deg, #2a211d, #171211 70%);
+  --theme-page-size: auto;
+  --theme-page-position: 0 0;
+  --theme-page-attachment: scroll;
   --theme-topbar: rgba(27,21,19,.95);
   --theme-card: linear-gradient(145deg, rgba(72,58,49,.98), rgba(34,27,24,.98));
   --theme-card-border: #866d57;
@@ -60,6 +66,9 @@
   --theme-page:
     radial-gradient(circle at 80% 10%, #245d75, transparent 34%),
     linear-gradient(160deg, #153d52, #071a25 72%);
+  --theme-page-size: auto;
+  --theme-page-position: 0 0;
+  --theme-page-attachment: scroll;
   --theme-topbar: rgba(7,28,39,.94);
   --theme-card: linear-gradient(145deg, rgba(43,84,103,.98), rgba(13,39,53,.98));
   --theme-card-border: #315d70;
@@ -87,8 +96,11 @@
   --board-light: #ffe39a;
   --board-dark: #e44e3f;
   --theme-page:
-    linear-gradient(90deg, rgba(255,255,255,.08) 2px, transparent 2px) 0 0 / 34px 34px,
-    linear-gradient(180deg, #3276d2, #183779);
+    linear-gradient(180deg, rgba(11,35,73,.38), rgba(13,31,67,.76)),
+    url("/themes/toybox.webp");
+  --theme-page-size: cover, cover;
+  --theme-page-position: center, center;
+  --theme-page-attachment: scroll, scroll;
   --theme-topbar: rgba(20,39,92,.96);
   --theme-card: linear-gradient(145deg, #3477d3, #214f9c);
   --theme-card-border: #10265c;
@@ -116,9 +128,11 @@
   --board-light: #cdb8ff;
   --board-dark: #7445c8;
   --theme-page:
-    radial-gradient(circle at 18% 18%, #7445c8 0 5%, transparent 26%),
-    radial-gradient(circle at 85% 78%, #d33f7a 0 4%, transparent 24%),
-    #25164b;
+    linear-gradient(180deg, rgba(15,6,37,.26), rgba(20,8,43,.82)),
+    url("/themes/arena-pop.webp");
+  --theme-page-size: cover, cover;
+  --theme-page-position: center, center;
+  --theme-page-attachment: scroll, scroll;
   --theme-topbar: rgba(20,11,43,.95);
   --theme-card: linear-gradient(145deg, rgba(101,68,164,.98), rgba(40,23,78,.98));
   --theme-card-border: #8d67cf;
@@ -146,8 +160,11 @@
   --board-light: #d9c690;
   --board-dark: #426045;
   --theme-page:
-    radial-gradient(circle at 50% -10%, #526c50, transparent 42%),
-    linear-gradient(145deg, #233228, #101a14);
+    linear-gradient(180deg, rgba(11,26,16,.36), rgba(11,21,14,.84)),
+    url("/themes/high-fantasy.webp");
+  --theme-page-size: cover, cover;
+  --theme-page-position: center, center;
+  --theme-page-attachment: scroll, scroll;
   --theme-topbar: rgba(16,26,20,.95);
   --theme-card: linear-gradient(145deg, rgba(75,91,69,.98), rgba(32,45,35,.98));
   --theme-card-border: #75552e;
@@ -176,8 +193,11 @@
   --board-light: #ead7a4;
   --board-dark: #7a3544;
   --theme-page:
-    radial-gradient(circle at 50% 0, #623047, transparent 38%),
-    linear-gradient(155deg, #2c1725, #160d16);
+    linear-gradient(180deg, rgba(24,8,20,.38), rgba(18,8,16,.86)),
+    url("/themes/arcane-cards.webp");
+  --theme-page-size: cover, cover;
+  --theme-page-position: center, center;
+  --theme-page-attachment: scroll, scroll;
   --theme-topbar: rgba(22,13,22,.96);
   --theme-card: linear-gradient(145deg, rgba(99,53,76,.98), rgba(42,23,35,.98));
   --theme-card-border: #9b7441;
@@ -188,6 +208,72 @@
   --theme-piece-black: #211522;
   --theme-piece-black-stroke: #d7a84b;
   --display: Palatino, "Palatino Linotype", Georgia, serif;
+}
+
+:root[data-theme="iron-legions"] {
+  --riot-navy: #24292c;
+  --riot-black: #111416;
+  --surface: #3a4042;
+  --surface-raised: #505759;
+  --surface-soft: #686e6e;
+  --electric-blue: #91b7c6;
+  --chess-gold: #c59d58;
+  --neon-purple: #74697e;
+  --riot-pink: #b74b3e;
+  --teal-spark: #8aa479;
+  --text: #f4eee2;
+  --muted: #cec6b8;
+  --board-light: #c9c0ad;
+  --board-dark: #545b5d;
+  --theme-page:
+    linear-gradient(180deg, rgba(12,15,17,.34), rgba(10,12,13,.86)),
+    url("/themes/iron-legions.webp");
+  --theme-page-size: cover, cover;
+  --theme-page-position: center, center;
+  --theme-page-attachment: scroll, scroll;
+  --theme-topbar: rgba(17,20,22,.96);
+  --theme-card: linear-gradient(145deg, rgba(67,73,75,.98), rgba(28,32,34,.98));
+  --theme-card-border: #777168;
+  --theme-frame: #51453b;
+  --theme-frame-border: #201b18;
+  --theme-piece-white: #f4eee2;
+  --theme-piece-white-stroke: #5b5550;
+  --theme-piece-black: #181b1d;
+  --theme-piece-black-stroke: #c59d58;
+  --display: Georgia, "Times New Roman", serif;
+}
+
+:root[data-theme="shadow-shogun"] {
+  --riot-navy: #202329;
+  --riot-black: #0a0d12;
+  --surface: #31343a;
+  --surface-raised: #45474c;
+  --surface-soft: #656269;
+  --electric-blue: #9fb9c6;
+  --chess-gold: #d5b16e;
+  --neon-purple: #71627e;
+  --riot-pink: #be4d3e;
+  --teal-spark: #819b80;
+  --text: #f7f0df;
+  --muted: #cfc7b7;
+  --board-light: #e1d7c2;
+  --board-dark: #514a43;
+  --theme-page:
+    linear-gradient(180deg, rgba(4,8,13,.24), rgba(7,10,14,.84)),
+    url("/themes/shadow-shogun.webp");
+  --theme-page-size: cover, cover;
+  --theme-page-position: center, center;
+  --theme-page-attachment: scroll, scroll;
+  --theme-topbar: rgba(8,11,15,.96);
+  --theme-card: linear-gradient(145deg, rgba(61,61,64,.98), rgba(23,25,29,.98));
+  --theme-card-border: #725346;
+  --theme-frame: #4e2d22;
+  --theme-frame-border: #1b1010;
+  --theme-piece-white: #f7f0df;
+  --theme-piece-white-stroke: #645c51;
+  --theme-piece-black: #111419;
+  --theme-piece-black-stroke: #be4d3e;
+  --display: Georgia, "Times New Roman", serif;
 }
 
 :root[data-theme="neon-grid"] {
@@ -209,6 +295,9 @@
     linear-gradient(rgba(63,244,255,.08) 1px, transparent 1px) 0 0 / 32px 32px,
     linear-gradient(90deg, rgba(255,79,216,.06) 1px, transparent 1px) 0 0 / 32px 32px,
     #080b18;
+  --theme-page-size: auto;
+  --theme-page-position: 0 0;
+  --theme-page-attachment: scroll;
   --theme-topbar: rgba(6,8,17,.94);
   --theme-card: linear-gradient(145deg, rgba(32,43,76,.98), rgba(8,11,24,.98));
   --theme-card-border: #3ff4ff;
@@ -236,6 +325,9 @@
   --board-light: #ececec;
   --board-dark: #777777;
   --theme-page: linear-gradient(145deg, #2b2b2b, #111111);
+  --theme-page-size: auto;
+  --theme-page-position: 0 0;
+  --theme-page-attachment: scroll;
   --theme-topbar: rgba(17,17,17,.96);
   --theme-card: linear-gradient(145deg, #484848, #242424);
   --theme-card-border: #777777;
@@ -250,6 +342,9 @@
 
 html[data-theme] body {
   background: var(--theme-page);
+  background-attachment: var(--theme-page-attachment);
+  background-position: var(--theme-page-position);
+  background-size: var(--theme-page-size);
   transition: background 160ms ease, color 160ms ease;
 }
 html[data-theme] .topbar { background: var(--theme-topbar); }
@@ -393,6 +488,12 @@ html[data-theme] .player-piece.piece-b {
   display: grid;
   grid-template-columns: 1fr 1fr;
   border: 2px solid rgba(255,255,255,.32);
+}
+.theme-preview[data-has-art="true"] {
+  display: block;
+  background-color: var(--surface);
+  background-position: center;
+  background-size: cover;
 }
 .theme-preview i { display: block; }
 .theme-option strong {

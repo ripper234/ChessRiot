@@ -8,9 +8,9 @@ import {
 } from "./themes";
 
 describe("visual themes", () => {
-  it("offers nine unique, original theme choices", () => {
-    expect(THEMES).toHaveLength(9);
-    expect(new Set(THEMES.map((theme) => theme.id)).size).toBe(9);
+  it("offers eleven unique, original theme choices", () => {
+    expect(THEMES).toHaveLength(11);
+    expect(new Set(THEMES.map((theme) => theme.id)).size).toBe(11);
     expect(THEMES.every((theme) => theme.preview.length === 4)).toBe(true);
     expect(THEMES.map((theme) => theme.name)).not.toEqual(
       expect.arrayContaining([
@@ -21,6 +21,15 @@ describe("visual themes", () => {
         "Magic: The Gathering",
       ]),
     );
+  });
+
+  it("uses only local optimized artwork for illustrated themes", () => {
+    const illustratedThemes = THEMES.filter((theme) => theme.art);
+
+    expect(illustratedThemes).toHaveLength(7);
+    for (const theme of illustratedThemes) {
+      expect(theme.art).toMatch(/^\/themes\/[a-z-]+\.webp$/);
+    }
   });
 
   it("normalizes unsupported storage values to the default", () => {

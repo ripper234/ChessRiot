@@ -16,9 +16,7 @@ import {
   inviteKey,
   playerKey,
   privateGamePath,
-  readRecentGames,
   rememberGame,
-  type RecentGame,
 } from "@/lib/client-storage";
 import { APP_VERSION } from "@/lib/version";
 import { Brand } from "./Brand";
@@ -37,32 +35,104 @@ const DIFFICULTY_LABELS: Record<AiDifficulty, string> = {
   5: "Brutal",
 };
 
-export function CreateGame() {
+interface AccountGame {
+  id: string;
+  mode: GameMode;
+  status: "waiting" | "active" | "completed";
+  color: "w" | "b";
+  opponent: string | null;
+  turn: "w" | "b";
+  plyCount: number;
+  updatedAt: string;
+  outcome: {
+    winner: "w" | "b" | null;
+    reason: string;
+  } | null;
+}
+
+interface AccountGamesPage {
+  games?: AccountGame[];
+  nextCursor?: string | null;
+}
+
+function gameState(game: AccountGame): {
+  label: string;
+  tone: "ready" | "waiting" | "won" | "lost" | "draw";
+} {
+  if (game.status === "waiting") {
+    return { label: "Waiting for opponent", tone: "waiting" };
+  }
+  if (game.status === "active") {
+    return game.turn === game.color
+      ? { label: "Your turn", tone: "ready" }
+      : { label: "Opponent’s turn", tone: "waiting" };
+  }
+  if (!game.outcome?.winner) return { label: "Draw", tone: "draw" };
+  return game.outcome.winner === game.color
+    ? { label: "You won", tone: "won" }
+    : { label: "You lost", tone: "lost" };
+}
+
+export function CreateGame({ displayName }: { displayName: string }) {
   const router = useRouter();
-  const [name, setName] = useState("");
   const [mode, setMode] = useState<GameMode>("multiplayer");
   const [difficulty, setDifficulty] = useState<AiDifficulty>(3);
   const [turnPaceDays, setTurnPaceDays] = useState<TurnPaceDays>(3);
-  const [recent, setRecent] = useState<RecentGame[]>([]);
+  const [games, setGames] = useState<AccountGame[]>([]);
+  const [nextGamesCursor, setNextGamesCursor] = useState<string | null>(null);
+  const [gamesBusy, setGamesBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const pending = useRef<PendingCreate | null>(null);
 
   useEffect(() => {
-    try {
-      setName(localStorage.getItem("chessriot:displayName") ?? "");
-    } catch {
-      setName("");
-    }
-    setRecent(readRecentGames());
+    let cancelled = false;
+    void fetch("/api/me/games?limit=12", { cache: "no-store" })
+      .then(async (response) => {
+        if (response.status === 401) {
+          window.location.assign(`/verify?return_to=${encodeURIComponent("/")}`);
+          return null;
+        }
+        return response.ok ? await response.json() as AccountGamesPage : null;
+      })
+      .then((data) => {
+        if (cancelled || !data?.games) return;
+        setGames(data.games);
+        setNextGamesCursor(data.nextCursor ?? null);
+      })
+      .catch(() => {
+        // Starting a game stays available if the history panel cannot load.
+      });
+    return () => { cancelled = true; };
   }, []);
+
+  async function loadMoreGames() {
+    if (!nextGamesCursor || gamesBusy) return;
+    setGamesBusy(true);
+    try {
+      const response = await fetch(
+        `/api/me/games?limit=12&cursor=${encodeURIComponent(nextGamesCursor)}`,
+        { cache: "no-store" },
+      );
+      if (!response.ok) return;
+      const data = await response.json() as AccountGamesPage;
+      if (!data.games) return;
+      setGames((current) => {
+        const known = new Set(current.map((game) => game.id));
+        return [...current, ...data.games!.filter((game) => !known.has(game.id))];
+      });
+      setNextGamesCursor(data.nextCursor ?? null);
+    } catch {
+      // The player can retry without affecting game creation or existing links.
+    } finally {
+      setGamesBusy(false);
+    }
+  }
 
   async function createGame(event: FormEvent) {
     event.preventDefault();
-    const cleanName = name.trim();
-    if (!cleanName) return;
     if (!canUseGameStorage()) {
-      setError("Allow browser storage to keep your private game seat.");
+      setError("Allow browser storage so the opening animation and invitation can be restored.");
       return;
     }
     setBusy(true);
@@ -77,7 +147,6 @@ export function CreateGame() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          displayName: cleanName,
           mode,
           ...(mode === "solo" ? { difficulty } : {}),
           ...(mode === "multiplayer" ? { turnPaceDays } : {}),
@@ -90,11 +159,21 @@ export function CreateGame() {
         error?: { message?: string };
       };
       if (!response.ok || !data.game || (mode === "multiplayer" && !data.inviteUrl)) {
+        if (response.status === 401) {
+          window.location.assign(`/verify?return_to=${encodeURIComponent("/")}`);
+          return;
+        }
         throw new Error(data.error?.message ?? "Could not create the game");
       }
-      localStorage.setItem("chessriot:displayName", cleanName);
       localStorage.setItem(playerKey(data.game.id), pending.current.playerToken);
       if (data.inviteUrl) localStorage.setItem(inviteKey(data.game.id), data.inviteUrl);
+      if (
+        data.game.mode === "solo"
+        && data.game.you.color === "b"
+        && data.game.plyCount > 0
+      ) {
+        sessionStorage.setItem(`chessriot:opening-intro:${data.game.id}`, "1");
+      }
       rememberGame(data.game);
       router.push(privateGamePath(data.game.id, pending.current.playerToken));
     } catch (caught) {
@@ -108,25 +187,17 @@ export function CreateGame() {
     <main className="home-shell">
       <header className="topbar">
         <Brand />
-        <Link className="home-link" href="/changelog">WHAT&apos;S NEW</Link>
+        <div className="topbar-actions">
+          <span className="account-name">{displayName}</span>
+          <Link className="home-link" href="/changelog">WHAT&apos;S NEW</Link>
+          <a className="home-link" href="/signout-with-chatgpt?return_to=%2F">SWITCH ACCOUNT</a>
+        </div>
       </header>
       <section className="start-stage">
         <form className="voxel-card create-card" onSubmit={createGame}>
           <span className="card-kicker">NEW GAME</span>
           <h1>Play chess</h1>
-          <label htmlFor="display-name">Your display name</label>
-          <input
-            id="display-name"
-            value={name}
-            onChange={(event) => {
-              setName(event.target.value);
-              pending.current = null;
-            }}
-            maxLength={24}
-            autoComplete="nickname"
-            placeholder="Ron"
-            disabled={busy}
-          />
+          <p className="signed-in-note">Playing as <strong>{displayName}</strong></p>
           <fieldset className="mode-fieldset" disabled={busy}>
             <legend>Game mode</legend>
             <div className="mode-options">
@@ -209,27 +280,48 @@ export function CreateGame() {
             </fieldset>
           )}
           {error ? <p className="form-error" role="alert">{error}</p> : null}
-          <button className="primary-button" disabled={busy || !name.trim()}>
+          <button className="primary-button" disabled={busy}>
             {busy
               ? "STARTING…"
               : mode === "solo" ? "PLAY RIOT BOT  →" : "CREATE GAME  →"}
           </button>
         </form>
       </section>
-      {recent.length > 0 ? (
+      {games.length > 0 ? (
         <section className="recent-section">
-          <div className="section-title"><span>CONTINUE A MATCH</span><i /></div>
+          <div className="section-title"><span>MY GAMES</span><i /></div>
           <div className="recent-grid">
-            {recent.map((game) => (
-              <Link className="recent-card" href={`/g/${game.id}`} key={game.id}>
-                <span className={`mini-piece ${game.color === "w" ? "light" : "dark"}`}>
-                  ♟
-                </span>
-                <span><strong>{game.label}</strong><small>Tap to return</small></span>
-                <b>→</b>
-              </Link>
-            ))}
+            {games.map((game) => {
+              const state = gameState(game);
+              return (
+                <Link className="recent-card" href={`/g/${game.id}`} key={game.id}>
+                  <span className={`mini-piece ${game.color === "w" ? "light" : "dark"}`}>
+                    ♟
+                  </span>
+                  <span>
+                    <strong>{game.opponent ?? "Waiting for opponent"}</strong>
+                    <span className="game-state" data-tone={state.tone}>{state.label}</span>
+                    <small>
+                      {game.mode === "solo" ? "SOLO" : "MULTIPLAYER"}
+                      {" · "}
+                      {game.color === "w" ? "WHITE" : "BLACK"}
+                    </small>
+                  </span>
+                  <b>→</b>
+                </Link>
+              );
+            })}
           </div>
+          {nextGamesCursor ? (
+            <button
+              className="secondary-button load-more-games"
+              type="button"
+              disabled={gamesBusy}
+              onClick={() => void loadMoreGames()}
+            >
+              {gamesBusy ? "LOADING…" : "LOAD MORE GAMES"}
+            </button>
+          ) : null}
         </section>
       ) : null}
       <footer>

@@ -14,6 +14,48 @@ const requestIdForColor = (color) => {
   return id.slice(0, -1) + (color === "w" ? "0" : "1");
 };
 const opsSecret = "local-ops-read-secret-for-e2e-tests";
+const accountIdSecret = "local-account-id-secret-for-e2e-tests";
+const sessionSigningSecret = "local-session-secret-for-e2e-tests";
+const accountBySeatToken = new Map();
+
+function accountForLabel(label) {
+  const clean = String(label || "Player").normalize("NFKC").trim() || "Player";
+  const slug = clean.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "player";
+  return {
+    displayName: clean,
+    email: `${slug}@players.chessriot.test`,
+  };
+}
+
+function accountForUnknownSeat(token) {
+  const id = createHmac("sha256", accountIdSecret)
+    .update(token)
+    .digest("hex")
+    .slice(0, 18);
+  return { displayName: "Other player", email: `seat-${id}@players.chessriot.test` };
+}
+
+function signedAccountHeaders(account) {
+  const email = account.email.normalize("NFKC").trim().toLowerCase();
+  const accountId = createHmac("sha256", accountIdSecret)
+    .update(email)
+    .digest("base64url");
+  const payload = Buffer.from(JSON.stringify({
+    v: 1,
+    sub: accountId,
+    exp: Math.floor(Date.now() / 1000) + 3_600,
+  })).toString("base64url");
+  const signature = createHmac("sha256", sessionSigningSecret)
+    .update(payload)
+    .digest("base64url");
+  return {
+    "oai-authenticated-user-email": email,
+    "oai-authenticated-user-full-name": encodeURIComponent(account.displayName),
+    "oai-authenticated-user-full-name-encoding": "percent-encoded-utf-8",
+    cookie: `__Host-chessriot-access=${payload}.${signature}`,
+  };
+}
+
 const opsGrant = (overrides = {}) => {
   const now = Math.floor(Date.now() / 1000);
   const payload = Buffer.from(JSON.stringify({
@@ -56,6 +98,10 @@ function createRuntime() {
       CONTROL_ORIGIN: controlOrigin,
       OBSERVABILITY_HASH_SECRET: "local-observability-hash-secret-for-e2e",
       OPS_READ_SECRET: opsSecret,
+      ACCOUNT_ID_SECRET: accountIdSecret,
+      SESSION_SIGNING_SECRET: sessionSigningSecret,
+      TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
+      TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
     },
     defaultPersistRoot: persistRoot,
     d1Persist: true,
@@ -63,10 +109,47 @@ function createRuntime() {
 }
 
 async function request(runtime, path, init = {}) {
-  const headers = new Headers(init.headers);
+  const {
+    anonymous = false,
+    accountEmail,
+    accountName,
+    ...requestInit
+  } = init;
+  const headers = new Headers(requestInit.headers);
   if (!headers.has("origin")) headers.set("origin", origin);
-  if (init.body && !headers.has("content-type")) headers.set("content-type", "application/json");
-  return runtime.dispatchFetch(`${origin}${path}`, { ...init, headers });
+  if (requestInit.body && !headers.has("content-type")) headers.set("content-type", "application/json");
+
+  if (!anonymous) {
+    let parsedBody = null;
+    if (
+      typeof requestInit.body === "string"
+      && headers.get("content-type")?.includes("application/json")
+    ) {
+      try {
+        parsedBody = JSON.parse(requestInit.body);
+      } catch {
+        parsedBody = null;
+      }
+    }
+    const bearer = headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
+    let account = accountEmail
+      ? { email: accountEmail, displayName: accountName || accountEmail.split("@")[0] }
+      : bearer
+        ? accountBySeatToken.get(bearer) || accountForUnknownSeat(bearer)
+        : parsedBody?.displayName
+          ? accountForLabel(parsedBody.displayName)
+          : accountForLabel(accountName || "E2E Player");
+    if (parsedBody?.playerToken) {
+      account = parsedBody.displayName
+        ? accountForLabel(parsedBody.displayName)
+        : account;
+      accountBySeatToken.set(parsedBody.playerToken, account);
+    }
+    for (const [name, value] of Object.entries(signedAccountHeaders(account))) {
+      if (!headers.has(name)) headers.set(name, value);
+    }
+  }
+  return runtime.dispatchFetch(`${origin}${path}`, { ...requestInit, headers });
 }
 
 async function body(response) {
@@ -75,6 +158,15 @@ async function body(response) {
 
 let runtime = createRuntime();
 try {
+  const anonymousCreate = await request(runtime, "/api/games", {
+    anonymous: true,
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  assert.equal(anonymousCreate.status, 401);
+  assert.equal((await body(anonymousCreate)).error.code, "account_required");
+  assert.equal((await request(runtime, "/api/me/games", { anonymous: true })).status, 401);
+
   const whiteToken = secret();
   const blackToken = secret();
   const thirdToken = secret();
@@ -98,6 +190,11 @@ try {
   assert.equal(created.game.mode, "multiplayer");
   assert.equal(created.game.aiDifficulty, null);
   assert.equal(created.game.turnPaceDays, 3);
+  assert.equal((await request(
+    runtime,
+    `/api/invitations/${inviteToken}`,
+    { anonymous: true },
+  )).status, 401);
 
   const createRetry = await request(runtime, "/api/games", {
     method: "POST",
@@ -131,6 +228,65 @@ try {
   assert.equal(joined.game.you.name, "Omri");
   assert.equal(joined.game.players.white.name, "Ron");
   assert.equal(joined.game.players.black.name, "Omri");
+
+  const secondWhiteToken = secret();
+  const secondInviteToken = secret();
+  const secondGameResponse = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Ron",
+      mode: "multiplayer",
+      playerToken: secondWhiteToken,
+      inviteToken: secondInviteToken,
+      requestId: randomUUID(),
+    }),
+  });
+  assert.equal(secondGameResponse.status, 201);
+  const secondGame = (await body(secondGameResponse)).game;
+
+  const firstGamesPageResponse = await request(runtime, "/api/me/games?limit=1", {
+    headers: { authorization: `Bearer ${whiteToken}` },
+  });
+  assert.equal(firstGamesPageResponse.status, 200);
+  const firstGamesPage = await body(firstGamesPageResponse);
+  assert.equal(firstGamesPage.games.length, 1);
+  assert.equal(firstGamesPage.games[0].color, "w");
+  assert.equal(firstGamesPage.games[0].turn, "w");
+  assert.equal(firstGamesPage.games[0].plyCount, 0);
+  assert.equal(firstGamesPage.games[0].outcome, null);
+  assert.equal(typeof firstGamesPage.nextCursor, "string");
+
+  const secondGamesPageResponse = await request(
+    runtime,
+    `/api/me/games?limit=1&cursor=${encodeURIComponent(firstGamesPage.nextCursor)}`,
+    { headers: { authorization: `Bearer ${whiteToken}` } },
+  );
+  assert.equal(secondGamesPageResponse.status, 200);
+  const secondGamesPage = await body(secondGamesPageResponse);
+  assert.deepEqual(
+    new Set([...firstGamesPage.games, ...secondGamesPage.games].map((game) => game.id)),
+    new Set([gameId, secondGame.id]),
+  );
+  assert.equal(
+    [...firstGamesPage.games, ...secondGamesPage.games]
+      .find((game) => game.id === gameId)?.opponent,
+    "Omri",
+  );
+  assert.equal(secondGamesPage.nextCursor, null);
+
+  const blackGames = await body(await request(runtime, "/api/me/games?view=watch", {
+    headers: { authorization: `Bearer ${blackToken}` },
+  }));
+  assert.deepEqual(blackGames.games.map((game) => game.id), [gameId]);
+  assert.equal(blackGames.games[0].color, "b");
+  assert.equal((await request(runtime, "/api/me/games?cursor=broken", {
+    headers: { authorization: `Bearer ${whiteToken}` },
+  })).status, 400);
+  const unrelatedGames = await body(await request(runtime, "/api/me/games", {
+    accountEmail: "unrelated@players.chessriot.test",
+    accountName: "Unrelated",
+  }));
+  assert.deepEqual(unrelatedGames.games, []);
 
   const maliciousReaction = "<script>steal-private-seat</script>";
   const maliciousHeaderRequestId = "private-seat-key-in-request-header";
@@ -711,6 +867,7 @@ try {
   assert.equal(blackSoloCreated.game.players.black.name, "Ron");
   assert.equal(blackSoloCreated.game.version, 1);
   assert.equal(blackSoloCreated.game.plyCount, 1);
+  assert.equal(blackSoloCreated.game.initialFen, new Chess().fen());
   assert.equal(blackSoloCreated.game.moves[0].color, "w");
   assert.equal(blackSoloCreated.game.turn, "b");
 

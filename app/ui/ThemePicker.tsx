@@ -103,8 +103,13 @@ export function ThemePicker() {
                   aria-label={`${theme.name}: ${theme.description}`}
                   onChange={() => choose(theme.id)}
                 />
-                <span className="theme-preview" aria-hidden="true">
-                  {theme.preview.map((color) => (
+                <span
+                  className="theme-preview"
+                  data-has-art={theme.art ? "true" : "false"}
+                  style={theme.art ? { backgroundImage: `url(${theme.art})` } : undefined}
+                  aria-hidden="true"
+                >
+                  {!theme.art && theme.preview.map((color) => (
                     <i key={color} style={{ background: color }} />
                   ))}
                 </span>
@@ -115,7 +120,7 @@ export function ThemePicker() {
             ))}
           </fieldset>
           <p className="theme-note">
-            Original palettes only. No third-party artwork, logos, or game assets.
+            Original artwork and palettes only. No third-party logos or game assets.
           </p>
         </div>
       </dialog>

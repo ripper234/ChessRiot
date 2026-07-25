@@ -1,4 +1,38 @@
-# ChessRiot v0.4.1 specification
+# ChessRiot v0.6.0 specification
+
+## v0.6 release additions
+
+- My Games is an account-bound, newest-first history with cursor pagination.
+  Cards show game mode, player color, waiting state, whose turn it is, and
+  Won, Lost, or Draw outcomes.
+- Optional open-app move alerts monitor every owned multiplayer game through
+  the verified account session. They no longer depend on a legacy seat key or
+  require the player to keep that specific game route open.
+- Alert polling establishes a silent baseline, notifies only after a later
+  opponent move, and remains excluded from product telemetry.
+- The account menu exposes Switch Account through the trusted ChatGPT sign-out
+  flow. ChessRiot does not store several identities in one browser session.
+
+## v0.5 release additions
+
+- Every player signs in with ChatGPT and completes a server-verified Turnstile
+  challenge before creating, joining, reading, or mutating a game.
+- A signed HttpOnly player session binds the trusted hosting identity to an
+  opaque account id. D1 membership maps that account to exactly one game seat.
+- Existing private seat links can claim their historical seat once after
+  login. New account-bound games are resumable from the account game list
+  without carrying a seat key between devices.
+- Account-scoped write limits and a per-game/version Riot Bot lease bound
+  automated abuse and duplicate computer searches. Volumetric protection
+  remains an edge-hosting responsibility.
+- When Riot Bot opens as White, a newly created Black-side game first paints
+  the untouched starting position, then animates the committed White move once.
+- The live board uses the available viewport on desktop and mobile. Secondary
+  actions, replay, and history are collapsed behind one More control.
+- Captured Black pieces appear with White, and captured White pieces appear
+  with Black.
+- Seven original illustrated theme backgrounds are included, and Iron Legions
+  plus Shadow Shogun expand the theme picker from nine to 11 choices.
 
 ## v0.4 release additions
 
@@ -74,12 +108,12 @@ This file and `MVP.md` are the source of truth for the current milestone.
 
 ## Flow
 
-1. The player enters a display name, then chooses Solo or Multiplayer.
+1. The player signs in with ChatGPT, completes the human check, then chooses Solo or Multiplayer.
 2. Solo reveals a five-step Bot level bar that starts at Level 3, Medium. Colors are assigned evenly and deterministically from the idempotent create request. If Riot Bot is White, its legal opening is committed before the game appears.
 3. Multiplayer asks for a one, three, or five-day move pace, then opens White's reusable private game URL and shows a separate one-use invitation URL.
-4. Black opens that invitation on another device, enters a display name, and claims the second seat.
+4. Black opens that invitation on another device, signs in if needed, and claims the second seat for that account.
 5. Every human and computer move is revalidated by the server against authoritative history.
-6. The board polls for changes and refreshes on focus. A player can open their private game URL on any device and restore the correct seat.
+6. The board polls for changes and refreshes on focus. A player can resume any owned game from their account list on another device.
 
 ## Rules and persistence
 
@@ -106,17 +140,19 @@ This file and `MVP.md` are the source of truth for the current milestone.
 
 ## Identity and privacy
 
-- No account is required.
-- Player keys are 256-bit bearer secrets carried in a `#seat=` URL fragment and cached per game in browser storage after successful authentication. The server stores SHA-256 hashes only.
-- URL fragments are never sent in HTTP requests or referrers. A private game URL is still a bearer credential, so anyone who has it can play as that seat.
-- Existing same-browser games add the cached key to the URL after authentication so their next copied link is portable. A bare game URL on a new device remains unauthorized.
-- Invitation links are one-use. A third party cannot read a game without one of its player keys.
+- A trusted Sign in with ChatGPT identity and a valid signed CAPTCHA session are required for every playable API.
+- Account ids are HMAC-derived from the canonical hosting identity. Raw email addresses are not stored in game or observability rows.
+- Each account may own only one color in a game. Membership, not a browser token, is authoritative for current games.
+- Historical player keys remain 256-bit bearer secrets carried in a `#seat=` URL fragment. The server stores SHA-256 hashes only, and a verified account may use a correct key to claim only an unbound legacy seat.
+- URL fragments are never sent in HTTP requests or referrers. Invitation links remain one-use and require a verified account to inspect or claim.
+- CAPTCHA verification happens server-side. Tokens are single-use and expire according to the provider; test keys are limited to Development.
 
 ## Interface
 
-- Nine original visual themes cover the page, panels, board, and pieces. The
+- Eleven original visual themes cover the page, panels, board, and pieces. The
   default Blockfield theme uses grass, dirt, stone, wood, sand, water, and
-  torch-light colors. None copy third-party game branding or assets.
+  torch-light colors. Seven themes include generated, wholly original
+  illustrations. None copy third-party game branding or assets.
 - Drag and drop a piece, or tap/click a piece and then a legal destination.
 - Board rotates for Black while submitted coordinates remain absolute chess squares.
 - The interface shows explicit player colors, turn, check, the checked king,

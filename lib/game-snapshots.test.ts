@@ -10,6 +10,7 @@ function startingSnapshot(overrides: Partial<GameSnapshot> = {}): GameSnapshot {
     aiDifficulty: 3,
     status: "active",
     version: 7,
+    initialFen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
     fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
     turn: "w",
     plyCount: 0,

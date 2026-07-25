@@ -70,6 +70,42 @@ export async function ensureSchema(): Promise<void> {
             (game_mode = 'multiplayer' AND ai_difficulty IS NULL)
           )
         )`),
+        db.prepare(`CREATE TABLE IF NOT EXISTS accounts (
+          id TEXT PRIMARY KEY NOT NULL,
+          display_name TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          last_seen_at TEXT NOT NULL,
+          last_captcha_at TEXT NOT NULL
+        )`),
+        db.prepare(`CREATE TABLE IF NOT EXISTS game_memberships (
+          game_id TEXT NOT NULL,
+          color TEXT NOT NULL CHECK (color IN ('w', 'b')),
+          account_id TEXT NOT NULL,
+          claimed_at TEXT NOT NULL,
+          PRIMARY KEY (game_id, color),
+          UNIQUE (game_id, account_id),
+          FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE,
+          FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE RESTRICT
+        )`),
+        db.prepare(`CREATE INDEX IF NOT EXISTS game_memberships_account_idx
+          ON game_memberships (account_id, claimed_at DESC)`),
+        db.prepare(`CREATE TABLE IF NOT EXISTS rate_limit_windows (
+          key TEXT PRIMARY KEY NOT NULL,
+          account_id TEXT NOT NULL,
+          scope TEXT NOT NULL,
+          window_start INTEGER NOT NULL,
+          hit_count INTEGER NOT NULL,
+          expires_at INTEGER NOT NULL
+        )`),
+        db.prepare(`CREATE INDEX IF NOT EXISTS rate_limit_expiry_idx
+          ON rate_limit_windows (expires_at)`),
+        db.prepare(`CREATE TABLE IF NOT EXISTS bot_turn_leases (
+          game_id TEXT PRIMARY KEY NOT NULL,
+          game_version INTEGER NOT NULL,
+          nonce TEXT NOT NULL,
+          lease_until TEXT NOT NULL,
+          FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
+        )`),
         db.prepare(`CREATE TABLE IF NOT EXISTS game_actions (
           game_id TEXT NOT NULL,
           request_id TEXT NOT NULL,

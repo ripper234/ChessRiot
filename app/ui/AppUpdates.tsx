@@ -1,20 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { playerKey, readSeatTokenFromHash } from "@/lib/client-storage";
-import type { GameSnapshot } from "@/lib/game-types";
 import {
-  gameIdFromPathname,
   hasUnseenRelease,
   MOVE_CHECK_INTERVAL_MS,
   MOVE_NOTIFICATIONS_KEY,
+  opponentMovedSince,
   parseEnabledPreference,
   RELEASE_CHECK_INTERVAL_MS,
   RELEASE_SEEN_KEY,
   releaseTarget,
-  shouldNotifyForOpponentMove,
+  type WatchedAccountGame,
 } from "@/lib/pwa";
 import { APP_VERSION } from "@/lib/version";
 import styles from "./AppUpdates.module.css";
@@ -28,8 +25,9 @@ interface HealthPayload {
   version?: unknown;
 }
 
-interface GamePayload {
-  game?: GameSnapshot;
+interface AccountGamesPage {
+  games?: WatchedAccountGame[];
+  nextCursor?: string | null;
 }
 
 function canNotify(): boolean {
@@ -52,12 +50,16 @@ function storeValue(key: string, value: string): void {
   }
 }
 
-async function showMoveNotification(pathname: string): Promise<void> {
+async function showMoveNotification(game: WatchedAccountGame): Promise<void> {
+  const pathname = `/g/${encodeURIComponent(game.id)}`;
+  const opponent = game.opponent?.trim() || "Your opponent";
   const options: NotificationOptions = {
-    body: "Your ChessRiot game is ready for you.",
+    body: game.status === "completed"
+      ? "Open ChessRiot to see how the game ended."
+      : "It’s your turn in ChessRiot.",
     icon: "/icons/chessriot-192.png",
     badge: "/icons/chessriot-192.png",
-    tag: `chessriot-move:${pathname}`,
+    tag: `chessriot-move:${game.id}`,
     data: { path: pathname },
   };
   if ("serviceWorker" in navigator) {
@@ -71,15 +73,30 @@ async function showMoveNotification(pathname: string): Promise<void> {
       // Fall back to a page notification when service workers are unavailable.
     }
   }
-  new Notification("Your opponent moved", options);
+  new Notification(`${opponent} moved`, options);
+}
+
+async function loadWatchedGames(): Promise<WatchedAccountGame[] | null> {
+  const games: WatchedAccountGame[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < 20; page += 1) {
+    const query = new URLSearchParams({ view: "watch", limit: "50" });
+    if (cursor) query.set("cursor", cursor);
+    const response = await fetch(`/api/me/games?${query}`, { cache: "no-store" });
+    if (!response.ok) return null;
+    const data = await response.json() as AccountGamesPage;
+    if (!Array.isArray(data.games)) return null;
+    games.push(...data.games);
+    cursor = typeof data.nextCursor === "string" ? data.nextCursor : null;
+    if (!cursor) return games;
+  }
+  return games;
 }
 
 export function AppUpdates() {
-  const pathname = usePathname();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const lastPlyRef = useRef<number | null>(null);
-  const lastVersionRef = useRef<number | null>(null);
+  const watchedGamesRef = useRef<Map<string, WatchedAccountGame> | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [availableVersion, setAvailableVersion] = useState<string | null>(null);
   const [releaseDot, setReleaseDot] = useState(false);
@@ -143,55 +160,45 @@ export function AppUpdates() {
   }, [checkRelease]);
 
   useEffect(() => {
-    lastPlyRef.current = null;
-    lastVersionRef.current = null;
-    const gameId = gameIdFromPathname(pathname);
     if (
       !notificationsEnabled
-      || !gameId
       || !canNotify()
       || Notification.permission !== "granted"
-    ) return;
+    ) {
+      watchedGamesRef.current = null;
+      return;
+    }
 
     let stopped = false;
-    const checkGame = async () => {
-      let token = readSeatTokenFromHash(window.location.hash);
-      if (!token) token = storedValue(playerKey(gameId));
-      if (!token) return;
-      const query = lastVersionRef.current === null
-        ? ""
-        : `?sinceVersion=${lastVersionRef.current}`;
+    const checkGames = async () => {
       try {
-        const response = await fetch(`/api/games/${encodeURIComponent(gameId)}${query}`, {
-          headers: { authorization: `Bearer ${token}` },
-          cache: "no-store",
-        });
-        if (stopped || response.status === 204 || !response.ok) return;
-        const data = await response.json() as GamePayload;
-        if (!data.game) return;
-        const game = data.game;
-        const shouldNotify = shouldNotifyForOpponentMove(
-          game,
-          lastPlyRef.current,
-          document.visibilityState === "visible" && document.hasFocus(),
-        );
-        lastPlyRef.current = game.plyCount;
-        lastVersionRef.current = game.version;
-        if (shouldNotify) await showMoveNotification(pathname);
+        const games = await loadWatchedGames();
+        if (stopped || !games) return;
+        const previous = watchedGamesRef.current;
+        const next = new Map(games.map((game) => [game.id, game]));
+        watchedGamesRef.current = next;
+        if (!previous || (document.visibilityState === "visible" && document.hasFocus())) {
+          return;
+        }
+        const changed = games
+          .filter((game) => opponentMovedSince(previous.get(game.id), game))
+          .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+          .slice(0, 3);
+        for (const game of changed) await showMoveNotification(game);
       } catch {
-        // The game UI owns connection status; this background convenience stays quiet.
+        // Game screens own connection status; this background convenience stays quiet.
       }
     };
 
-    void checkGame();
-    const timer = window.setInterval(checkGame, MOVE_CHECK_INTERVAL_MS);
-    window.addEventListener("online", checkGame);
+    void checkGames();
+    const timer = window.setInterval(checkGames, MOVE_CHECK_INTERVAL_MS);
+    window.addEventListener("online", checkGames);
     return () => {
       stopped = true;
       window.clearInterval(timer);
-      window.removeEventListener("online", checkGame);
+      window.removeEventListener("online", checkGames);
     };
-  }, [notificationsEnabled, pathname]);
+  }, [notificationsEnabled]);
 
   function openDialog() {
     const target = releaseTarget(APP_VERSION, availableVersion);
@@ -296,8 +303,8 @@ export function AppUpdates() {
           <section className={styles.section} aria-labelledby="notification-settings-title">
             <h3 id="notification-settings-title">Opponent moves</h3>
             <p>
-              Opt in to browser notifications when your opponent moves while ChessRiot
-              remains open in another tab or window.
+              Get alerts for all your multiplayer games across devices while
+              ChessRiot remains open in another tab or window.
             </p>
             <button
               className={styles.action}

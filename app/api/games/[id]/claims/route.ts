@@ -4,13 +4,15 @@ import {
   assertAuthoritativeState,
   expireMultiplayerTurn,
   findGameById,
-  playerColor,
   readMoves,
   snapshot,
+  type GameRow,
 } from "@/lib/game-store";
-import { apiError, bearerToken, json, readJson } from "@/lib/http";
+import { authorizeGameRequest } from "@/lib/game-auth";
+import { enforceAccountRateLimit } from "@/lib/accounts";
+import { apiError, json, readJson } from "@/lib/http";
 import type { DrawClaim } from "@/lib/game-types";
-import { hashSecret, isUuid, requestIsSameOrigin } from "@/lib/validation";
+import { isUuid, requestIsSameOrigin } from "@/lib/validation";
 import { recordEvent } from "@/lib/observability";
 
 export const dynamic = "force-dynamic";
@@ -55,14 +57,33 @@ export async function POST(
   if (!requestIsSameOrigin(request)) {
     return apiError(403, "wrong_origin", "Request origin is not allowed");
   }
-  const token = bearerToken(request);
+  const { id } = await context.params;
+  const authorization = await authorizeGameRequest(request, id);
+  if (!authorization.ok) {
+    return apiError(
+      authorization.status,
+      authorization.code,
+      authorization.message,
+    );
+  }
+  const rate = await enforceAccountRateLimit(
+    authorization.account.id,
+    "draw_claim",
+    20,
+    60 * 60,
+  );
+  if (!rate.allowed) {
+    return json(
+      { error: { code: "rate_limited", message: "Too many draw-claim attempts. Try again later." } },
+      { status: 429, headers: { "retry-after": String(rate.retryAfter) } },
+    );
+  }
   const body = await readJson(request);
   const claim = body?.claim;
   const expectedVersion = body?.expectedVersion;
   const requestId = body?.requestId;
   if (
-    !token
-    || !isDrawClaim(claim)
+    !isDrawClaim(claim)
     || !Number.isInteger(expectedVersion)
     || (expectedVersion as number) < 0
     || !isUuid(requestId)
@@ -70,11 +91,8 @@ export async function POST(
     return apiError(400, "invalid_request", "Draw claim request is invalid");
   }
 
-  const { id } = await context.params;
-  let game = await findGameById(id);
-  if (!game) return apiError(404, "not_found", "Game not found");
-  const color = playerColor(game, await hashSecret(token));
-  if (!color) return apiError(404, "not_found", "Game not found");
+  const { color } = authorization;
+  let game: GameRow | null = authorization.game;
   game = await expireMultiplayerTurn(game);
   let moves = await readMoves(id);
   const existingAction = await readAction(id, requestId);
@@ -114,7 +132,13 @@ export async function POST(
       db.prepare(`UPDATE games SET
         status = 'completed', winner_color = NULL, termination = ?,
         version = ?, last_mutation_nonce = ?, updated_at = ?, finished_at = ?
-        WHERE id = ? AND version = ? AND status = 'active' AND turn_color = ?`)
+        WHERE id = ? AND version = ? AND status = 'active' AND turn_color = ?
+          AND EXISTS (
+            SELECT 1 FROM game_memberships
+            WHERE game_memberships.game_id = games.id
+              AND game_memberships.account_id = ?
+              AND game_memberships.color = ?
+          )`)
         .bind(
           claim,
           nextVersion,
@@ -123,6 +147,8 @@ export async function POST(
           now,
           id,
           expectedVersion,
+          color,
+          authorization.account.id,
           color,
         ),
       db.prepare(`INSERT INTO game_actions (

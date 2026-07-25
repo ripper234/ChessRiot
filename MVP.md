@@ -4,15 +4,18 @@
 
 - Human versus human asynchronous chess
 - Solo chess against Riot Bot with five levels
+- Sign in with ChatGPT, server-verified CAPTCHA, account-bound game membership,
+  and a cross-device game list
 - Two separate devices or browsers
 - Create, invite, and join
 - Standard legal rules and complete endings
 - Durable game state and move history
-- Reusable private seat links that resume on another device
+- Legacy private-seat migration into account membership
 - Turn enforcement and stale-write protection
 - A selectable one, three, or five-day multiplayer move deadline
 - Mobile-friendly original voxel/block-world interface
-- Nine original, locally persistent visual themes with a global textless picker
+- Eleven original, locally persistent visual themes, including seven
+  illustrated backgrounds, with a global textless picker
 - A visible, exact release version on every route and state
 - Authenticated, rate-limited preset cheers for joined two-player games, with a
   15-minute Good Game and Thanks courtesy window after completion
@@ -28,7 +31,7 @@
 
 ## Excluded
 
-- Accounts, social graph, and server-side account recovery
+- Social graph, in-app profile editing, and multi-account switching
 - AI coach
 - Closed-app push, email, and real-time transport
 - Matchmaking, ratings, points, rewards, and payments

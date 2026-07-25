@@ -21,10 +21,15 @@ type InviteState =
   | { kind: "missing" }
   | { kind: "error" };
 
-export function JoinGame({ inviteToken }: { inviteToken: string }) {
+export function JoinGame({
+  inviteToken,
+  displayName,
+}: {
+  inviteToken: string;
+  displayName: string;
+}) {
   const router = useRouter();
   const [invite, setInvite] = useState<InviteState>({ kind: "loading" });
-  const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const playerToken = useRef<string | null>(null);
@@ -58,11 +63,6 @@ export function JoinGame({ inviteToken }: { inviteToken: string }) {
   }, [inviteToken, router]);
 
   useEffect(() => {
-    try {
-      setName(localStorage.getItem("chessriot:displayName") ?? "");
-    } catch {
-      setName("");
-    }
     let cancelled = false;
     void loadInvite(() => cancelled);
     return () => { cancelled = true; };
@@ -70,9 +70,9 @@ export function JoinGame({ inviteToken }: { inviteToken: string }) {
 
   async function join(event: FormEvent) {
     event.preventDefault();
-    if (invite.kind !== "waiting" || !name.trim()) return;
+    if (invite.kind !== "waiting") return;
     if (!canUseGameStorage()) {
-      setError("Allow browser storage to keep your private game seat.");
+      setError("Allow browser storage so this invitation can be restored.");
       return;
     }
     setBusy(true);
@@ -82,7 +82,7 @@ export function JoinGame({ inviteToken }: { inviteToken: string }) {
       const response = await fetch(`/api/invitations/${inviteToken}/join`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ displayName: name.trim(), playerToken: playerToken.current }),
+        body: JSON.stringify({ playerToken: playerToken.current }),
       });
       const data = (await response.json()) as {
         game?: GameSnapshot;
@@ -96,8 +96,11 @@ export function JoinGame({ inviteToken }: { inviteToken: string }) {
         setInvite({ kind: "cancelled", gameId: invite.gameId });
         return;
       }
+      if (response.status === 401) {
+        window.location.assign(`/verify?return_to=${encodeURIComponent(window.location.pathname)}`);
+        return;
+      }
       if (!response.ok || !data.game) throw new Error(data.error?.message ?? "Could not join this game");
-      localStorage.setItem("chessriot:displayName", name.trim());
       localStorage.setItem(playerKey(data.game.id), playerToken.current);
       rememberGame(data.game);
       router.replace(privateGamePath(data.game.id, playerToken.current));
@@ -118,24 +121,12 @@ export function JoinGame({ inviteToken }: { inviteToken: string }) {
           <form className="voxel-card join-card" onSubmit={join}>
             <p className="eyebrow"><span /> PRIVATE CHALLENGE</p>
             <h1><em>{invite.creatorName}</em><br />wants a match.</h1>
-            <label htmlFor="join-name">What should they call you?</label>
-            <input
-              id="join-name"
-              value={name}
-              onChange={(event) => {
-                setName(event.target.value);
-                playerToken.current = null;
-              }}
-              maxLength={24}
-              autoComplete="nickname"
-              placeholder="Omri"
-              disabled={busy}
-            />
+            <p className="signed-in-note">Joining as <strong>{displayName}</strong></p>
             {error ? <p className="form-error" role="alert">{error}</p> : null}
-            <button className="primary-button" disabled={busy || !name.trim()}>
+            <button className="primary-button" disabled={busy}>
               {busy ? "CLAIMING SEAT…" : "JOIN AS BLACK  →"}
             </button>
-            <p className="fine-print">Claim your seat once, then keep your private game link for any device.</p>
+            <p className="fine-print">This seat will be linked to your ChessRiot account.</p>
           </form>
         ) : null}
         {invite.kind === "claimed" ? (

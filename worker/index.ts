@@ -17,6 +17,10 @@ interface Env {
   CONTROL_ORIGIN?: string;
   OBSERVABILITY_HASH_SECRET?: string;
   OPS_READ_SECRET?: string;
+  ACCOUNT_ID_SECRET?: string;
+  SESSION_SIGNING_SECRET?: string;
+  TURNSTILE_SITE_KEY?: string;
+  TURNSTILE_SECRET_KEY?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -38,6 +42,10 @@ const worker = {
     globalThis.__CHESSRIOT_CONTROL_ORIGIN__ = env.CONTROL_ORIGIN;
     globalThis.__CHESSRIOT_OBSERVABILITY_HASH_SECRET__ = env.OBSERVABILITY_HASH_SECRET;
     globalThis.__CHESSRIOT_OPS_READ_SECRET__ = env.OPS_READ_SECRET;
+    globalThis.__CHESSRIOT_ACCOUNT_ID_SECRET__ = env.ACCOUNT_ID_SECRET;
+    globalThis.__CHESSRIOT_SESSION_SIGNING_SECRET__ = env.SESSION_SIGNING_SECRET;
+    globalThis.__CHESSRIOT_TURNSTILE_SITE_KEY__ = env.TURNSTILE_SITE_KEY;
+    globalThis.__CHESSRIOT_TURNSTILE_SECRET_KEY__ = env.TURNSTILE_SECRET_KEY;
     const url = new URL(request.url);
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];

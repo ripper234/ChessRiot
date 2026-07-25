@@ -3,7 +3,18 @@ import type { GameSnapshot, PublicMove } from "./game-types";
 export const RELEASE_SEEN_KEY = "chessriot:release-seen";
 export const MOVE_NOTIFICATIONS_KEY = "chessriot:move-notifications";
 export const RELEASE_CHECK_INTERVAL_MS = 5 * 60 * 1_000;
-export const MOVE_CHECK_INTERVAL_MS = 3_000;
+export const MOVE_CHECK_INTERVAL_MS = 15_000;
+
+export interface WatchedAccountGame {
+  id: string;
+  mode: "solo" | "multiplayer";
+  status: "waiting" | "active" | "completed";
+  color: "w" | "b";
+  opponent: string | null;
+  turn: "w" | "b";
+  plyCount: number;
+  updatedAt: string;
+}
 
 export function releaseTarget(currentVersion: string, availableVersion: string | null): string {
   return availableVersion && availableVersion !== currentVersion
@@ -52,3 +63,15 @@ export function shouldNotifyForOpponentMove(
   return newestOpponentMoveAfter(game, afterPly) !== null;
 }
 
+export function opponentMovedSince(
+  previous: WatchedAccountGame | undefined,
+  current: WatchedAccountGame,
+): boolean {
+  if (
+    !previous
+    || current.mode !== "multiplayer"
+    || current.plyCount <= previous.plyCount
+  ) return false;
+  const lastMover = current.plyCount % 2 === 1 ? "w" : "b";
+  return lastMover !== current.color;
+}

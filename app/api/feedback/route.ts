@@ -1,5 +1,6 @@
 import { ensureSchema, getDatabase } from "@/db";
 import { apiError, json, readJson } from "@/lib/http";
+import { enforceAccountRateLimit, requireApiAccount } from "@/lib/accounts";
 import { appEnvironment } from "@/lib/runtime";
 import { requestIsSameOrigin, isUuid } from "@/lib/validation";
 import { APP_VERSION } from "@/lib/version";
@@ -19,6 +20,22 @@ function cleanPage(value: unknown): string {
 
 export async function POST(request: Request) {
   if (!requestIsSameOrigin(request)) return apiError(403, "wrong_origin", "Request origin is not allowed");
+  const account = await requireApiAccount(request);
+  if (!account) {
+    return apiError(401, "account_required", "Sign in and complete the human check");
+  }
+  const rate = await enforceAccountRateLimit(
+    account.id,
+    "feedback",
+    10,
+    60 * 60,
+  );
+  if (!rate.allowed) {
+    return json(
+      { error: { code: "rate_limited", message: "Too much feedback was submitted. Try again later." } },
+      { status: 429, headers: { "retry-after": String(rate.retryAfter) } },
+    );
+  }
   const body = await readJson(request);
   if (!body) return apiError(400, "invalid_request", "Invalid JSON request");
   const title = cleanText(body.title, 120);

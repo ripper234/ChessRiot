@@ -9,10 +9,12 @@ import {
   type PublicReaction,
   type ReactionKey,
 } from "@/lib/game-reactions";
-import { expireMultiplayerTurn, findGameById, playerColor } from "@/lib/game-store";
-import { apiError, bearerToken, json, readJson } from "@/lib/http";
+import { expireMultiplayerTurn } from "@/lib/game-store";
+import { authorizeGameRequest } from "@/lib/game-auth";
+import { enforceAccountRateLimit } from "@/lib/accounts";
+import { apiError, json, readJson } from "@/lib/http";
 import type { Color } from "@/lib/game-types";
-import { hashSecret, isUuid, requestIsSameOrigin } from "@/lib/validation";
+import { isUuid, requestIsSameOrigin } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -50,28 +52,24 @@ async function readReaction(gameId: string, requestId: string): Promise<Reaction
   ) ?? null;
 }
 
-async function authenticate(request: Request, id: string) {
-  const token = bearerToken(request);
-  if (!token) return null;
-  let game = await findGameById(id);
-  if (!game) return null;
-  const color = playerColor(game, await hashSecret(token));
-  if (!color) return null;
-  game = await expireMultiplayerTurn(game);
-  return { game, color };
-}
-
 export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  const auth = await authenticate(request, id);
-  if (!auth) return apiError(404, "not_found", "Game not found");
-  if (auth.game.game_mode !== "multiplayer") {
+  const authorization = await authorizeGameRequest(request, id);
+  if (!authorization.ok) {
+    return apiError(
+      authorization.status,
+      authorization.code,
+      authorization.message,
+    );
+  }
+  const game = await expireMultiplayerTurn(authorization.game);
+  if (game.game_mode !== "multiplayer") {
     return apiError(409, "reactions_not_available", "Reactions are for two-player games");
   }
-  if (auth.game.status === "waiting" || !auth.game.black_token_hash) {
+  if (game.status === "waiting" || !game.black_token_hash) {
     return apiError(409, "reactions_not_ready", "Player 2 must join before reactions are available");
   }
 
@@ -102,25 +100,45 @@ export async function POST(
   }
 
   const { id } = await context.params;
-  const auth = await authenticate(request, id);
-  if (!auth) return apiError(404, "not_found", "Game not found");
-  if (auth.game.game_mode !== "multiplayer") {
+  const authorization = await authorizeGameRequest(request, id);
+  if (!authorization.ok) {
+    return apiError(
+      authorization.status,
+      authorization.code,
+      authorization.message,
+    );
+  }
+  const rate = await enforceAccountRateLimit(
+    authorization.account.id,
+    "game_reaction",
+    120,
+    60 * 60,
+  );
+  if (!rate.allowed) {
+    return json(
+      { error: { code: "rate_limited", message: "Too many reactions. Try again later." } },
+      { status: 429, headers: { "retry-after": String(rate.retryAfter) } },
+    );
+  }
+  const game = await expireMultiplayerTurn(authorization.game);
+  const color = authorization.color;
+  if (game.game_mode !== "multiplayer") {
     return apiError(409, "reactions_not_available", "Reactions are for two-player games");
   }
-  if (auth.game.status === "waiting" || !auth.game.black_token_hash) {
+  if (game.status === "waiting" || !game.black_token_hash) {
     return apiError(409, "reactions_not_ready", "Player 2 must join before reactions are available");
   }
   const repeated = await readReaction(id, requestId);
   if (repeated) {
-    if (repeated.sender_color !== auth.color || repeated.reaction_key !== key) {
+    if (repeated.sender_color !== color || repeated.reaction_key !== key) {
       return apiError(409, "idempotency_conflict", "This request id was already used");
     }
     return json({ reaction: publicReaction(repeated) });
   }
   if (
-    auth.game.status === "completed"
+    game.status === "completed"
     && (
-      !postGameReactionWindowOpen(auth.game.finished_at ?? auth.game.updated_at)
+      !postGameReactionWindowOpen(game.finished_at ?? game.updated_at)
       || !isPostGameReactionKey(key)
     )
   ) {
@@ -155,21 +173,21 @@ export async function POST(
         reactionId,
         id,
         requestId,
-        auth.color,
+        color,
         key,
         createdAt,
         id,
-        auth.color,
+        color,
         cooldownAfter,
         id,
-        auth.color,
+        color,
         dailyAfter,
         REACTION_DAILY_LIMIT,
       )
       .run();
     if ((inserted.meta.changes ?? 0) === 0) {
       const raced = await readReaction(id, requestId);
-      if (raced && raced.sender_color === auth.color && raced.reaction_key === key) {
+      if (raced && raced.sender_color === color && raced.reaction_key === key) {
         return json({ reaction: publicReaction(raced) });
       }
       if (raced) return apiError(409, "idempotency_conflict", "This request id was already used");
@@ -179,7 +197,7 @@ export async function POST(
     const raced = await readReaction(id, requestId);
     if (
       raced
-      && raced.sender_color === auth.color
+      && raced.sender_color === color
       && raced.reaction_key === key
     ) {
       return json({ reaction: publicReaction(raced) });

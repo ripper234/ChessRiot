@@ -4,6 +4,9 @@
 - `lib/game-rules.ts`: pure chess.js adapter and terminal-state logic.
 - `lib/computer-player.ts`: bounded server-side move search for Riot Bot.
 - `lib/computer-turn.ts`: recovery path for a pending Solo computer turn.
+- `lib/account-auth.ts`: trusted identity binding, signed player session, and server-side CAPTCHA verification.
+- `lib/accounts.ts`: durable account summaries and account-scoped rate limits.
+- `lib/game-auth.ts`: account membership authorization and legacy seat migration.
 - `lib/observability.ts`: central request observation, safe event storage, correlation, and retention.
 - `lib/ops-auth.ts`: short-lived signed observability-read grant verification.
 - `lib/game-store.ts`: D1 reads and public snapshot shaping.
@@ -25,11 +28,27 @@ persistence. The one-ply authoritative response replaces it, then the bot reply
 arrives as the next version. Rejection or transport failure reconciles the
 preview against the server before rolling it back.
 
-Player authority is game-scoped. The reusable private game URL carries the bearer key in its fragment, which is not sent to the server as part of the HTTP URL. After the key authenticates, the client caches it locally and sends it only in the authorization header. D1 stores only its hash.
+Player authority is account-scoped and game-specific. Sites supplies the trusted
+Sign in with ChatGPT identity, Turnstile is verified by the Worker, and a
+short-lived signed HttpOnly cookie binds those two checks. D1 membership rows
+map an opaque HMAC account id to exactly one color per game.
+
+Historical private game URLs still carry their bearer key in the fragment,
+which is not sent as part of the HTTP URL. After a verified account presents a
+valid legacy key, it may atomically claim that still-unbound seat. New and
+migrated games can then be resumed from a bare game URL through account
+membership alone.
 
 In Multiplayer, the creator is White and the invitee is Black. In Solo, the
 human may be White or Black. The unowned bot seat uses an unreachable stored
-hash so only the human's private key authenticates.
+hash and never receives an account membership, so only the human account can
+authorize the game.
+
+Mutating routes enforce fixed-window account limits. Riot Bot work uses a
+short per-game/version D1 lease, then revalidates the authoritative version
+before searching or committing. These controls reduce application-resource
+abuse and duplicate compute; the Sites/Cloudflare edge remains responsible for
+volumetric network protection.
 
 Each environment stores its own observability events in its own D1. The Worker
 wraps API requests, normalizes routes, skips unchanged polling, and uses

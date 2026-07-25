@@ -9,6 +9,7 @@ function snapshot(overrides: Partial<GameSnapshot> = {}): GameSnapshot {
     aiDifficulty: null,
     status: "active",
     version: 1,
+    initialFen: "start",
     fen: "start",
     turn: "b",
     plyCount: 1,

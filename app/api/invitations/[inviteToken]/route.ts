@@ -1,13 +1,30 @@
 import { findGameByInviteHash } from "@/lib/game-store";
 import { apiError, json } from "@/lib/http";
+import { enforceAccountRateLimit, requireApiAccount } from "@/lib/accounts";
 import { hashSecret, isSecret } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ inviteToken: string }> },
 ) {
+  const account = await requireApiAccount(request);
+  if (!account) {
+    return apiError(401, "account_required", "Sign in and complete the human check");
+  }
+  const rate = await enforceAccountRateLimit(
+    account.id,
+    "invitation_preview",
+    120,
+    60 * 60,
+  );
+  if (!rate.allowed) {
+    return json(
+      { error: { code: "rate_limited", message: "Too many invitation checks. Try again later." } },
+      { status: 429, headers: { "retry-after": String(rate.retryAfter) } },
+    );
+  }
   const { inviteToken } = await context.params;
   if (!isSecret(inviteToken)) return apiError(404, "not_found", "Invitation not found");
   const game = await findGameByInviteHash(await hashSecret(inviteToken));

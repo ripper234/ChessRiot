@@ -132,6 +132,55 @@ export function playerColor(game: GameRow, tokenHash: string): Color | null {
   return null;
 }
 
+export async function accountPlayerColor(
+  game: GameRow,
+  accountId: string,
+  tokenHash?: string | null,
+): Promise<Color | null> {
+  await ensureSchema();
+  const existing = await getDatabase()
+    .prepare(`SELECT color FROM game_memberships
+      WHERE game_id = ? AND account_id = ?`)
+    .bind(game.id, accountId)
+    .first<{ color: Color }>();
+  if (existing?.color === "w" || existing?.color === "b") return existing.color;
+
+  if (!tokenHash) return null;
+  const legacyColor = playerColor(game, tokenHash);
+  if (!legacyColor) return null;
+  try {
+    await getDatabase()
+      .prepare(`INSERT INTO game_memberships (
+        game_id, color, account_id, claimed_at
+      ) VALUES (?, ?, ?, ?)`)
+      .bind(game.id, legacyColor, accountId, new Date().toISOString())
+      .run();
+  } catch {
+    const winner = await getDatabase()
+      .prepare(`SELECT account_id FROM game_memberships
+        WHERE game_id = ? AND color = ?`)
+      .bind(game.id, legacyColor)
+      .first<{ account_id: string }>();
+    if (winner?.account_id !== accountId) return null;
+  }
+  return legacyColor;
+}
+
+export async function addGameMembership(
+  gameId: string,
+  color: Color,
+  accountId: string,
+  claimedAt: string,
+): Promise<void> {
+  await ensureSchema();
+  await getDatabase()
+    .prepare(`INSERT INTO game_memberships (
+      game_id, color, account_id, claimed_at
+    ) VALUES (?, ?, ?, ?)`)
+    .bind(gameId, color, accountId, claimedAt)
+    .run();
+}
+
 export function oppositeColor(color: Color): Color {
   return color === "w" ? "b" : "w";
 }
@@ -208,6 +257,7 @@ export function snapshot(game: GameRow, moves: StoredMove[], you: Color): GameSn
     turnPaceDays: game.turn_pace_days,
     status: game.status,
     version: game.version,
+    initialFen: game.initial_fen,
     fen: game.current_fen,
     turn: game.turn_color,
     plyCount: game.ply_count,

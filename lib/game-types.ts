@@ -47,6 +47,7 @@ export interface GameSnapshot {
   turnPaceDays?: TurnPaceDays | null;
   status: "waiting" | "active" | "completed";
   version: number;
+  initialFen: string;
   fen: string;
   turn: Color;
   plyCount: number;

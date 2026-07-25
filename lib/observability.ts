@@ -151,6 +151,7 @@ function routeEvent(method: string, pathname: string): string | null {
     return null;
   }
   if (method === "GET" && /^\/api\/games\/[^/]+$/.test(pathname)) return "game.loaded";
+  if (method === "GET" && pathname === "/api/me/games") return null;
   if (method === "POST" && pathname === "/api/telemetry/client") return "client.telemetry";
   if (method === "POST" && pathname === "/api/feedback") return "feedback.submitted";
   // Health and dashboard polling are operational reads, not product actions.

@@ -11,6 +11,35 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.6.0",
+    date: "2026-07-25",
+    title: "Every game, every turn",
+    summary: "A complete My Games history and account-aware alerts make asynchronous play reliable across devices.",
+    changes: [
+      "Added cursor pagination so My Games can reach the complete account history instead of stopping at 50 games.",
+      "Added clear Your turn, Opponent's turn, Waiting, Won, Lost, and Draw states to every game card.",
+      "Made open-app opponent-move alerts watch all owned multiplayer games through the account session.",
+      "Removed the alert dependency on a legacy private-seat token or the currently open game route.",
+      "Added a clear Switch Account action through the trusted ChatGPT sign-out flow.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.6.0`,
+  },
+  {
+    version: "0.5.0",
+    date: "2026-07-24",
+    title: "Secure accounts and a bigger board",
+    summary: "Account login, a human check, a board-first layout, and original illustrated themes make ChessRiot safer and more immersive.",
+    changes: [
+      "Required a signed-in ChessRiot account and server-verified CAPTCHA before any game can be created or played.",
+      "Added account-bound game access, per-account rate limits, and bot-turn leases to reduce automated abuse and duplicate AI work.",
+      "Made the board fill the available desktop or mobile viewport and collapsed secondary match tools.",
+      "Showed the starting position before animating Riot Bot’s White opening when the player starts as Black.",
+      "Placed captured Black pieces with White and captured White pieces with Black.",
+      "Added seven original illustrated theme backgrounds, including medieval army and moonlit castle styles, plus two new themes.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.5.0`,
+  },
+  {
     version: "0.4.1",
     date: "2026-07-24",
     title: "Viewport clearance",

@@ -188,6 +188,12 @@ input:focus { border-color: var(--electric-blue); box-shadow: 0 0 0 1px rgba(0,2
 .recent-card strong, .recent-card small { display: block; }
 .recent-card strong { font-size: 13px; }
 .recent-card small { margin-top: 4px; color: var(--muted); font: 500 10px/1 var(--ui); }
+.game-state { display: block; margin-top: 4px; color: var(--muted); font: 800 10px/1.1 var(--ui); }
+.game-state[data-tone="ready"], .game-state[data-tone="won"] { color: var(--electric-blue); }
+.game-state[data-tone="lost"] { color: #ff8a9f; }
+.game-state[data-tone="draw"] { color: var(--chess-gold); }
+.load-more-games { min-width: 190px; margin: 22px auto 0; }
+.load-more-games:disabled { cursor: wait; opacity: .58; }
 .mini-piece { width: 46px; height: 46px; display: grid; place-items: center; border: 1px solid rgba(0,229,255,.34); font: 33px/1 Georgia,serif; clip-path: polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px); }
 .mini-piece.light { color: var(--text); background: var(--surface-soft); text-shadow: 0 0 8px rgba(0,229,255,.4); }
 .mini-piece.dark { color: var(--chess-gold); background: var(--riot-black); text-shadow: 0 0 8px rgba(255,196,0,.28); }
@@ -1444,6 +1450,223 @@ footer {
 
 @media (prefers-reduced-motion: reduce) {
   .square.king-in-check::after { animation: none !important; }
+}
+
+/* v0.5.0: account gate and board-first play surface */
+.account-shell {
+  min-height: 100dvh;
+  color: var(--text);
+}
+.account-stage {
+  min-height: calc(100dvh - 64px);
+  display: grid;
+  place-items: center;
+  padding: clamp(24px,7vw,80px) 16px;
+}
+.account-card {
+  width: min(100%,500px);
+  display: grid;
+  gap: 18px;
+  padding: clamp(28px,6vw,48px);
+  text-align: center;
+}
+.account-card h1 {
+  margin: 0;
+  font: italic clamp(38px,8vw,64px)/.92 var(--display);
+  text-transform: uppercase;
+}
+.account-card p {
+  margin: 0;
+  color: var(--muted);
+  font: 600 14px/1.55 var(--ui);
+}
+.account-card .primary-button {
+  display: grid;
+  place-items: center;
+  text-decoration: none;
+}
+.account-exit {
+  color: var(--muted);
+  font: 800 9px/1 var(--mono);
+  text-transform: uppercase;
+}
+.signed-in-note {
+  margin: -10px 0 18px;
+  color: var(--muted);
+  font: 600 13px/1.35 var(--ui);
+}
+.signed-in-note strong { color: var(--chess-gold); }
+.account-name {
+  max-width: 180px;
+  overflow: hidden;
+  color: var(--muted);
+  font: 800 10px/1 var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-topbar {
+  min-height: 60px;
+  height: 60px;
+}
+.game-topbar .brand-mark { width: 40px; height: 40px; }
+.game-topbar .brand-name { font-size: 30px; }
+.game-layout {
+  width: 100%;
+  max-width: none;
+  grid-template-columns: minmax(0,1fr) minmax(230px,280px);
+  gap: 16px;
+  padding: 10px 16px 18px;
+}
+.board-column { width: 100%; }
+.match-banner {
+  width: min(100%,calc(100dvh - 194px));
+  min-height: 68px;
+  margin-right: auto;
+  margin-left: auto;
+}
+.player-card {
+  min-height: 62px;
+  grid-template-columns: 30px minmax(0,1fr) 12px;
+}
+.player-card > div { min-width: 0; }
+.captured-by {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  overflow: hidden;
+}
+.captured-by small {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 7px;
+}
+.captured-by b {
+  min-width: 0;
+  overflow: hidden;
+  font: 14px/1 "Arial Unicode MS","Segoe UI Symbol",Georgia,serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.captured-by i {
+  font-style: normal;
+  -webkit-text-stroke-width: 1px;
+}
+.turn-panel,
+.turn-deadline,
+.draw-claims,
+.board-message {
+  width: min(100%,calc(100dvh - 194px));
+  margin-right: auto;
+  margin-left: auto;
+}
+.turn-panel {
+  min-height: 48px;
+  padding: 6px 11px;
+}
+.turn-panel > span { width: 31px; height: 31px; }
+.turn-panel strong { font-size: 18px; }
+.board-wrap {
+  width: min(calc(100vw - 328px),calc(100dvh - 194px));
+  max-width: none;
+  padding: clamp(5px,.65vw,10px);
+}
+.piece { font-size: 10.5cqw; }
+.game-sidebar {
+  align-content: start;
+  gap: 10px;
+  max-height: calc(100dvh - 80px);
+  padding-top: 0;
+  overflow-y: auto;
+}
+.game-tools {
+  border: 3px solid var(--theme-card-border,var(--stone-dark));
+  background: color-mix(in srgb,var(--surface) 92%,black);
+}
+.game-tools > summary {
+  min-height: 54px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 10px 13px;
+  color: var(--text);
+  cursor: pointer;
+  list-style: none;
+}
+.game-tools > summary::-webkit-details-marker { display: none; }
+.game-tools > summary::after {
+  position: absolute;
+  right: 13px;
+  content: "+";
+  color: var(--chess-gold);
+  font: 900 20px/1 var(--mono);
+}
+.game-tools[open] > summary::after { content: "−"; }
+.game-tools > summary span {
+  color: var(--chess-gold);
+  font: 900 9px/1 var(--mono);
+}
+.game-tools > summary b {
+  color: var(--muted);
+  font: 700 10px/1.2 var(--ui);
+}
+.game-tools-content {
+  display: grid;
+  gap: 10px;
+  padding: 0 8px 8px;
+}
+.game-tools-content .side-card {
+  padding: 14px;
+  box-shadow: none;
+}
+
+@media (max-width: 980px) {
+  .game-layout {
+    max-width: none;
+    grid-template-columns: minmax(0,1fr);
+    gap: 12px;
+    padding: 8px 5px max(86px,calc(env(safe-area-inset-bottom) + 74px));
+  }
+  .match-banner,
+  .turn-panel,
+  .turn-deadline,
+  .draw-claims,
+  .board-message {
+    width: min(100%,calc(100dvh - 170px));
+  }
+  .board-wrap {
+    width: min(calc(100vw - 10px),max(300px,calc(100dvh - 170px)));
+  }
+  .game-sidebar {
+    width: min(100%,720px);
+    max-height: none;
+    grid-template-columns: 1fr;
+    margin: 0 auto;
+    overflow: visible;
+  }
+}
+
+@media (max-width: 620px) {
+  .account-name { display: none; }
+  .game-topbar { min-height: 54px; height: 54px; }
+  .match-banner {
+    width: 100%;
+    min-height: 66px;
+    margin: 0 0 5px;
+  }
+  .match-banner > .player-card,
+  .match-banner > .player-card.you-player {
+    min-height: 62px;
+    grid-template-columns: 22px minmax(0,1fr) 8px;
+    padding: 5px 4px;
+  }
+  .captured-by { gap: 3px; }
+  .captured-by small { display: none; }
+  .captured-by b { font-size: 12px; }
+  .turn-panel { width: 100%; margin-bottom: 5px; }
+  .board-wrap { width: calc(100vw - 10px); }
 }
 
 /* v0.4.0: preset reactions and theme-aware victory finisher */
