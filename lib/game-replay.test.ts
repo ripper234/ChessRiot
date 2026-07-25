@@ -193,4 +193,10 @@ describe("game replay", () => {
     expect(nextHistoryCursor(null, 5)).toBeNull();
     expect(resolvedHistoryPly(99, 5)).toBe(5);
   });
+
+  it("steps from a visible Magic draft to the latest authoritative position", () => {
+    expect(previousHistoryCursor(null, 5, true)).toBe(5);
+    expect(previousHistoryCursor(null, 0, true)).toBe(0);
+    expect(previousHistoryCursor(5, 5, true)).toBe(4);
+  });
 });

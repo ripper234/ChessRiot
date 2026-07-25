@@ -33,14 +33,16 @@ export function HistoryControls({
       <button
         type="button"
         className="history-live"
-        aria-label={viewingHistory ? "Return to live position" : "Live position"}
+        aria-label={viewingHistory
+          ? `Return to live position, move ${currentPly} of ${latestPly}`
+          : "Live position"}
         disabled={!viewingHistory}
         onClick={onLive}
       >
         {unavailable
           ? "HISTORY OFF"
           : viewingHistory
-            ? `${currentPly}/${latestPly} · GO LIVE`
+            ? "GO LIVE"
             : "LIVE"}
       </button>
       <button

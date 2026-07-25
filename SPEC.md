@@ -1,4 +1,19 @@
-# ChessRiot v0.9.0 specification
+# ChessRiot v0.9.1 specification
+
+## v0.9.1 release additions
+
+- Live-board history follows the exact position visible to the player, including
+  the temporary optimistic Solo position. Back therefore never skips the last
+  authoritative position.
+- Back from a staged first leg of a Magic move cancels that draft and shows the
+  latest authoritative position instead of skipping a ply.
+- Historical squares remain readable but are removed from keyboard navigation.
+- The status announcement contains status text only; navigation controls are a
+  separate accessible group with 44-pixel touch targets.
+- Move confirmation restores focus to its still-usable trigger after
+  cancellation, or to the stable match status after a committed move or
+  promotion.
+- Move confirmation storage is described accurately as browser-local.
 
 ## v0.9.0 release additions
 

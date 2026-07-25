@@ -95,7 +95,9 @@ export function resolvedHistoryPly(
 export function previousHistoryCursor(
   cursor: HistoryCursor,
   latestPly: number,
+  hasVisibleDraft = false,
 ): HistoryCursor {
+  if (cursor === null && hasVisibleDraft) return Math.max(0, latestPly);
   const current = resolvedHistoryPly(cursor, latestPly);
   if (current === 0) return latestPly === 0 ? null : 0;
   return current - 1;

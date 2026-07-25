@@ -2474,17 +2474,21 @@ footer {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.turn-status-copy:focus-visible {
+  outline: 3px solid var(--electric-blue);
+  outline-offset: 3px;
+}
 .history-controls {
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: 40px minmax(62px, auto) 40px;
+  grid-template-columns: 44px minmax(68px, auto) 44px;
   gap: 5px;
   margin-left: auto;
 }
 .turn-panel > b + .history-controls { margin-left: 0; }
 .history-controls button {
-  min-width: 0;
-  min-height: 40px;
+  min-width: 44px;
+  min-height: 44px;
   padding: 0 8px;
   border: 3px solid var(--theme-frame-border, var(--stone-dark));
   color: var(--text);
@@ -2496,7 +2500,7 @@ footer {
 .history-controls .history-live {
   color: #172515;
   background: var(--teal-spark);
-  font-size: 8px;
+  font-size: 10px;
   letter-spacing: .3px;
 }
 .history-controls button:hover:not(:disabled) {
@@ -2632,15 +2636,15 @@ footer {
 
 @media (max-width: 620px) {
   .history-controls {
-    grid-template-columns: 35px minmax(54px, auto) 35px;
+    grid-template-columns: 44px minmax(62px, auto) 44px;
     gap: 3px;
   }
   .history-controls button {
-    min-height: 36px;
+    min-height: 44px;
     padding: 0 5px;
     border-width: 2px;
-    font-size: 16px;
+    font-size: 18px;
   }
-  .history-controls .history-live { font-size: 7px; }
+  .history-controls .history-live { font-size: 10px; }
   .move-confirm-card > div { grid-template-columns: 1fr; }
 }

@@ -11,6 +11,21 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.9.1",
+    date: "2026-07-25",
+    title: "History polish",
+    summary: "History now follows the position you can actually see, with stronger mobile and keyboard behavior.",
+    changes: [
+      "Kept the immediately previous position available while a Solo move is shown optimistically.",
+      "Made Back from a staged Magic first leg return to the latest authoritative position without skipping a ply.",
+      "Removed historical board squares from keyboard navigation while keeping their position labels available.",
+      "Moved history controls outside the live status announcement and enlarged their mobile touch targets.",
+      "Restored focus safely after move confirmation, including promotion and committed-move flows.",
+      "Clarified that Confirm every move is stored in the current browser.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.9.1`,
+  },
+  {
     version: "0.9.0",
     date: "2026-07-25",
     title: "History at hand",
@@ -18,7 +33,7 @@ export const RELEASES: ReleaseNote[] = [
     changes: [
       "Added always-visible Back and Forward arrows that step through committed positions without changing the live game.",
       "Kept historical viewing pinned when a new move arrives, with a direct Go Live control and frame-specific check, captures, and last-move highlights.",
-      "Added a device-local Confirm every move setting that is off by default.",
+      "Added a browser-local Confirm every move setting that is off by default.",
       "Applied one confirmation to every human move path, including tap, drag, promotion, and complete atomic Magic turns.",
       "Blocked stale and duplicate confirmations before they can submit a move.",
     ],

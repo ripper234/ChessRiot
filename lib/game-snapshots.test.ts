@@ -1,5 +1,6 @@
 import { Chess } from "chess.js";
 import { describe, expect, it } from "vitest";
+import { buildReplayFrames } from "./game-replay";
 import type { GameSnapshot } from "./game-types";
 import { optimisticMoveSnapshot, shouldAcceptGameSnapshot } from "./game-snapshots";
 
@@ -69,6 +70,31 @@ describe("optimisticMoveSnapshot", () => {
       san: "e4",
     });
     expect(authoritative).toEqual(startingSnapshot());
+  });
+
+  it("keeps the position immediately before an optimistic move available to history", () => {
+    const authoritative = startingSnapshot();
+    const optimistic = optimisticMoveSnapshot(
+      authoritative,
+      "e2",
+      "e4",
+      undefined,
+      { createdAt: "2026-07-24T00:00:01.000Z" },
+    );
+    const frames = buildReplayFrames(
+      optimistic!.moves,
+      optimistic!.initialFen,
+    );
+
+    expect(frames).toHaveLength(2);
+    expect(new Chess(frames.at(-1)!.fen).get("e4")).toMatchObject({
+      color: "w",
+      type: "p",
+    });
+    expect(new Chess(frames.at(-2)!.fen).get("e2")).toMatchObject({
+      color: "w",
+      type: "p",
+    });
   });
 
   it("refuses illegal, inactive, and out-of-turn previews", () => {

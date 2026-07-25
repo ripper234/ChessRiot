@@ -136,17 +136,23 @@
 - Stay on a historical ply while a Solo bot reply or Multiplayer poll adds a
   move. Verify the board remains pinned, the total increases, Forward reaches
   the new position, and Go Live returns to current play.
+- During the immediate Solo move preview, press Back and verify it shows the
+  position immediately before the visible move rather than skipping a ply.
+- Stage the first leg of a two-step Magic move, then press Back. Verify the
+  draft is cancelled and the latest authoritative position is shown.
 - Verify history browsing never submits a move, claim, or Magic turn and
-  suppresses live move effects and the checkmate finisher.
+  suppresses live move effects and the checkmate finisher. Verify the historical
+  board squares are not keyboard tab stops.
 - Verify Confirm every move is off by default. Enable it under Move Settings,
-  reload and open another game on the same device, and verify it remains on.
+  reload and open another game in the same browser, and verify it remains on.
 - With confirmation enabled, verify tap, pointer drag, keyboard activation,
   promotion, Magic Finish Turn, and a two-leg Magic move each open exactly one
   dialog and send no move before CONFIRM MOVE.
 - Verify KEEP THINKING, Escape, and backdrop cancellation send no move. Verify
   CONFIRM MOVE sends exactly one move, a rapid second activation cannot
   duplicate it, bot replies never prompt, and a changed game version dismisses
-  the stale intent.
+  the stale intent. After cancel, return focus to the trigger; after commit or
+  promotion, return it to the match status.
 - In an active joined two-player game, send each preset cheer from both seats
   and verify both players see the same bounded stream.
 - Verify identical reaction retries are idempotent, conflicting request reuse

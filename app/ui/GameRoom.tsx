@@ -194,6 +194,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const reactionTrigger = useRef<HTMLButtonElement | null>(null);
   const moveConfirmDialog = useRef<HTMLDialogElement | null>(null);
   const moveConfirmReturnFocus = useRef<HTMLElement | null>(null);
+  const moveConfirmFallback = useRef<HTMLDivElement | null>(null);
   const moveCommitInFlight = useRef(false);
   const postGameReactionsOpen = Boolean(
     game?.status === "completed"
@@ -585,8 +586,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
     try {
       return {
         frames: buildReplayFrames(
-          serverGame?.moves ?? [],
-          serverGame?.initialFen,
+          openingIntro ? [] : game?.moves ?? [],
+          game?.initialFen,
         ),
         error: false,
       };
@@ -596,7 +597,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
         error: true,
       };
     }
-  }, [serverGame?.initialFen, serverGame?.moves]);
+  }, [game?.initialFen, game?.moves, openingIntro]);
   const latestHistoryPly = Math.max(0, history.frames.length - 1);
   const visibleHistoryPly = resolvedHistoryPly(historyPly, latestHistoryPly);
   const viewingHistory = historyPly !== null && !history.error;
@@ -1059,7 +1060,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
   }
 
   function stepHistoryBack(): void {
-    showHistory(previousHistoryCursor(historyPly, latestHistoryPly));
+    showHistory(previousHistoryCursor(
+      historyPly,
+      latestHistoryPly,
+      Boolean(magicDraft),
+    ));
   }
 
   function stepHistoryForward(): void {
@@ -1305,11 +1310,16 @@ export function GameRoom({ gameId }: { gameId: string }) {
 
           <div
             className={`turn-panel ${viewingHistory ? "history" : game.turn === game.you.color ? "mine" : "theirs"} ${game.status}${displayCheck && !viewingHistory ? " check" : ""}`}
-            role={displayCheck && !viewingHistory ? "alert" : "status"}
-            aria-live={displayCheck && !viewingHistory ? "assertive" : "polite"}
           >
             <span>{viewingHistory ? "↶" : game.status === "completed" ? "⚑" : magicDraft ? "✦" : displayCheck ? "!" : "◆"}</span>
-            <div>
+            <div
+              className="turn-status-copy"
+              ref={moveConfirmFallback}
+              role={displayCheck && !viewingHistory ? "alert" : "status"}
+              aria-live={displayCheck && !viewingHistory ? "assertive" : "polite"}
+              aria-atomic="true"
+              tabIndex={-1}
+            >
               <small>{viewingHistory ? "MOVE HISTORY" : magicDraft ? "MAGIC MOVE" : displayCheck && game.status !== "completed" ? "CHECK" : "MATCH STATUS"}</small>
               <strong>{statusText}</strong>
             </div>
@@ -1427,7 +1437,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                     className={`square ${isDarkSquare(square) ? "dark-square" : "light-square"}${isSelected ? " selected" : ""}${isLast ? " last-move" : ""}${isCheckedKing ? " king-in-check" : ""}${legal ? capture ? " capture-target" : " legal-target" : ""}${isDragOver ? " drag-over" : ""}${effect?.capture ? " capture-impact" : ""}`}
                     key={square}
                     onClick={() => tapSquare(square)}
-                    disabled={busy || botThinking}
+                    disabled={busy || botThinking || viewingHistory}
                   >
                     {showRank ? <span className="rank-label">{rank}</span> : null}
                     {showFile ? <span className="file-label">{file}</span> : null}
@@ -1495,7 +1505,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                   />
                   <span>
                     <strong>CONFIRM EVERY MOVE</strong>
-                    <small>Ask “Are you sure?” before a move is sent. Stored on this device.</small>
+                    <small>Ask “Are you sure?” before a move is sent. Stored in this browser.</small>
                   </span>
                   <b>{confirmEveryMove ? "ON" : "OFF"}</b>
                 </label>
@@ -1603,7 +1613,18 @@ export function GameRoom({ gameId }: { gameId: string }) {
         }}
         onClose={() => {
           setPendingMove(null);
-          window.requestAnimationFrame(() => moveConfirmReturnFocus.current?.focus());
+          window.requestAnimationFrame(() => {
+            const preferred = moveConfirmReturnFocus.current;
+            const preferredIsReady = Boolean(
+              preferred
+              && preferred.isConnected
+              && preferred !== document.body
+              && !preferred.matches(":disabled,[aria-disabled='true']"),
+            );
+            const target = preferredIsReady ? preferred : moveConfirmFallback.current;
+            target?.focus({ preventScroll: true });
+            moveConfirmReturnFocus.current = null;
+          });
         }}
         onClick={(event) => {
           if (event.target === event.currentTarget) cancelMoveConfirmation();

@@ -33,7 +33,7 @@ describe("HistoryControls", () => {
       onLive: noop,
     }));
 
-    expect(html).toContain('aria-label="Return to live position"');
-    expect(html).toContain("2/7 · GO LIVE");
+    expect(html).toContain('aria-label="Return to live position, move 2 of 7"');
+    expect(html).toContain("GO LIVE");
   });
 });
