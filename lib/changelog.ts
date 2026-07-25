@@ -11,6 +11,17 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.9.2",
+    date: "2026-07-25",
+    title: "First-move history fix",
+    summary: "Back now works even while the first Magic move of a game is still being staged.",
+    changes: [
+      "Kept the Back arrow available at ply zero when a staged Magic position is visible.",
+      "Made Back cancel that draft and reveal the authoritative starting position.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.9.2`,
+  },
+  {
     version: "0.9.1",
     date: "2026-07-25",
     title: "History polish",

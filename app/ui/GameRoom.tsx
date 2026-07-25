@@ -1329,6 +1329,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
               latestPly={latestHistoryPly}
               viewingHistory={viewingHistory}
               unavailable={history.error}
+              canStepBackFromDraft={Boolean(magicDraft)}
               onBack={stepHistoryBack}
               onForward={stepHistoryForward}
               onLive={returnToLive}

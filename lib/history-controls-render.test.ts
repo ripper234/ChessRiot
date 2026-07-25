@@ -36,4 +36,23 @@ describe("HistoryControls", () => {
     expect(html).toContain('aria-label="Return to live position, move 2 of 7"');
     expect(html).toContain("GO LIVE");
   });
+
+  it("keeps Back enabled for a staged first-ply Magic move", () => {
+    const html = renderToStaticMarkup(createElement(HistoryControls, {
+      currentPly: 0,
+      latestPly: 0,
+      viewingHistory: false,
+      canStepBackFromDraft: true,
+      onBack: noop,
+      onForward: noop,
+      onLive: noop,
+    }));
+
+    const previousButton = html.match(
+      /<button[^>]*aria-label="Previous position"[^>]*>/,
+    )?.[0];
+
+    expect(previousButton).toBeDefined();
+    expect(previousButton).not.toContain("disabled");
+  });
 });

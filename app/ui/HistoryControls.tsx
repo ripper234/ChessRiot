@@ -5,6 +5,7 @@ interface HistoryControlsProps {
   latestPly: number;
   viewingHistory: boolean;
   unavailable?: boolean;
+  canStepBackFromDraft?: boolean;
   onBack(): void;
   onForward(): void;
   onLive(): void;
@@ -15,6 +16,7 @@ export function HistoryControls({
   latestPly,
   viewingHistory,
   unavailable = false,
+  canStepBackFromDraft = false,
   onBack,
   onForward,
   onLive,
@@ -25,7 +27,7 @@ export function HistoryControls({
         type="button"
         aria-label="Previous position"
         title="Previous position"
-        disabled={unavailable || currentPly === 0}
+        disabled={unavailable || (currentPly === 0 && !canStepBackFromDraft)}
         onClick={onBack}
       >
         <span aria-hidden="true">←</span>

@@ -1,4 +1,9 @@
-# ChessRiot v0.9.1 specification
+# ChessRiot v0.9.2 specification
+
+## v0.9.2 release additions
+
+- At ply zero, a staged first-leg Magic move keeps the Back arrow enabled.
+  Using it cancels the draft and shows the authoritative starting position.
 
 ## v0.9.1 release additions
 
