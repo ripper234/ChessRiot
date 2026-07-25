@@ -47,6 +47,14 @@ const page = await pageResponse.text();
 assert.match(page, new RegExp(`CONTROL v${packageVersion.replace(/\./g, "\\.")}`));
 assert.match(page, /AUTO CHECK · 5 MIN/);
 assert.match(page, /<h1>Release pipeline<\/h1>/);
+assert.match(
+  page,
+  /\.pipeline-node b\{[^}]*width:calc\(100% \+ 12px\)[^}]*margin:7px -6px 12px[^}]*padding:2px 6px 3px[^}]*overflow:hidden[^}]*font:italic clamp\(20px,2\.2vw,24px\)\/1\.15/,
+);
+assert.match(
+  page,
+  /\.pipeline-node b\{font-size:clamp\(22px,7vw,24px\)\}/,
+);
 assert.match(page, /Environment health/);
 assert.match(page, /Recent events/);
 assert.match(page, /<span class="summary-title">Feedback <span class="drawer-count"/);

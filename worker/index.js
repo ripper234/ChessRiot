@@ -28,7 +28,7 @@ const ENVIRONMENTS = [
   },
 ];
 
-const CONTROL_VERSION = "0.3.1";
+const CONTROL_VERSION = "0.3.2";
 const STATUS_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
 const HEALTH_STATES = new Set([
@@ -439,8 +439,9 @@ const page = `<!doctype html>
         align-items:stretch;gap:8px}.pipeline-node{min-width:0;display:flex;flex-direction:column;align-items:flex-start;
         padding:14px;border:1px solid var(--line);background:rgba(5,9,20,.6)}.pipeline-node.latest{border-color:rgba(255,196,0,.55)}
       .pipeline-label{display:block;color:var(--muted);font:800 8px/1 var(--mono);letter-spacing:.8px}
-      .pipeline-node b{display:block;margin:7px 0 12px;overflow:hidden;color:var(--text);font:italic 24px/1 var(--display);
-        text-overflow:ellipsis;white-space:nowrap}.pipeline-open{min-height:31px;display:inline-flex;align-items:center;
+      .pipeline-node b{display:block;width:calc(100% + 12px);margin:7px -6px 12px;padding:2px 6px 3px;overflow:hidden;
+        color:var(--text);font:italic clamp(20px,2.2vw,24px)/1.15 var(--display);text-overflow:ellipsis;white-space:nowrap}
+      .pipeline-open{min-height:31px;display:inline-flex;align-items:center;
         justify-content:center;margin-top:auto;padding:0 9px;border:1px solid rgba(0,229,255,.55);color:var(--cyan);
         background:rgba(0,229,255,.06);font:850 10px/1 var(--mono);letter-spacing:.5px;text-decoration:none;
         cursor:pointer}.pipeline-open:hover{border-color:var(--cyan);background:rgba(0,229,255,.13)}
@@ -499,7 +500,8 @@ const page = `<!doctype html>
         line-height:1.5;white-space:pre-wrap}.feedback-meta{display:block;margin-top:9px;color:var(--muted);
         font:700 8px/1.35 var(--mono)}
       button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
-      @media(max-width:980px){.pipeline{grid-template-columns:1fr}.pipeline-connector{min-height:62px}.pipeline-arrow{transform:rotate(90deg)}
+      @media(max-width:980px){.pipeline{grid-template-columns:1fr}.pipeline-node b{font-size:clamp(22px,7vw,24px)}
+        .pipeline-connector{min-height:62px}.pipeline-arrow{transform:rotate(90deg)}
         .pipeline-action{width:min(260px,100%)}.environment-summary{grid-template-columns:100px 1fr}.metrics{grid-column:1/-1}}
       @media(max-width:680px){.topbar{padding:10px 13px}.brand strong{font-size:21px}.brand small{display:none}
         .github{width:38px;padding:0;justify-content:center}.github span{display:none}.github.releases-link{width:auto;padding:0 10px}main{padding:14px 10px 40px}.release-board{padding:14px}

@@ -36,6 +36,8 @@ zeroes or demo data.
 
 ## Control changelog
 
+- `0.3.2`: Added safe spacing around italic pipeline versions and responsive
+  sizing so complete version numbers render without clipped glyphs.
 - `0.3.1`: Removed visible cached and hard-coded versions, added strict
   check-then-render behavior, linked the public Releases page, and simplified
   section headings and feedback counts.
