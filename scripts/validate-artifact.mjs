@@ -46,10 +46,18 @@ const pageResponse = await workerModule.default.fetch(
 const page = await pageResponse.text();
 assert.match(page, new RegExp(`CONTROL v${packageVersion.replace(/\./g, "\\.")}`));
 assert.match(page, /AUTO CHECK · 5 MIN/);
-assert.match(page, /OBSERVABILITY/);
-assert.match(page, /Version history/);
-assert.match(page, /Code changes deploy automatically to Development/);
-assert.match(page, /Staging and Production move only after your explicit promotion click/);
+assert.match(page, /<h1>Release pipeline<\/h1>/);
+assert.match(page, /Environment health/);
+assert.match(page, /Recent events/);
+assert.match(page, /<span class="summary-title">Feedback <span class="drawer-count"/);
+assert.match(page, /Promotions require Sites access/);
+assert.match(
+  page,
+  /https:\/\/chessriot\.ripper234\.chatgpt\.site\/releases/,
+);
+assert.doesNotMatch(page, /Version history|CONTROL \+ GAME|ADVANCED VERSIONS/);
+assert.doesNotMatch(page, /<details[^>]*\sopen(?:\s|>)/);
+assert.doesNotMatch(page, /<dialog|Copy request|Open ChatGPT/);
 assert.match(page, /script src="\/control\.js"/);
 assert.doesNotMatch(page, /script-src 'unsafe-inline'/);
 
@@ -74,16 +82,30 @@ assert.doesNotMatch(script, /No successful health response/);
 assert.doesNotMatch(script, /\bUNAVAILABLE\b|\bUNDEPLOYED\b/i);
 assert.doesNotMatch(script, /UNDEPLOYED|UNAVAILABLE/);
 assert.match(script, /AbortController/);
-assert.match(script, /sessionStorage/);
+assert.doesNotMatch(script, /sessionStorage|fallbackVersion/);
 assert.match(script, /COULD NOT VERIFY/);
-assert.match(script, /Deployment state is unaffected/);
+assert.match(script, /Could not verify a current version/);
+assert.match(script, /function verifiedVersion/);
+assert.doesNotMatch(script, /deployedVersion|lastKnownHealth|verifiedAt/);
+assert.doesNotMatch(
+  script,
+  /telemetryFresh[\s\S]{0,180}overview\.version/,
+);
+assert.match(script, /label: "LATEST IN DEV", version: developmentVersion/);
+assert.match(script, /window\.addEventListener\("pageshow"/);
+assert.match(script, /if \(event\.persisted\) void loadStatus\(\)/);
+assert.match(
+  script,
+  /version\.textContent = stage\.version \? "v" \+ stage\.version : "—"/,
+);
+assert.doesNotMatch(script, /Not recorded|STALE HEALTH|Showing last good/);
 assert.match(script, /lastSuccessfulAt/);
 assert.match(script, /latest successful environment check/);
-assert.match(script, /LOADING DEPLOYMENT STATE/);
-assert.match(script, /MANUALLY PROMOTE FROM/);
-assert.match(script, /AUTO-DEPLOYED FROM CODE/);
-assert.match(script, /WAITING FOR DEV AUTO-DEPLOY/);
-assert.match(script, /Manual only: your click promotes/);
+assert.match(script, /pipeline-connector/);
+assert.match(script, /AUTO TARGET v/);
+assert.match(script, /PROMOTE v/);
+assert.match(script, /action\.disabled = true/);
+assert.match(script, /deploy access required/);
 assert.match(script, /pipeline-open/);
 assert.match(script, /OPEN " \+ stage\.label \+ " ↗"/);
 assert.match(script, /if \(!stage\.latest\)/);
@@ -94,9 +116,10 @@ assert.match(script, /"Open " \+ stage\.label \+ " environment"/);
 assert.match(script, /connecting\.disabled = true/);
 assert.match(script, /connecting\.textContent = "CONNECTING…"/);
 assert.doesNotMatch(script, /PREPARE DEPLOY LATEST/);
-assert.doesNotMatch(script, /openRequest\(latestVersion/);
-assert.match(script, /snapshot\.loading = true/);
-assert.doesNotMatch(script, /if \(cached\) snapshot\.loading = false/);
+assert.doesNotMatch(script, /openRequest|navigator\.clipboard|chatgpt\.com/);
+assert.match(script, /loading: true/);
+assert.match(script, /health: null/);
+assert.doesNotMatch(script, /cachedSnapshot|registrySnapshot|preserveSnapshot/);
 
 const forbiddenAutomaticPromotion = await workerModule.default.fetch(
   new Request("https://control.test/api/promote", {
@@ -263,34 +286,36 @@ const status = await statusResponse.json();
 assert.equal(status.controlVersion, packageVersion);
 assert.equal(status.refreshIntervalMs, 300000);
 assert.deepEqual(
-  status.environments.map(({ key, deployedVersion, url, grant }) => ({
+  status.environments.map(({ key, url, grant }) => ({
     key,
-    deployedVersion,
     url,
     hasGrant: typeof grant === "string" && grant.includes("."),
   })),
   [
     {
       key: "development",
-      deployedVersion: "0.3.2",
       url: "https://dev.test",
       hasGrant: true,
     },
     {
       key: "staging",
-      deployedVersion: "0.3.0",
       url: "https://staging.test",
       hasGrant: true,
     },
     {
       key: "production",
-      deployedVersion: "0.2.2",
       url: "https://prod.test",
       hasGrant: true,
     },
   ],
 );
-assert.equal(status.releases[0].version, "0.4.1");
+for (const environment of status.environments) {
+  assert.equal("deployedVersion" in environment, false);
+  assert.equal("lastKnownHealth" in environment, false);
+  assert.equal("verifiedAt" in environment, false);
+}
+assert.equal("releases" in status, false);
+assert.equal("latestVersion" in status, false);
 
 const fallbackResponse = await workerModule.default.fetch(
   new Request("https://control.test/api/status"),
@@ -299,14 +324,11 @@ const fallbackResponse = await workerModule.default.fetch(
 );
 const fallbackStatus = await fallbackResponse.json();
 assert.deepEqual(
-  fallbackStatus.environments.map(({ key, deployedVersion }) => ({
-    key,
-    deployedVersion,
-  })),
+  fallbackStatus.environments.map(({ key }) => key),
   [
-    { key: "development", deployedVersion: "0.4.1" },
-    { key: "staging", deployedVersion: "0.3.3" },
-    { key: "production", deployedVersion: "0.3.3" },
+    "development",
+    "staging",
+    "production",
   ],
 );
 
@@ -343,7 +365,8 @@ const seededResponse = await workerModule.default.fetch(
 );
 const seeded = await seededResponse.json();
 assert.equal(seeded.registryPersistence, "d1");
-assert.equal(seeded.environments[0].deployedVersion, "0.3.2");
+assert.equal("deployedVersion" in seeded.environments[0], false);
+assert.equal(database.rows.get("development").deployed_version, "0.3.2");
 
 const successfulObservationResponse = await workerModule.default.fetch(
   new Request("https://control.test/api/registry/observation", {
@@ -397,12 +420,12 @@ const persistedResponse = await workerModule.default.fetch(
   {},
 );
 const persisted = await persistedResponse.json();
-assert.equal(persisted.environments[0].deployedVersion, "0.3.3");
+assert.equal("deployedVersion" in persisted.environments[0], false);
 assert.equal(
-  persisted.environments[0].lastKnownHealth.lastHealthAt,
+  database.rows.get("development").last_health_at,
   successfulObservation.lastHealthAt,
 );
-assert.equal(persisted.latestVersion, "0.4.1");
+assert.equal("latestVersion" in persisted, false);
 
 const promotedEnv = {
   ...persistentEnv,
@@ -423,9 +446,10 @@ const promotedResponse = await workerModule.default.fetch(
   {},
 );
 const promoted = await promotedResponse.json();
-assert.equal(promoted.environments[0].deployedVersion, "0.3.4");
-assert.equal(promoted.environments[0].lastKnownHealth.runtimeVersion, null);
-assert.equal(promoted.latestVersion, "0.4.1");
+assert.equal("deployedVersion" in promoted.environments[0], false);
+assert.equal(database.rows.get("development").deployed_version, "0.3.4");
+assert.equal(database.rows.get("development").runtime_version, null);
+assert.equal("latestVersion" in promoted, false);
 
 const reconciliationDb = new FakeD1();
 const oldRegistryEnv = {
@@ -474,9 +498,9 @@ const reconciledResponse = await workerModule.default.fetch(
   reconciledEnv,
   {},
 );
-const reconciled = await reconciledResponse.json();
+await reconciledResponse.json();
 assert.deepEqual(
-  reconciled.environments.map(({ deployedVersion }) => deployedVersion),
+  [...reconciliationDb.rows.values()].map(({ deployed_version }) => deployed_version),
   ["0.3.3", "0.3.3", "0.3.3"],
 );
 
