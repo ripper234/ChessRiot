@@ -11,6 +11,17 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.3.6",
+    date: "2026-07-25",
+    title: "Sandboxed play restored",
+    summary: "Legitimate same-origin moves work when ChessRiot is opened inside a sandboxed Sites frame.",
+    changes: [
+      "Accepted opaque browser origins only when protected Fetch Metadata proves the request is same-origin.",
+      "Kept cross-site and metadata-free opaque requests blocked.",
+    ],
+    githubUrl: REPOSITORY_URL,
+  },
+  {
     version: "0.3.3",
     date: "2026-07-24",
     title: "Unmistakable piece colors",

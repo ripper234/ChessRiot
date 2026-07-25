@@ -75,6 +75,44 @@ async function body(response) {
 
 let runtime = createRuntime();
 try {
+  const sandboxedTelemetry = await runtime.dispatchFetch(
+    `${origin}/api/telemetry/client`,
+    {
+      method: "POST",
+      headers: {
+        origin: "null",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        event: "client.network_error",
+        code: "sandboxed_same_origin",
+      }),
+    },
+  );
+  assert.equal(sandboxedTelemetry.status, 204);
+
+  const crossSiteOpaqueTelemetry = await runtime.dispatchFetch(
+    `${origin}/api/telemetry/client`,
+    {
+      method: "POST",
+      headers: {
+        origin: "null",
+        "sec-fetch-site": "cross-site",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        event: "client.network_error",
+        code: "cross_site_opaque",
+      }),
+    },
+  );
+  assert.equal(crossSiteOpaqueTelemetry.status, 403);
+
   const whiteToken = secret();
   const blackToken = secret();
   const thirdToken = secret();

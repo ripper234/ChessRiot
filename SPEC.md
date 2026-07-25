@@ -1,7 +1,10 @@
-# ChessRiot v0.3.3 specification
+# ChessRiot v0.3.6 specification
 
 ## v0.3 release additions
 
+- Browser mutations accept an opaque `Origin: null` only when browser-controlled
+  Fetch Metadata identifies a same-origin request. Cross-site and metadata-free
+  opaque requests remain rejected.
 - The home route is a compact start flow: display name, Solo or Multiplayer,
   conditional Solo bot level, and one primary action.
 - Accepted moves receive a short destination animation; captures also receive a

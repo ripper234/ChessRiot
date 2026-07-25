@@ -33,5 +33,20 @@ export async function hashSecret(secret: string): Promise<string> {
 
 export function requestIsSameOrigin(request: Request): boolean {
   const origin = request.headers.get("origin");
-  return !origin || origin === new URL(request.url).origin;
+  const fetchSite = request.headers.get("sec-fetch-site");
+  const expectedOrigin = new URL(request.url).origin;
+
+  // Fetch Metadata is browser-controlled. When it exists, mutation requests
+  // must come from this exact origin rather than only the same registrable site.
+  if (fetchSite !== null && fetchSite !== "same-origin") return false;
+
+  if (origin === null) {
+    return fetchSite === null || fetchSite === "same-origin";
+  }
+  if (origin === expectedOrigin) return true;
+
+  // Sites can run inside a sandboxed same-origin frame. Chromium then serializes
+  // its opaque origin as "null", while Sec-Fetch-Site still proves exact
+  // same-origin provenance.
+  return origin === "null" && fetchSite === "same-origin";
 }
