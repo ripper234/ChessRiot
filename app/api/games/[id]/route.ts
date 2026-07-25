@@ -12,6 +12,35 @@ import { apiError, json } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
+const BOT_READ_RETRY_DELAYS_MS = [25, 40, 60, 90, 125, 175, 225, 300];
+
+function isPendingComputerTurn(game: GameRow): boolean {
+  return (
+    game.game_mode === "solo" &&
+    game.status === "active" &&
+    game.turn_color === computerColor(game)
+  );
+}
+
+async function waitForComputerTurnResolution(
+  gameId: string,
+  expectedVersion: number,
+): Promise<GameRow | null> {
+  let game = await findGameById(gameId);
+  for (const delayMs of BOT_READ_RETRY_DELAYS_MS) {
+    if (
+      !game ||
+      game.version !== expectedVersion ||
+      !isPendingComputerTurn(game)
+    ) {
+      return game;
+    }
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    game = await findGameById(gameId);
+  }
+  return game;
+}
+
 export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> },
@@ -28,13 +57,10 @@ export async function GET(
   const { color } = authorization;
   let game: GameRow | null = authorization.game;
   game = await expireMultiplayerTurn(game);
-  if (
-    game.game_mode === "solo"
-    && game.status === "active"
-    && game.turn_color === computerColor(game)
-  ) {
+  if (isPendingComputerTurn(game)) {
+    const expectedVersion = game.version;
     await playPendingComputerTurn(id);
-    game = await findGameById(id);
+    game = await waitForComputerTurnResolution(id, expectedVersion);
     if (!game) return apiError(404, "not_found", "Game not found");
   }
 

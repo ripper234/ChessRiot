@@ -1,7 +1,9 @@
 import { Chess } from "chess.js";
 import { describe, expect, it } from "vitest";
+import { applyCandidate, INITIAL_FEN, type CandidateMove } from "./game-rules";
 import { buildReplayFrames, replayFrameLabel } from "./game-replay";
 import type { PublicMove } from "./game-types";
+import type { CompiledMagicRules } from "./magic-rules";
 
 function move(
   ply: number,
@@ -48,5 +50,61 @@ describe("game replay", () => {
     expect(() => buildReplayFrames([
       move(1, "w", "e2", "e5", "e5"),
     ])).toThrow("Game history cannot be replayed");
+  });
+
+  it("replays an atomic two-step rook action as one labeled turn", () => {
+    const rules: CompiledMagicRules = {
+      version: 1,
+      rules: [{ kind: "double_move", piece: "r" }],
+    };
+    const candidates: CandidateMove[] = [
+      { from: "a2", to: "a4" },
+      { from: "h7", to: "h6" },
+      {
+        from: "a1",
+        to: "a3",
+        second: { from: "a3", to: "h3" },
+      },
+    ];
+    const history: PublicMove[] = [];
+    for (const candidate of candidates) {
+      const outcome = applyCandidate(
+        INITIAL_FEN,
+        history,
+        candidate,
+        rules,
+      );
+      history.push({
+        ply: history.length + 1,
+        color: outcome.move.color,
+        from: outcome.move.from,
+        to: outcome.move.to,
+        promotion: (outcome.move.promotion as PublicMove["promotion"]) ?? null,
+        san: outcome.move.san,
+        second: outcome.secondMove
+          ? {
+            from: outcome.secondMove.from,
+            to: outcome.secondMove.to,
+            san: outcome.secondMove.san,
+          }
+          : null,
+        fenBefore: outcome.fenBefore,
+        fenAfter: outcome.fenAfter,
+        createdAt: "2026-07-25T00:00:00.000Z",
+      });
+    }
+    const frames = buildReplayFrames(history);
+    const rookMove = history[2];
+
+    expect(frames).toHaveLength(4);
+    expect(frames[3]).toMatchObject({
+      from: "a1",
+      to: "h3",
+      san: `${rookMove.san} → ${rookMove.second!.san}`,
+    });
+    expect(new Chess(frames[3].fen).get("h3")).toMatchObject({
+      color: "w",
+      type: "r",
+    });
   });
 });

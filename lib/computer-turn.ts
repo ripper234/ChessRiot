@@ -5,6 +5,7 @@ import {
   assertAuthoritativeState,
   computerColor,
   findGameById,
+  gameMagicRules,
   readMoves,
 } from "./game-store";
 import { recordEvent } from "./observability";
@@ -85,8 +86,15 @@ export async function playPendingComputerTurn(gameId: string): Promise<void> {
     const difficulty = leasedGame.ai_difficulty;
     const storedMoves = await readMoves(gameId);
     const replayed = assertAuthoritativeState(leasedGame, storedMoves);
+    const magicRules = gameMagicRules(leasedGame);
     const startedAt = performance.now();
-    const candidate = chooseComputerMove(replayed.fen(), difficulty, botColor);
+    const candidate = chooseComputerMove(
+      replayed.fen(),
+      difficulty,
+      botColor,
+      Math.random,
+      magicRules,
+    );
     if (!candidate) {
       await recordEvent({
         event: "bot.move_failed",
@@ -101,6 +109,7 @@ export async function playPendingComputerTurn(gameId: string): Promise<void> {
       leasedGame.initial_fen,
       storedMoves,
       candidate,
+      magicRules,
     );
     const now = new Date().toISOString();
     const nextVersion = leasedGame.version + 1;
@@ -141,8 +150,9 @@ export async function playPendingComputerTurn(gameId: string): Promise<void> {
         .prepare(
           `INSERT INTO moves (
       game_id, ply, request_id, color, from_square, to_square, promotion,
-      san, fen_before, fen_after, created_at
-    ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      san, second_from_square, second_to_square, second_san,
+      fen_before, fen_after, created_at
+    ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       FROM games WHERE id = ? AND version = ? AND last_mutation_nonce = ?`,
         )
         .bind(
@@ -154,6 +164,9 @@ export async function playPendingComputerTurn(gameId: string): Promise<void> {
           candidate.to,
           candidate.promotion ?? null,
           outcome.move.san,
+          candidate.second?.from ?? null,
+          candidate.second?.to ?? null,
+          outcome.secondMove?.san ?? null,
           outcome.fenBefore,
           outcome.fenAfter,
           now,
@@ -178,6 +191,7 @@ export async function playPendingComputerTurn(gameId: string): Promise<void> {
           color: botColor,
           difficulty,
           gameStatus: status,
+          magic: Boolean(magicRules),
         },
       });
       if (wonCommit && outcome.completed) {

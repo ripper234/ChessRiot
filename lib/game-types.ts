@@ -1,3 +1,5 @@
+import type { PublicMagicRules } from "./magic-rules";
+
 export type Color = "w" | "b";
 export type GameMode = "solo" | "multiplayer";
 export type AiDifficulty = 1 | 2 | 3 | 4 | 5;
@@ -25,6 +27,11 @@ export interface StoredMove {
   to: string;
   promotion: Promotion | null;
   san: string;
+  second: {
+    from: string;
+    to: string;
+    san: string;
+  } | null;
   fenBefore: string;
   fenAfter: string;
   createdAt: string;
@@ -37,6 +44,13 @@ export interface PublicMove {
   to: string;
   promotion: Promotion | null;
   san: string;
+  second?: {
+    from: string;
+    to: string;
+    san: string;
+  } | null;
+  fenBefore?: string;
+  fenAfter?: string;
   createdAt: string;
 }
 
@@ -45,6 +59,7 @@ export interface GameSnapshot {
   mode: GameMode;
   aiDifficulty: AiDifficulty | null;
   turnPaceDays?: TurnPaceDays | null;
+  magicRules?: PublicMagicRules | null;
   status: "waiting" | "active" | "completed";
   version: number;
   initialFen: string;

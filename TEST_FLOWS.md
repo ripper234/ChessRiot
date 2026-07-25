@@ -23,11 +23,34 @@
 6. Backdate a live player turn beyond its selected pace, load the game, and
    verify the waiting player loses on time before a late move can commit.
 
+## Magic Rules
+
+1. Create Solo and Multiplayer games with Magic Rules off and verify both use
+   standard chess with no Magic banner.
+2. Enable the box, enter `Rooks move twice. Pawns never get promoted.`, and
+   verify the interpreted rules before creating the game.
+3. Verify the invitation shows the same rules before Black joins and the live
+   game, My Games card, move history, and replay retain them after refresh.
+4. Clear a rook path, stage its first legal move, then finish the turn once.
+   Repeat and move that same rook a second time. Verify the latter stores both
+   legs but advances only one version, ply, deadline, and repetition position.
+5. Verify the second rook move cannot use a different rook. Verify a first rook
+   move that gives check ends the turn immediately.
+6. Verify pawns cannot enter the final rank, castling is absent under no
+   castling, and en passant is absent under no en passant.
+7. Verify Riot Bot follows all active Magic Rules.
+8. Retry the same create or move request id and verify identical results.
+   Change the Magic prompt or second rook leg and verify a conflict.
+9. Enter an unsupported or partly unsupported paragraph and verify creation is
+   rejected without creating a game or silently dropping any clause.
+
 ## Enforcement
 
 - Reject an illegal move, wrong player, missing or wrong key, stale version, reused invite, and post-completion move.
 - Retrying an identical request id is idempotent.
 - A different payload with an already-used request id conflicts.
+- Concurrent authenticated reads during a pending Riot Bot turn return the
+  single committed bot version rather than a transient pre-bot snapshot.
 
 ## Rules
 

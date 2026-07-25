@@ -11,6 +11,24 @@ import {
   type CandidateMove,
 } from "./game-rules";
 import type { Promotion } from "./game-types";
+import type { CompiledMagicRules } from "./magic-rules";
+
+const DOUBLE_ROOK: CompiledMagicRules = {
+  version: 1,
+  rules: [{ kind: "double_move", piece: "r" }],
+};
+const NO_PROMOTION: CompiledMagicRules = {
+  version: 1,
+  rules: [{ kind: "no_promotion" }],
+};
+const NO_CASTLING: CompiledMagicRules = {
+  version: 1,
+  rules: [{ kind: "no_castling" }],
+};
+const NO_EN_PASSANT: CompiledMagicRules = {
+  version: 1,
+  rules: [{ kind: "no_en_passant" }],
+};
 
 type HistoricMove = { from: string; to: string; promotion?: Promotion };
 
@@ -139,5 +157,150 @@ describe("ChessRiot rules adapter", () => {
       { from: "a2", to: "a3" },
     );
     expect(result.termination).toBe("seventy_five_move");
+  });
+
+  it("commits two moves by the same rook as one atomic ply", () => {
+    const result = applyCandidate(
+      "4k3/8/8/8/8/8/R7/4K3 w - - 0 1",
+      [],
+      {
+        from: "a2",
+        to: "a3",
+        second: { from: "a3", to: "h3" },
+      },
+      DOUBLE_ROOK,
+    );
+    expect(result.move).toMatchObject({ from: "a2", to: "a3", piece: "r" });
+    expect(result.secondMove).toMatchObject({ from: "a3", to: "h3", piece: "r" });
+    expect(result.turn).toBe("b");
+    expect(new Chess(result.fenAfter).get("h3")).toMatchObject({
+      color: "w",
+      type: "r",
+    });
+    expect(result.fenAfter.split(" ")[4]).toBe("1");
+    expect(result.fenAfter.split(" ")[5]).toBe("1");
+  });
+
+  it("requires the same rook for the second leg and ends a checking first leg", () => {
+    const fen = "4k3/8/8/8/8/8/R7/R3K3 w - - 0 1";
+    expect(() => applyCandidate(
+      fen,
+      [],
+      {
+        from: "a2",
+        to: "a3",
+        second: { from: "a1", to: "b1" },
+      },
+      DOUBLE_ROOK,
+    )).toThrow(IllegalMoveError);
+
+    const checking = applyCandidate(
+      fen,
+      [],
+      { from: "a2", to: "e2" },
+      DOUBLE_ROOK,
+    );
+    expect(checking.check).toBe(true);
+    expect(() => applyCandidate(
+      fen,
+      [],
+      {
+        from: "a2",
+        to: "e2",
+        second: { from: "e2", to: "e3" },
+      },
+      DOUBLE_ROOK,
+    )).toThrow(IllegalMoveError);
+  });
+
+  it("supports two captures in one rook action and resets the halfmove clock", () => {
+    const result = applyCandidate(
+      "4k3/8/8/8/n2n4/8/8/R3K3 w - - 17 9",
+      [],
+      {
+        from: "a1",
+        to: "a4",
+        second: { from: "a4", to: "d4" },
+      },
+      DOUBLE_ROOK,
+    );
+    expect(result.move.captured).toBe("n");
+    expect(result.secondMove?.captured).toBe("n");
+    expect(result.fenAfter.split(" ")[4]).toBe("0");
+  });
+
+  it("advances the fullmove counter once for a two-leg Black rook action", () => {
+    const result = applyCandidate(
+      "4k3/r7/8/8/8/8/8/4K3 b - - 0 12",
+      [],
+      {
+        from: "a7",
+        to: "a6",
+        second: { from: "a6", to: "h6" },
+      },
+      DOUBLE_ROOK,
+    );
+    expect(result.fenAfter.split(" ")[5]).toBe("13");
+  });
+
+  it("blocks all pawn moves onto the final rank", () => {
+    const fen = "4k3/P7/8/8/8/8/8/4K3 w - - 0 1";
+    expect(() => applyCandidate(
+      fen,
+      [],
+      { from: "a7", to: "a8", promotion: "q" },
+      NO_PROMOTION,
+    )).toThrow(IllegalMoveError);
+
+    expect(() => applyCandidate(
+      "1r2k3/P7/8/8/8/8/8/4K3 w - - 0 1",
+      [],
+      { from: "a7", to: "b8", promotion: "q" },
+      NO_PROMOTION,
+    )).toThrow(IllegalMoveError);
+  });
+
+  it("disables castling without changing ordinary king moves", () => {
+    const fen = "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1";
+    expect(() => applyCandidate(
+      fen,
+      [],
+      { from: "e1", to: "g1" },
+      NO_CASTLING,
+    )).toThrow(IllegalMoveError);
+    expect(
+      applyCandidate(
+        fen,
+        [],
+        { from: "e1", to: "f1" },
+        NO_CASTLING,
+      ).move.to,
+    ).toBe("f1");
+  });
+
+  it("disables an otherwise legal en passant capture", () => {
+    const fen = "k7/8/8/3pP3/8/8/8/4K3 w - d6 0 2";
+    expect(applyCandidate(
+      fen,
+      [],
+      { from: "e5", to: "d6" },
+    ).move.isEnPassant()).toBe(true);
+    expect(() => applyCandidate(
+      fen,
+      [],
+      { from: "e5", to: "d6" },
+      NO_EN_PASSANT,
+    )).toThrow(IllegalMoveError);
+  });
+
+  it("uses Magic Rules when deciding stalemate", () => {
+    const fen = "8/P7/8/8/8/5k2/6r1/7K w - - 0 1";
+    const chess = new Chess(fen);
+    expect(chess.isStalemate()).toBe(false);
+    expect(analyzeTerminal(chess, 1, NO_PROMOTION)).toEqual({
+      completed: true,
+      winner: null,
+      termination: "stalemate",
+    });
   });
 });

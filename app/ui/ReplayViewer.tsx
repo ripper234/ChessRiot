@@ -13,6 +13,7 @@ import {
 } from "@/lib/game-replay";
 import { isDarkSquare } from "@/lib/game-presentation";
 import type { Color, PublicMove } from "@/lib/game-types";
+import type { PublicMagicRules } from "@/lib/magic-rules";
 
 const PIECES: Record<Color, Record<PieceSymbol, string>> = {
   w: { p: "♟", n: "♞", b: "♝", r: "♜", q: "♛", k: "♚" },
@@ -32,9 +33,14 @@ const RANKS = ["8", "7", "6", "5", "4", "3", "2", "1"];
 interface ReplayViewerProps {
   moves: PublicMove[];
   orientation: Color;
+  magicRules: PublicMagicRules | null;
 }
 
-export function ReplayViewer({ moves, orientation }: ReplayViewerProps) {
+export function ReplayViewer({
+  moves,
+  orientation,
+  magicRules,
+}: ReplayViewerProps) {
   const launcher = useRef<HTMLButtonElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
@@ -89,6 +95,11 @@ export function ReplayViewer({ moves, orientation }: ReplayViewerProps) {
         <span>{moves.length} PLY</span>
       </div>
       <p>Step through the complete game without changing live play.</p>
+      {magicRules ? (
+        <p className="replay-magic-summary">
+          <strong>✦ MAGIC</strong> {magicRules.labels.join(" · ")}
+        </p>
+      ) : null}
       <button
         className="replay-launch"
         type="button"
@@ -129,6 +140,13 @@ export function ReplayViewer({ moves, orientation }: ReplayViewerProps) {
             </div>
             <button type="button" onClick={closeReplay} aria-label="Return to live game">×</button>
           </header>
+
+          {magicRules ? (
+            <div className="replay-magic-rules" role="note">
+              <strong>✦ MAGIC RULES</strong>
+              <span>{magicRules.labels.join(" · ")}</span>
+            </div>
+          ) : null}
 
           <div className="replay-position" role="status" aria-live="polite" aria-atomic="true">
             <strong>{frame.ply === 0 ? "START" : `MOVE ${frame.moveNumber}`}</strong>

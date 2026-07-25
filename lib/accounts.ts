@@ -13,6 +13,7 @@ export interface AccountGameSummary {
   opponent: string | null;
   turn: Color;
   plyCount: number;
+  isMagic: boolean;
   updatedAt: string;
   outcome: { winner: Color | null; reason: Termination } | null;
 }
@@ -143,6 +144,7 @@ export async function listAccountGames(
         games.termination,
         games.updated_at,
         game_settings.game_mode,
+        CASE WHEN game_settings.magic_rules_json IS NULL THEN 0 ELSE 1 END AS is_magic,
         game_memberships.color,
         CASE
           WHEN game_memberships.color = 'w' THEN games.black_name
@@ -164,6 +166,7 @@ export async function listAccountGames(
       termination: Termination | null;
       updated_at: string;
       game_mode: GameMode;
+      is_magic: number;
       color: Color;
       opponent: string | null;
     }>();
@@ -177,6 +180,7 @@ export async function listAccountGames(
     opponent: row.opponent,
     turn: row.turn_color,
     plyCount: row.ply_count,
+    isMagic: row.is_magic === 1,
     updatedAt: row.updated_at,
     outcome: row.termination
       ? { winner: row.winner_color, reason: row.termination }

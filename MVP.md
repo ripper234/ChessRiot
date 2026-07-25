@@ -8,7 +8,9 @@
   and a cross-device game list
 - Two separate devices or browsers
 - Create, invite, and join
-- Standard legal rules and complete endings
+- Standard legal rules and complete endings by default
+- Optional per-game Magic Rules for two-step rook turns, no promotion, no
+  castling, and no en passant, with unsupported prompts rejected
 - Durable game state and move history
 - Legacy private-seat migration into account membership
 - Turn enforcement and stale-write protection
@@ -38,3 +40,6 @@
 - Free-form chat
 - Collectible skins or account-bound cosmetics
 - Native apps and app-store packaging
+- Arbitrary executable rule code or silently interpreted unsupported prompts
+- Google sign-in and Telegram release announcements until their external
+  credentials and explicit feature flags are configured

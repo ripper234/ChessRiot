@@ -1,7 +1,8 @@
-import { findGameByInviteHash } from "@/lib/game-store";
+import { findGameByInviteHash, gameMagicRules } from "@/lib/game-store";
 import { apiError, json } from "@/lib/http";
 import { enforceAccountRateLimit, requireApiAccount } from "@/lib/accounts";
 import { hashSecret, isSecret } from "@/lib/validation";
+import { publicMagicRules } from "@/lib/magic-rules";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +43,12 @@ export async function GET(
     );
   }
   return json(
-    { state: "waiting", gameId: game.id, creatorName: game.white_name },
+    {
+      state: "waiting",
+      gameId: game.id,
+      creatorName: game.white_name,
+      magicRules: publicMagicRules(game.magic_prompt, gameMagicRules(game)),
+    },
     { headers: { "referrer-policy": "no-referrer" } },
   );
 }

@@ -11,6 +11,20 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.7.0",
+    date: "2026-07-25",
+    title: "Magic Rules",
+    summary: "Every new Solo or Multiplayer game can optionally carry its own safe, immutable rule changes.",
+    changes: [
+      "Added an optional Magic Rules box to game creation with a concise natural-language prompt.",
+      "Compiled recognized prompts into versioned rules and rejected unsupported text instead of executing arbitrary code or silently ignoring it.",
+      "Added atomic two-step rook turns: the same rook may move again before the turn ends, while giving check ends the turn immediately.",
+      "Added no-promotion, no-castling, and no-en-passant rules with server, client, replay, and Riot Bot enforcement.",
+      "Showed Magic Rules before joining, during play, in replay and move history, and on My Games cards.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.7.0`,
+  },
+  {
     version: "0.6.0",
     date: "2026-07-25",
     title: "Every game, every turn",

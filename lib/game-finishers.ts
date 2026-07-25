@@ -33,7 +33,7 @@ export function classifyGameFinisher(
 
   try {
     const position = new Chess(next.fen);
-    const attackingTo = lastMove.to as Square;
+    const attackingTo = (lastMove.second?.to ?? lastMove.to) as Square;
     const attackingPiece = position.get(attackingTo);
     const loser: Color = next.outcome.winner === "w" ? "b" : "w";
     const losingKing = position.board()
@@ -51,7 +51,7 @@ export function classifyGameFinisher(
       winner: next.outcome.winner,
       loser,
       attackingPiece: attackingPiece.type,
-      attackingFrom: lastMove.from as Square,
+      attackingFrom: (lastMove.second?.from ?? lastMove.from) as Square,
       attackingTo,
       losingKingSquare: losingKing.square,
     };

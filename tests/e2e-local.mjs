@@ -190,6 +190,7 @@ try {
   assert.equal(created.game.mode, "multiplayer");
   assert.equal(created.game.aiDifficulty, null);
   assert.equal(created.game.turnPaceDays, 3);
+  assert.equal(created.game.magicRules, null);
   assert.equal((await request(
     runtime,
     `/api/invitations/${inviteToken}`,
@@ -423,6 +424,148 @@ try {
     headers: { authorization: `Bearer ${thirdToken}` },
   });
   assert.equal(unauthorized.status, 404);
+
+  const magicWhite = secret();
+  const magicBlack = secret();
+  const magicInvite = secret();
+  const magicCreateRequestId = randomUUID();
+  const magicPrompt = "Rooks move twice. Pawns never get promoted.";
+  const magicCreateResponse = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Magic White",
+      mode: "multiplayer",
+      playerToken: magicWhite,
+      inviteToken: magicInvite,
+      requestId: magicCreateRequestId,
+      magicPrompt,
+    }),
+  });
+  assert.equal(magicCreateResponse.status, 201);
+  const magicCreated = await body(magicCreateResponse);
+  const magicGameId = magicCreated.game.id;
+  assert.equal(magicCreated.game.magicRules.prompt, magicPrompt);
+  assert.deepEqual(magicCreated.game.magicRules.labels, [
+    "Rooks may move twice; check ends the turn",
+    "Pawns cannot move onto the final rank",
+  ]);
+
+  const magicCreateRetry = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Magic White",
+      mode: "multiplayer",
+      playerToken: magicWhite,
+      inviteToken: magicInvite,
+      requestId: magicCreateRequestId,
+      magicPrompt,
+    }),
+  });
+  assert.equal(magicCreateRetry.status, 200);
+  assert.equal((await body(magicCreateRetry)).game.id, magicGameId);
+
+  const magicCreateConflict = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Magic White",
+      mode: "multiplayer",
+      playerToken: magicWhite,
+      inviteToken: magicInvite,
+      requestId: magicCreateRequestId,
+      magicPrompt: "No castling.",
+    }),
+  });
+  assert.equal(magicCreateConflict.status, 409);
+  assert.equal((await body(magicCreateConflict)).error.code, "idempotency_conflict");
+
+  const unsupportedMagicResponse = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Magic White",
+      mode: "multiplayer",
+      playerToken: secret(),
+      inviteToken: secret(),
+      requestId: randomUUID(),
+      magicPrompt: "Knights can fly anywhere.",
+    }),
+  });
+  assert.equal(unsupportedMagicResponse.status, 422);
+  assert.equal((await body(unsupportedMagicResponse)).error.code, "magic_rule_unsupported");
+
+  const magicPreviewResponse = await request(
+    runtime,
+    `/api/invitations/${magicInvite}`,
+    {
+      accountEmail: "magic-black@players.chessriot.test",
+      accountName: "Magic Black",
+    },
+  );
+  assert.equal(magicPreviewResponse.status, 200);
+  const magicPreview = await body(magicPreviewResponse);
+  assert.equal(magicPreview.state, "waiting");
+  assert.deepEqual(magicPreview.magicRules.labels, magicCreated.game.magicRules.labels);
+
+  const magicJoinResponse = await request(
+    runtime,
+    `/api/invitations/${magicInvite}/join`,
+    {
+      method: "POST",
+      accountEmail: "magic-black@players.chessriot.test",
+      accountName: "Magic Black",
+      body: JSON.stringify({
+        displayName: "Magic Black",
+        playerToken: magicBlack,
+      }),
+    },
+  );
+  assert.equal(magicJoinResponse.status, 200);
+  const magicJoined = await body(magicJoinResponse);
+  assert.equal(magicJoined.game.version, 1);
+  assert.deepEqual(magicJoined.game.magicRules.labels, magicCreated.game.magicRules.labels);
+
+  const playMagicMove = async (
+    token,
+    from,
+    to,
+    expectedVersion,
+    second,
+  ) => {
+    const response = await request(runtime, `/api/games/${magicGameId}/moves`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        from,
+        to,
+        expectedVersion,
+        requestId: randomUUID(),
+        ...(second ? { second } : {}),
+      }),
+    });
+    return { response, data: await body(response) };
+  };
+
+  assert.equal((await playMagicMove(magicWhite, "a2", "a4", 1)).response.status, 200);
+  assert.equal((await playMagicMove(magicBlack, "h7", "h6", 2)).response.status, 200);
+  const atomicRookTurn = await playMagicMove(
+    magicWhite,
+    "a1",
+    "a3",
+    3,
+    { from: "a3", to: "h3" },
+  );
+  assert.equal(atomicRookTurn.response.status, 200);
+  assert.equal(atomicRookTurn.data.game.version, 4);
+  assert.equal(atomicRookTurn.data.game.plyCount, 3);
+  assert.equal(atomicRookTurn.data.game.turn, "b");
+  assert.deepEqual(atomicRookTurn.data.game.moves[2].second, {
+    from: "a3",
+    to: "h3",
+    san: "Rh3",
+  });
+  const magicGames = await body(await request(runtime, "/api/me/games", {
+    headers: { authorization: `Bearer ${magicWhite}` },
+  }));
+  assert.equal(magicGames.games.find((game) => game.id === magicGameId)?.isMagic, true);
 
   const move = async (
     token,
@@ -766,6 +909,28 @@ try {
     }),
   });
   assert.equal(invalidTurnPace.status, 400);
+
+  const magicSoloToken = secret();
+  const magicSoloResponse = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Magic Solo",
+      mode: "solo",
+      difficulty: 2,
+      playerToken: magicSoloToken,
+      inviteToken: secret(),
+      requestId: requestIdForColor("w"),
+      magicPrompt: "No castling. No en passant.",
+    }),
+  });
+  assert.equal(magicSoloResponse.status, 201);
+  const magicSolo = await body(magicSoloResponse);
+  assert.equal(magicSolo.game.mode, "solo");
+  assert.equal(magicSolo.game.you.color, "w");
+  assert.deepEqual(magicSolo.game.magicRules.labels, [
+    "No castling",
+    "No en passant",
+  ]);
 
   const soloToken = secret();
   const soloInvite = secret();

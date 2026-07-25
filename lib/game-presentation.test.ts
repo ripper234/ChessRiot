@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Chess } from "chess.js";
 import type { PublicMove } from "./game-types";
 import {
+  actionEndpointSquares,
   capturedPiecesByVictimColor,
   checkedKingSquare,
   illegalDestinationMessage,
@@ -84,5 +85,15 @@ describe("board colors", () => {
     expect(isDarkSquare("h8")).toBe(true);
     expect(isDarkSquare("a8")).toBe(false);
     expect(isDarkSquare("h1")).toBe(false);
+  });
+});
+
+describe("move presentation", () => {
+  it("highlights the start and final square of an atomic rook action", () => {
+    expect(actionEndpointSquares({
+      from: "a1",
+      to: "a3",
+      second: { from: "a3", to: "h3", san: "Rh3" },
+    })).toEqual(["a1", "h3"]);
   });
 });

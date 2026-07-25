@@ -46,6 +46,9 @@ export async function ensureSchema(): Promise<void> {
           to_square TEXT NOT NULL,
           promotion TEXT,
           san TEXT NOT NULL,
+          second_from_square TEXT,
+          second_to_square TEXT,
+          second_san TEXT,
           fen_before TEXT NOT NULL,
           fen_after TEXT NOT NULL,
           created_at TEXT NOT NULL,
@@ -64,6 +67,8 @@ export async function ensureSchema(): Promise<void> {
             CHECK (human_color IN ('w', 'b')),
           turn_pace_days INTEGER
             CHECK (turn_pace_days IS NULL OR turn_pace_days IN (1, 3, 5)),
+          magic_prompt TEXT,
+          magic_rules_json TEXT,
           FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE,
           CHECK (
             (game_mode = 'solo' AND ai_difficulty IS NOT NULL) OR
@@ -209,6 +214,50 @@ export async function ensureSchema(): Promise<void> {
             .prepare("PRAGMA table_info(game_settings)")
             .all<{ name: string }>();
           if (!(reloaded.results ?? []).some((column) => column.name === "turn_pace_days")) {
+            throw error;
+          }
+        }
+      }
+      const finalSettingsColumns = await db
+        .prepare("PRAGMA table_info(game_settings)")
+        .all<{ name: string }>();
+      for (const column of [
+        { name: "magic_prompt", sql: "ALTER TABLE game_settings ADD COLUMN magic_prompt TEXT" },
+        { name: "magic_rules_json", sql: "ALTER TABLE game_settings ADD COLUMN magic_rules_json TEXT" },
+      ]) {
+        if ((finalSettingsColumns.results ?? []).some((current) => current.name === column.name)) {
+          continue;
+        }
+        try {
+          await db.prepare(column.sql).run();
+        } catch (error) {
+          const reloaded = await db
+            .prepare("PRAGMA table_info(game_settings)")
+            .all<{ name: string }>();
+          if (!(reloaded.results ?? []).some((current) => current.name === column.name)) {
+            throw error;
+          }
+        }
+      }
+
+      const moveColumns = await db
+        .prepare("PRAGMA table_info(moves)")
+        .all<{ name: string }>();
+      for (const column of [
+        { name: "second_from_square", sql: "ALTER TABLE moves ADD COLUMN second_from_square TEXT" },
+        { name: "second_to_square", sql: "ALTER TABLE moves ADD COLUMN second_to_square TEXT" },
+        { name: "second_san", sql: "ALTER TABLE moves ADD COLUMN second_san TEXT" },
+      ]) {
+        if ((moveColumns.results ?? []).some((current) => current.name === column.name)) {
+          continue;
+        }
+        try {
+          await db.prepare(column.sql).run();
+        } catch (error) {
+          const reloaded = await db
+            .prepare("PRAGMA table_info(moves)")
+            .all<{ name: string }>();
+          if (!(reloaded.results ?? []).some((current) => current.name === column.name)) {
             throw error;
           }
         }

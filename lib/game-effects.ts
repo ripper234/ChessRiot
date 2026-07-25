@@ -16,8 +16,8 @@ export function boardEffects(
     .filter((move: PublicMove) => move.ply > previous.plyCount)
     .map((move) => ({
       ply: move.ply,
-      from: move.from,
-      to: move.to,
-      capture: move.san.includes("x"),
+      from: move.second?.from ?? move.from,
+      to: move.second?.to ?? move.to,
+      capture: (move.second?.san ?? move.san).includes("x"),
     }));
 }

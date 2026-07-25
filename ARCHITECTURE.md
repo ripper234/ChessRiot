@@ -2,6 +2,8 @@
 
 - `app/`: Vinext pages, client interactions, and HTTP APIs.
 - `lib/game-rules.ts`: pure chess.js adapter and terminal-state logic.
+- `lib/magic-rules.ts`: bounded prompt compiler and versioned per-game rule
+  schema.
 - `lib/computer-player.ts`: bounded server-side move search for Riot Bot.
 - `lib/computer-turn.ts`: recovery path for a pending Solo computer turn.
 - `lib/account-auth.ts`: trusted identity binding, signed player session, and server-side CAPTCHA verification.
@@ -13,14 +15,20 @@
 - `db/schema.ts` and `drizzle/`: durable game and move schema.
 - `worker/index.ts`: Cloudflare Worker entry and runtime binding handoff.
 
-The server is authoritative. The client submits only a move, expected version,
-and idempotency key. Each mutation reconstructs the chess engine from immutable
-history and validates FEN, turn, and ply invariants before the candidate. Every
-human move atomically advances one ply and returns immediately. In Solo, the
-client then requests the pending Riot Bot turn in the background. Every
-authenticated game read runs the same pending-turn recovery, so refresh or
-browser closure cannot strand the game. A White bot opening is committed during
-create.
+The server is authoritative. The client submits a move, an optional same-rook
+second leg, the expected version, and an idempotency key. Each mutation
+reconstructs the chess engine from immutable history and validates FEN, turn,
+and ply invariants before the candidate. Every completed human turn atomically
+advances one ply and returns immediately. In Solo, the client then requests the
+pending Riot Bot turn in the background. Every authenticated game read runs the
+same pending-turn recovery, so refresh or browser closure cannot strand the
+game. A White bot opening is committed during create.
+
+Magic prompt text is normalized and compiled only through an explicit
+allowlist. The immutable versioned result, not the prose, drives legality.
+Unsupported clauses fail game creation. A valid two-step rook action is replayed
+as two chess.js moves but stored and counted as one application turn, so no
+partially committed variant state can become authoritative.
 
 While the human request is in flight, the client renders a display-only legal
 move preview without advancing the accepted server version or local
@@ -49,6 +57,10 @@ short per-game/version D1 lease, then revalidates the authoritative version
 before searching or committing. These controls reduce application-resource
 abuse and duplicate compute; the Sites/Cloudflare edge remains responsible for
 volumetric network protection.
+
+Concurrent game reads that encounter an existing bot lease wait for a bounded
+fresh read instead of briefly returning the pre-bot version. They never acquire
+a second lease or duplicate a move.
 
 Each environment stores its own observability events in its own D1. The Worker
 wraps API requests, normalizes routes, skips unchanged polling, and uses

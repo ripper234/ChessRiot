@@ -23,6 +23,11 @@ import type { Color } from "@/lib/game-types";
 import type { AiDifficulty } from "@/lib/game-types";
 import { recordEvent } from "@/lib/observability";
 import { enforceAccountRateLimit, requireApiAccount } from "@/lib/accounts";
+import {
+  compileMagicPrompt,
+  serializeMagicRules,
+  type CompiledMagicRules,
+} from "@/lib/magic-rules";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +66,17 @@ export async function POST(request: Request) {
   const turnPaceDays = mode === "multiplayer"
     ? body.turnPaceDays === undefined ? 3 : body.turnPaceDays
     : null;
+  let magicPrompt: string | null = null;
+  let magicRules: CompiledMagicRules | null = null;
+  if (body.magicPrompt !== undefined && body.magicPrompt !== null && body.magicPrompt !== "") {
+    const magic = compileMagicPrompt(body.magicPrompt);
+    if (!magic.ok) {
+      return apiError(422, "magic_rule_unsupported", magic.message);
+    }
+    magicPrompt = magic.prompt;
+    magicRules = magic.compiled;
+  }
+  const magicRulesJson = serializeMagicRules(magicRules);
   const turnPaceMatches = (value: number | null) =>
     value === turnPaceDays
     || (mode === "multiplayer" && body.turnPaceDays === undefined && value === null);
@@ -88,7 +104,9 @@ export async function POST(request: Request) {
       existing.invite_token_hash !== inviteHash ||
       existing.game_mode !== mode ||
       existing.ai_difficulty !== difficulty ||
-      !turnPaceMatches(existing.turn_pace_days)
+      !turnPaceMatches(existing.turn_pace_days) ||
+      existing.magic_prompt !== magicPrompt ||
+      existing.magic_rules_json !== magicRulesJson
     ) {
       return apiError(409, "idempotency_conflict", "This request id was already used");
     }
@@ -121,13 +139,19 @@ export async function POST(request: Request) {
     : mode === "solo" ? botHash : null;
   const joinedAt = mode === "solo" ? now : null;
   const openingCandidate = mode === "solo" && computerColor === "w" && difficulty
-    ? chooseComputerMove(INITIAL_FEN, difficulty as AiDifficulty, computerColor)
+    ? chooseComputerMove(
+      INITIAL_FEN,
+      difficulty as AiDifficulty,
+      computerColor,
+      Math.random,
+      magicRules,
+    )
     : null;
   if (mode === "solo" && computerColor === "w" && !openingCandidate) {
     return apiError(500, "computer_move_failed", "The computer could not open the game");
   }
   const opening = openingCandidate
-    ? applyCandidate(INITIAL_FEN, [], openingCandidate)
+    ? applyCandidate(INITIAL_FEN, [], openingCandidate, magicRules)
     : null;
   const initialVersion = opening ? 1 : 0;
   const initialPly = opening ? 1 : 0;
@@ -160,9 +184,18 @@ export async function POST(request: Request) {
           now,
         ),
       db.prepare(`INSERT INTO game_settings (
-        game_id, game_mode, ai_difficulty, human_color, turn_pace_days
-      ) VALUES (?, ?, ?, ?, ?)`)
-        .bind(id, mode, difficulty, humanColor, turnPaceDays),
+        game_id, game_mode, ai_difficulty, human_color, turn_pace_days,
+        magic_prompt, magic_rules_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+        .bind(
+          id,
+          mode,
+          difficulty,
+          humanColor,
+          turnPaceDays,
+          magicPrompt,
+          magicRulesJson,
+        ),
       db.prepare(`INSERT INTO game_memberships (
         game_id, color, account_id, claimed_at
       ) VALUES (?, ?, ?, ?)`)
@@ -172,8 +205,9 @@ export async function POST(request: Request) {
       writes.push(
         db.prepare(`INSERT INTO moves (
           game_id, ply, request_id, color, from_square, to_square, promotion,
-          san, fen_before, fen_after, created_at
-        ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+          san, second_from_square, second_to_square, second_san,
+          fen_before, fen_after, created_at
+        ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
           .bind(
             id,
             crypto.randomUUID(),
@@ -182,6 +216,9 @@ export async function POST(request: Request) {
             openingCandidate.to,
             openingCandidate.promotion ?? null,
             opening.move.san,
+            openingCandidate.second?.from ?? null,
+            openingCandidate.second?.to ?? null,
+            opening.secondMove?.san ?? null,
             opening.fenBefore,
             opening.fenAfter,
             now,
@@ -199,7 +236,9 @@ export async function POST(request: Request) {
       raced.invite_token_hash !== inviteHash ||
       raced.game_mode !== mode ||
       raced.ai_difficulty !== difficulty ||
-      !turnPaceMatches(raced.turn_pace_days)
+      !turnPaceMatches(raced.turn_pace_days) ||
+      raced.magic_prompt !== magicPrompt ||
+      raced.magic_rules_json !== magicRulesJson
     ) {
       return apiError(409, "idempotency_conflict", "Could not create this game");
     }
@@ -224,6 +263,8 @@ export async function POST(request: Request) {
         color: computerColor,
         difficulty: difficulty as number,
         opening: true,
+        magic: Boolean(magicRules),
+        ruleCount: magicRules?.rules.length ?? 0,
       },
     });
   }

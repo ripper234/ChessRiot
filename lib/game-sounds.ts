@@ -33,7 +33,9 @@ export function classifyGameSound(previous: GameSnapshot | null, next: GameSnaps
   if (next.check) return "check";
   const lastMove = next.moves.at(-1);
   if (!lastMove) return null;
-  return lastMove.san.includes("x") ? "capture" : "move";
+  return lastMove.san.includes("x") || lastMove.second?.san.includes("x")
+    ? "capture"
+    : "move";
 }
 
 function getAudioContext(): AudioContext | null {

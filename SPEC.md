@@ -1,4 +1,22 @@
-# ChessRiot v0.6.0 specification
+# ChessRiot v0.7.0 specification
+
+## v0.7 release additions
+
+- New Solo and Multiplayer games offer an optional Magic Rules box. It is off
+  by default, and its prompt and compiled rules belong only to that game.
+- The prompt compiler accepts a short paragraph made from supported clauses,
+  normalizes it, stores a versioned rule document, and rejects any clause it
+  cannot interpret. Prompt text is never executed as code or copied into
+  telemetry.
+- The initial supported rules are: rooks may move twice in one turn, pawns
+  cannot move onto the final rank, no castling, and no en passant.
+- A rook's optional second move uses the same rook and commits atomically with
+  the first move as one turn, version, history item, deadline action, and
+  repetition position. If the first move gives check, the turn ends
+  immediately.
+- Magic Rules are visible before an invitation is claimed, throughout the live
+  game, in move history and replay, and on My Games cards. Riot Bot and human
+  players use the same rule-aware server adapter.
 
 ## v0.6 release additions
 
@@ -109,18 +127,25 @@ This file and `MVP.md` are the source of truth for the current milestone.
 ## Flow
 
 1. The player signs in with ChatGPT, completes the human check, then chooses Solo or Multiplayer.
-2. Solo reveals a five-step Bot level bar that starts at Level 3, Medium. Colors are assigned evenly and deterministically from the idempotent create request. If Riot Bot is White, its legal opening is committed before the game appears.
-3. Multiplayer asks for a one, three, or five-day move pace, then opens White's reusable private game URL and shows a separate one-use invitation URL.
-4. Black opens that invitation on another device, signs in if needed, and claims the second seat for that account.
-5. Every human and computer move is revalidated by the server against authoritative history.
-6. The board polls for changes and refreshes on focus. A player can resume any owned game from their account list on another device.
+2. The player may enable Magic Rules and enter a supported rule paragraph. With
+   the box off, the game uses standard chess.
+3. Solo reveals a five-step Bot level bar that starts at Level 3, Medium. Colors are assigned evenly and deterministically from the idempotent create request. If Riot Bot is White, its legal opening is committed before the game appears.
+4. Multiplayer asks for a one, three, or five-day move pace, then opens White's reusable private game URL and shows a separate one-use invitation URL.
+5. Black opens that invitation on another device, signs in if needed, reviews
+   any Magic Rules, and claims the second seat for that account.
+6. Every human and computer move is revalidated by the server against authoritative history.
+7. The board polls for changes and refreshes on focus. A player can resume any owned game from their account list on another device.
 
 ## Rules and persistence
 
-- Standard chess only, implemented with chess.js.
-- D1 stores current FEN, status, version, mode, bot level, players, hashed keys, and immutable ordered moves.
+- Standard chess is the default, implemented with chess.js. A game may instead
+  carry one immutable, compiler-versioned set of supported Magic Rules.
+- D1 stores current FEN, status, version, mode, bot level, Magic prompt and
+  compiled rules, players, hashed keys, and immutable ordered turn actions.
 - Every move carries an expected version and idempotency key.
 - A conditional update plus move insert runs atomically. Stale, illegal, wrong-turn, unauthorized, and completed-game moves do not mutate state.
+- A two-step rook action stores both legal legs in one move row and advances the
+  turn, version, ply count, deadline, and repetition counter only once.
 - In Solo, the human move commits atomically as one ply and returns immediately.
   The client then requests Riot Bot's pending turn in the background. Riot Bot
   evaluates from its assigned color, uses bounded server-side search, and
@@ -128,7 +153,8 @@ This file and `MVP.md` are the source of truth for the current milestone.
   authenticated game read also recovers a pending bot turn, so closing or
   refreshing cannot strand the game.
 - Replaying move history is required before validation so repetition remains correct.
-- Promotion data is accepted only when a pawn reaches its final rank.
+- Promotion data is accepted only when a pawn reaches its final rank. Under the
+  no-promotion rule, a pawn cannot move onto that rank at all.
 - Threefold repetition and the fifty-move rule are player claims. Fivefold repetition and the seventy-five-move rule end automatically, after checkmate precedence.
 - Before human or computer moves, immutable history must match current FEN, turn, and ply count.
 - Ending a waiting game records cancellation with no winner. Ending an active
@@ -156,7 +182,8 @@ This file and `MVP.md` are the source of truth for the current milestone.
 - Drag and drop a piece, or tap/click a piece and then a legal destination.
 - Board rotates for Black while submitted coordinates remain absolute chess squares.
 - The interface shows explicit player colors, turn, check, the checked king,
-  lost pieces, outcome, deadline, move history, and read-only replay.
+  lost pieces, outcome, deadline, Magic Rules, move history, and read-only
+  replay.
 - When a threefold or fifty-move draw is available to the player on move, the interface offers an explicit claim.
 - Synthesized move, capture, check, result, and invalid-action sounds are on by default and can be muted.
 - Initial loads, refreshes, repeated polling responses, and join-only version changes do not replay move sounds.

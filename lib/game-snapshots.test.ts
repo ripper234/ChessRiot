@@ -45,7 +45,7 @@ describe("optimisticMoveSnapshot", () => {
       "e2",
       "e4",
       undefined,
-      "2026-07-24T00:00:01.000Z",
+      { createdAt: "2026-07-24T00:00:01.000Z" },
     );
 
     expect(optimistic).not.toBeNull();

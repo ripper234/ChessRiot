@@ -42,6 +42,9 @@ export const moves = sqliteTable(
     toSquare: text("to_square").notNull(),
     promotion: text("promotion"),
     san: text("san").notNull(),
+    secondFromSquare: text("second_from_square"),
+    secondToSquare: text("second_to_square"),
+    secondSan: text("second_san"),
     fenBefore: text("fen_before").notNull(),
     fenAfter: text("fen_after").notNull(),
     createdAt: text("created_at").notNull(),
@@ -58,6 +61,8 @@ export const gameSettings = sqliteTable("game_settings", {
   aiDifficulty: integer("ai_difficulty"),
   humanColor: text("human_color").notNull().default("w"),
   turnPaceDays: integer("turn_pace_days"),
+  magicPrompt: text("magic_prompt"),
+  magicRulesJson: text("magic_rules_json"),
 });
 
 export const accounts = sqliteTable("accounts", {

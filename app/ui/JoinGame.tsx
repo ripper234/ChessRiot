@@ -11,11 +11,17 @@ import {
   rememberGame,
 } from "@/lib/client-storage";
 import type { GameSnapshot } from "@/lib/game-types";
+import type { PublicMagicRules } from "@/lib/magic-rules";
 import { Brand } from "./Brand";
 
 type InviteState =
   | { kind: "loading" }
-  | { kind: "waiting"; gameId: string; creatorName: string }
+  | {
+    kind: "waiting";
+    gameId: string;
+    creatorName: string;
+    magicRules: PublicMagicRules | null;
+  }
   | { kind: "claimed"; gameId?: string }
   | { kind: "cancelled"; gameId?: string }
   | { kind: "missing" }
@@ -38,7 +44,12 @@ export function JoinGame({
     setInvite({ kind: "loading" });
     try {
       const response = await fetch(`/api/invitations/${inviteToken}`, { cache: "no-store" });
-      const data = (await response.json()) as { state?: string; gameId?: string; creatorName?: string };
+      const data = (await response.json()) as {
+        state?: string;
+        gameId?: string;
+        creatorName?: string;
+        magicRules?: PublicMagicRules | null;
+      };
       if (cancelled()) return;
       const storedToken = data.gameId ? localStorage.getItem(playerKey(data.gameId)) : null;
       if (data.gameId && storedToken) {
@@ -46,7 +57,12 @@ export function JoinGame({
         return;
       }
       if (response.ok && data.gameId && data.creatorName) {
-        setInvite({ kind: "waiting", gameId: data.gameId, creatorName: data.creatorName });
+        setInvite({
+          kind: "waiting",
+          gameId: data.gameId,
+          creatorName: data.creatorName,
+          magicRules: data.magicRules ?? null,
+        });
       } else if (response.status === 410) {
         setInvite({
           kind: data.state === "cancelled" ? "cancelled" : "claimed",
@@ -121,6 +137,12 @@ export function JoinGame({
           <form className="voxel-card join-card" onSubmit={join}>
             <p className="eyebrow"><span /> PRIVATE CHALLENGE</p>
             <h1><em>{invite.creatorName}</em><br />wants a match.</h1>
+            {invite.magicRules ? (
+              <div className="magic-invite">
+                <strong>✦ MAGIC RULES</strong>
+                <span>{invite.magicRules.labels.join(" · ")}</span>
+              </div>
+            ) : null}
             <p className="signed-in-note">Joining as <strong>{displayName}</strong></p>
             {error ? <p className="form-error" role="alert">{error}</p> : null}
             <button className="primary-button" disabled={busy}>

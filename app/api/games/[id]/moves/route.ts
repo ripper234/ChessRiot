@@ -5,6 +5,7 @@ import {
   assertAuthoritativeState,
   expireMultiplayerTurn,
   findGameById,
+  gameMagicRules,
   readMoves,
   snapshot,
   type GameRow,
@@ -15,11 +16,18 @@ import { apiError, json, readJson } from "@/lib/http";
 import type { Promotion } from "@/lib/game-types";
 import { isUuid, requestIsSameOrigin } from "@/lib/validation";
 import { recordEvent } from "@/lib/observability";
+import { hasMagicRule } from "@/lib/magic-rules";
 
 export const dynamic = "force-dynamic";
 
 function changes(result: D1Result<unknown> | undefined): number {
   return result?.meta.changes ?? 0;
+}
+
+function isSecondMove(value: unknown): value is { from: string; to: string } {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as { from?: unknown; to?: unknown };
+  return isSquare(candidate.from) && isSquare(candidate.to);
 }
 
 function sameMoveRequest(
@@ -28,13 +36,16 @@ function sameMoveRequest(
   from: string,
   to: string,
   promotion: Promotion | undefined,
+  second: { from: string; to: string } | undefined,
 ): boolean {
   return Boolean(
     move
     && move.color === color
     && move.from === from
     && move.to === to
-    && (move.promotion ?? undefined) === promotion,
+    && (move.promotion ?? undefined) === promotion
+    && (move.second?.from ?? undefined) === second?.from
+    && (move.second?.to ?? undefined) === second?.to
   );
 }
 
@@ -68,18 +79,21 @@ export async function POST(
   const from = body?.from;
   const to = body?.to;
   const promotion = body?.promotion;
+  const second = body?.second;
   const expectedVersion = body?.expectedVersion;
   const requestId = body?.requestId;
   if (
     !isSquare(from) ||
     !isSquare(to) ||
     (promotion !== undefined && !isPromotion(promotion)) ||
+    (second !== undefined && !isSecondMove(second)) ||
     !Number.isInteger(expectedVersion) ||
     (expectedVersion as number) < 0 ||
     !isUuid(requestId)
   ) {
     return apiError(400, "invalid_request", "Move request is invalid");
   }
+  const secondMove = second as { from: string; to: string } | undefined;
 
   const { color } = authorization;
   let game: GameRow | null = authorization.game;
@@ -88,7 +102,14 @@ export async function POST(
   let storedMoves = await readMoves(id);
   const repeated = storedMoves.find((move) => move.requestId === requestId);
   if (repeated) {
-    if (!sameMoveRequest(repeated, color, from, to, promotion as Promotion | undefined)) {
+    if (!sameMoveRequest(
+      repeated,
+      color,
+      from,
+      to,
+      promotion as Promotion | undefined,
+      secondMove,
+    )) {
       return apiError(409, "idempotency_conflict", "This move request id was already used");
     }
     return json({ game: snapshot(game, storedMoves, color) });
@@ -108,8 +129,17 @@ export async function POST(
   } catch {
     return apiError(500, "history_mismatch", "Stored game history does not match the board");
   }
+  const magicRules = gameMagicRules(game);
   const piece = replayed.get(from as Square);
-  if (piece?.type === "p" && (to.endsWith("8") || to.endsWith("1")) && promotion === undefined) {
+  if (promotion !== undefined && hasMagicRule(magicRules, "no_promotion")) {
+    return apiError(422, "promotion_disabled", "Pawns cannot promote in this game");
+  }
+  if (
+    piece?.type === "p"
+    && (to.endsWith("8") || to.endsWith("1"))
+    && promotion === undefined
+    && !hasMagicRule(magicRules, "no_promotion")
+  ) {
     return apiError(422, "promotion_required", "Choose a promotion piece");
   }
 
@@ -120,7 +150,13 @@ export async function POST(
       from,
       to,
       ...(promotion ? { promotion: promotion as Promotion } : {}),
-    });
+      ...(secondMove ? {
+        second: {
+          from: secondMove.from,
+          to: secondMove.to,
+        },
+      } : {}),
+    }, magicRules);
   } catch (error) {
     if (error instanceof IllegalMoveError) {
       return wasInCheck
@@ -172,8 +208,9 @@ export async function POST(
   const insert = db
     .prepare(`INSERT INTO moves (
       game_id, ply, request_id, color, from_square, to_square, promotion,
-      san, fen_before, fen_after, created_at
-    ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      san, second_from_square, second_to_square, second_san,
+      fen_before, fen_after, created_at
+    ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       FROM games WHERE id = ? AND version = ? AND last_mutation_nonce = ?`)
     .bind(
       id,
@@ -184,6 +221,9 @@ export async function POST(
       to,
       promotion ?? null,
       outcome.move.san,
+      secondMove?.from ?? null,
+      secondMove?.to ?? null,
+      outcome.secondMove?.san ?? null,
       outcome.fenBefore,
       outcome.fenAfter,
       now,
@@ -200,7 +240,14 @@ export async function POST(
     storedMoves = await readMoves(id);
     const wonRace = storedMoves.find((move) => move.requestId === requestId);
     if (game && wonRace) {
-      if (sameMoveRequest(wonRace, color, from, to, promotion as Promotion | undefined)) {
+      if (sameMoveRequest(
+        wonRace,
+        color,
+        from,
+        to,
+        promotion as Promotion | undefined,
+        secondMove,
+      )) {
         return json({ game: snapshot(game, storedMoves, color) });
       }
       return apiError(409, "idempotency_conflict", "This move request id was already used");
@@ -219,7 +266,14 @@ export async function POST(
     storedMoves = await readMoves(id);
     const wonRace = storedMoves.find((move) => move.requestId === requestId);
     if (game && wonRace) {
-      if (sameMoveRequest(wonRace, color, from, to, promotion as Promotion | undefined)) {
+      if (sameMoveRequest(
+        wonRace,
+        color,
+        from,
+        to,
+        promotion as Promotion | undefined,
+        secondMove,
+      )) {
         return json({ game: snapshot(game, storedMoves, color) });
       }
       return apiError(409, "idempotency_conflict", "This move request id was already used");

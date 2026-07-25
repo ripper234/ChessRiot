@@ -1,10 +1,11 @@
 # ChessRiot
 
-ChessRiot v0.6.0 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
+Play the current game at [chessriot.ripper234.chatgpt.site](https://chessriot.ripper234.chatgpt.site).
 
-[Play the production game](https://chessriot.ripper234.chatgpt.site) · [View the source](https://github.com/ripper234/ChessRiot)
+ChessRiot v0.7.0 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
 
-Have feedback or a cool feature request? Use **Send feedback** inside the game, or [open a GitHub request](https://github.com/ripper234/ChessRiot/issues/new).
+Found something confusing or have a cool rule request? Use **Feedback** inside
+the game or [open a GitHub issue](https://github.com/ripper234/ChessRiot/issues).
 
 See the durable [product backlog](BACKLOG.md) for shipped foundations, blocked
 progression work, and features that still need explicit rule design.
@@ -17,6 +18,9 @@ progression work, and features that still need explicit rule design.
 - Resume every owned game from a paginated cross-device My Games history with
   clear turn and result states.
 - Play complete standard chess with server-authoritative legal move validation.
+- Optionally enable Magic Rules for one game. Supported prompts can give rooks
+  a second same-turn move, block promotion, disable castling, or disable en
+  passant; unsupported clauses are rejected clearly.
 - Persist the board, player names, result, and immutable move history in Cloudflare D1.
 - Keep legacy private-seat links working while account membership becomes the authoritative access path.
 - Detect check, checkmate, stalemate, castling, en passant, all four promotions, insufficient material, claimable threefold/50-move draws, and automatic fivefold/75-move draws.
@@ -39,7 +43,15 @@ progression work, and features that still need explicit rule design.
 
 ## Current limits
 
-No AI coach, closed-app push or email notifications, free-form chat, friend graph, matchmaking, ratings, rewards, collectible skins, or payments. CAPTCHA and account throttles protect application resources, while volumetric denial-of-service protection remains the hosting edge’s responsibility. Development uses Cloudflare’s published test CAPTCHA keys; any later Staging or Production promotion must configure real environment-specific keys first.
+No arbitrary executable rule prompts, AI coach, closed-app push or email
+notifications, free-form chat, friend graph, matchmaking, ratings, rewards,
+collectible skins, or payments. Google sign-in and Telegram release
+announcements remain disabled until their external credentials are configured
+and the corresponding code is explicitly enabled. CAPTCHA and account
+throttles protect application resources, while volumetric denial-of-service
+protection remains the hosting edge’s responsibility. Development uses
+Cloudflare’s published test CAPTCHA keys; any later Staging or Production
+promotion must configure real environment-specific keys first.
 
 ## Versioning
 

@@ -18,27 +18,50 @@ export function isDarkSquare(square: Square): boolean {
   return (file + Number(square[1])) % 2 === 1;
 }
 
+export function actionEndpointSquares(
+  move: Pick<PublicMove, "from" | "to" | "second">,
+): [string, string] {
+  return [move.from, move.second?.to ?? move.to];
+}
+
 export function capturedPiecesByVictimColor(
   moves: PublicMove[],
   initialFen = new Chess().fen(),
 ): CapturedPieces {
-  const chess = new Chess(initialFen);
+  let chess = new Chess(initialFen);
   const captured: CapturedPieces = { w: [], b: [] };
 
   for (const stored of moves) {
-    let move;
     try {
-      move = chess.move({
+      if (stored.fenBefore) chess = new Chess(stored.fenBefore);
+      const first = chess.move({
         from: stored.from as Square,
         to: stored.to as Square,
         ...(stored.promotion ? { promotion: stored.promotion } : {}),
       });
+      if (first.captured) {
+        const capturedColor: Color = first.color === "w" ? "b" : "w";
+        captured[capturedColor].push(first.captured);
+      }
+      if (stored.second) {
+        const fields = chess.fen().split(" ");
+        fields[1] = first.color;
+        if (first.color === "b") {
+          fields[5] = String(Math.max(1, Number(fields[5] ?? "1") - 1));
+        }
+        chess = new Chess(fields.join(" "));
+        const second = chess.move({
+          from: stored.second.from as Square,
+          to: stored.second.to as Square,
+        });
+        if (second.captured) {
+          const capturedColor: Color = second.color === "w" ? "b" : "w";
+          captured[capturedColor].push(second.captured);
+        }
+      }
+      if (stored.fenAfter) chess = new Chess(stored.fenAfter);
     } catch {
       return captured;
-    }
-    if (move.captured) {
-      const capturedColor: Color = move.color === "w" ? "b" : "w";
-      captured[capturedColor].push(move.captured);
     }
   }
 

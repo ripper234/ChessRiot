@@ -4,6 +4,7 @@ import {
   assertAuthoritativeState,
   expireMultiplayerTurn,
   findGameById,
+  gameMagicRules,
   readMoves,
   snapshot,
   type GameRow,
@@ -116,7 +117,11 @@ export async function POST(
   } catch {
     return apiError(500, "history_mismatch", "Stored game history does not match the board");
   }
-  const replayed = replayWithRepetition(game.initial_fen, moves);
+  const replayed = replayWithRepetition(
+    game.initial_fen,
+    moves,
+    gameMagicRules(game),
+  );
   if (!claimableDraws(replayed.chess, replayed.currentRepetitionCount).includes(claim)) {
     return apiError(422, "draw_not_claimable", "That draw cannot be claimed now");
   }

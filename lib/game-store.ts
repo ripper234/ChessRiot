@@ -2,6 +2,11 @@ import { Chess } from "chess.js";
 import { ensureSchema, getDatabase } from "@/db";
 import { turnDeadlineAt, turnDeadlineExpired } from "./game-deadlines";
 import { claimableDraws, replayWithRepetition } from "./game-rules";
+import {
+  parseStoredMagicRules,
+  publicMagicRules,
+  type CompiledMagicRules,
+} from "./magic-rules";
 import { recordEvent } from "./observability";
 import type {
   AiDifficulty,
@@ -39,6 +44,8 @@ export interface GameRow {
   ai_difficulty: AiDifficulty | null;
   human_color: Color;
   turn_pace_days: TurnPaceDays | null;
+  magic_prompt: string | null;
+  magic_rules_json: string | null;
 }
 
 interface MoveRow {
@@ -50,6 +57,9 @@ interface MoveRow {
   to_square: string;
   promotion: Promotion | null;
   san: string;
+  second_from_square: string | null;
+  second_to_square: string | null;
+  second_san: string | null;
   fen_before: string;
   fen_after: string;
   created_at: string;
@@ -63,7 +73,9 @@ export async function findGameById(id: string): Promise<GameRow | null> {
         COALESCE(game_settings.game_mode, 'multiplayer') AS game_mode,
         game_settings.ai_difficulty AS ai_difficulty,
         COALESCE(game_settings.human_color, 'w') AS human_color,
-        game_settings.turn_pace_days AS turn_pace_days
+        game_settings.turn_pace_days AS turn_pace_days,
+        game_settings.magic_prompt AS magic_prompt,
+        game_settings.magic_rules_json AS magic_rules_json
         FROM games
         LEFT JOIN game_settings ON game_settings.game_id = games.id
         WHERE games.id = ?`)
@@ -80,7 +92,9 @@ export async function findGameByCreateRequest(requestId: string): Promise<GameRo
         COALESCE(game_settings.game_mode, 'multiplayer') AS game_mode,
         game_settings.ai_difficulty AS ai_difficulty,
         COALESCE(game_settings.human_color, 'w') AS human_color,
-        game_settings.turn_pace_days AS turn_pace_days
+        game_settings.turn_pace_days AS turn_pace_days,
+        game_settings.magic_prompt AS magic_prompt,
+        game_settings.magic_rules_json AS magic_rules_json
         FROM games
         LEFT JOIN game_settings ON game_settings.game_id = games.id
         WHERE games.create_request_id = ?`)
@@ -97,7 +111,9 @@ export async function findGameByInviteHash(inviteHash: string): Promise<GameRow 
         COALESCE(game_settings.game_mode, 'multiplayer') AS game_mode,
         game_settings.ai_difficulty AS ai_difficulty,
         COALESCE(game_settings.human_color, 'w') AS human_color,
-        game_settings.turn_pace_days AS turn_pace_days
+        game_settings.turn_pace_days AS turn_pace_days,
+        game_settings.magic_prompt AS magic_prompt,
+        game_settings.magic_rules_json AS magic_rules_json
         FROM games
         LEFT JOIN game_settings ON game_settings.game_id = games.id
         WHERE games.invite_token_hash = ?`)
@@ -120,6 +136,13 @@ export async function readMoves(gameId: string): Promise<StoredMove[]> {
     to: row.to_square,
     promotion: row.promotion,
     san: row.san,
+    second: row.second_from_square && row.second_to_square && row.second_san
+      ? {
+        from: row.second_from_square,
+        to: row.second_to_square,
+        san: row.second_san,
+      }
+      : null,
     fenBefore: row.fen_before,
     fenAfter: row.fen_after,
     createdAt: row.created_at,
@@ -189,6 +212,10 @@ export function computerColor(game: GameRow): Color | null {
   return game.game_mode === "solo" ? oppositeColor(game.human_color) : null;
 }
 
+export function gameMagicRules(game: GameRow): CompiledMagicRules | null {
+  return parseStoredMagicRules(game.magic_rules_json);
+}
+
 export function multiplayerTurnDeadline(game: GameRow): string | null {
   return game.game_mode === "multiplayer"
     && game.status === "active"
@@ -236,7 +263,11 @@ export function assertAuthoritativeState(
   game: GameRow,
   moves: StoredMove[],
 ): Chess {
-  const replayed = replayWithRepetition(game.initial_fen, moves).chess;
+  const replayed = replayWithRepetition(
+    game.initial_fen,
+    moves,
+    gameMagicRules(game),
+  ).chess;
   if (
     replayed.fen() !== game.current_fen
     || replayed.turn() !== game.turn_color
@@ -248,13 +279,15 @@ export function assertAuthoritativeState(
 }
 
 export function snapshot(game: GameRow, moves: StoredMove[], you: Color): GameSnapshot {
-  const replayed = replayWithRepetition(game.initial_fen, moves);
+  const magicRules = gameMagicRules(game);
+  const replayed = replayWithRepetition(game.initial_fen, moves, magicRules);
   const position = replayed.chess;
   return {
     id: game.id,
     mode: game.game_mode,
     aiDifficulty: game.ai_difficulty,
     turnPaceDays: game.turn_pace_days,
+    magicRules: publicMagicRules(game.magic_prompt, magicRules),
     status: game.status,
     version: game.version,
     initialFen: game.initial_fen,
@@ -273,13 +306,27 @@ export function snapshot(game: GameRow, moves: StoredMove[], you: Color): GameSn
     outcome: game.termination
       ? { winner: game.winner_color, reason: game.termination }
       : null,
-    moves: moves.map(({ ply, color, from, to, promotion, san, createdAt }) => ({
+    moves: moves.map(({
       ply,
       color,
       from,
       to,
       promotion,
       san,
+      second,
+      fenBefore,
+      fenAfter,
+      createdAt,
+    }) => ({
+      ply,
+      color,
+      from,
+      to,
+      promotion,
+      san,
+      second,
+      fenBefore,
+      fenAfter,
       createdAt,
     })),
     updatedAt: game.updated_at,

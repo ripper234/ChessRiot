@@ -1,7 +1,9 @@
 import { Chess } from "chess.js";
 import { describe, expect, it } from "vitest";
 import { chooseComputerMove } from "./computer-player";
+import { applyCandidate } from "./game-rules";
 import type { AiDifficulty } from "./game-types";
+import type { CompiledMagicRules } from "./magic-rules";
 
 describe("Riot Bot", () => {
   it.each([1, 2, 3, 4, 5] as AiDifficulty[])(
@@ -43,5 +45,39 @@ describe("Riot Bot", () => {
   it("preserves promotion details", () => {
     const move = chooseComputerMove("7K/8/8/8/8/8/p7/7k b - - 0 1", 4, "b", () => 0);
     expect(move).toMatchObject({ from: "a2", to: "a1", promotion: "q" });
+  });
+
+  it("never selects a forbidden promotion", () => {
+    const rules: CompiledMagicRules = {
+      version: 1,
+      rules: [{ kind: "no_promotion" }],
+    };
+    const move = chooseComputerMove(
+      "7K/8/8/8/8/8/p7/7k b - - 0 1",
+      4,
+      "b",
+      () => 0,
+      rules,
+    );
+    expect(move).not.toMatchObject({ from: "a2", to: "a1" });
+    expect(move?.promotion).toBeUndefined();
+  });
+
+  it("returns a complete legal rook action when the double-move rule is active", () => {
+    const rules: CompiledMagicRules = {
+      version: 1,
+      rules: [{ kind: "double_move", piece: "r" }],
+    };
+    const fen = "4k3/8/8/8/8/8/R7/4K3 w - - 0 1";
+    const move = chooseComputerMove(fen, 3, "w", () => 0, rules);
+    expect(move).not.toBeNull();
+    if (move?.from === "a2" && move.second) {
+      expect(move.second.from).toBe(move.to);
+    } else if (move?.from === "a2") {
+      const afterFirst = new Chess(fen);
+      afterFirst.move(move);
+      expect(afterFirst.isCheck()).toBe(true);
+    }
+    expect(() => applyCandidate(fen, [], move!, rules)).not.toThrow();
   });
 });

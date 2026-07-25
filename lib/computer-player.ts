@@ -1,10 +1,16 @@
 import { Chess, type Move, type PieceSymbol, type Square } from "chess.js";
+import { legalMagicMoves, rookSecondStep } from "./game-rules";
+import type { CompiledMagicRules } from "./magic-rules";
 import type { AiDifficulty, Color, Promotion } from "./game-types";
 
 export interface ComputerMove {
   from: Square;
   to: Square;
   promotion?: Promotion;
+  second?: {
+    from: Square;
+    to: Square;
+  };
 }
 
 const PIECE_VALUE: Record<PieceSymbol, number> = {
@@ -99,12 +105,34 @@ function search(
   return best;
 }
 
-function asComputerMove(move: Move): ComputerMove {
-  return {
+function asComputerMove(
+  move: Move,
+  rootFen: string,
+  rules: CompiledMagicRules | null,
+  random: () => number,
+  randomSecond: boolean,
+): ComputerMove {
+  const candidate: ComputerMove = {
     from: move.from,
     to: move.to,
     ...(move.promotion ? { promotion: move.promotion as Promotion } : {}),
   };
+  if (move.piece !== "r") return candidate;
+  const afterFirst = new Chess(rootFen);
+  afterFirst.move(move);
+  const secondStep = rookSecondStep(afterFirst, move.to, move.color, rules);
+  if (!secondStep) return candidate;
+  const ordered = [...secondStep.moves]
+    .sort((left, right) => movePriority(right) - movePriority(left));
+  const second = randomSecond
+    ? ordered[Math.floor(random() * ordered.length)] ?? ordered[0]
+    : ordered[0];
+  return second
+    ? {
+      ...candidate,
+      second: { from: second.from, to: second.to },
+    }
+    : candidate;
 }
 
 export function chooseComputerMove(
@@ -112,14 +140,22 @@ export function chooseComputerMove(
   difficulty: AiDifficulty,
   computerColor: Color = new Chess(fen).turn(),
   random: () => number = Math.random,
+  rules: CompiledMagicRules | null = null,
 ): ComputerMove | null {
   const chess = new Chess(fen);
   if (chess.turn() !== computerColor) return null;
-  const moves = orderedMoves(chess);
+  const moves = legalMagicMoves(chess, rules)
+    .sort((a, b) => movePriority(b) - movePriority(a));
   if (moves.length === 0) return null;
 
   if (difficulty === 1) {
-    return asComputerMove(moves[Math.floor(random() * moves.length)] ?? moves[0]);
+    return asComputerMove(
+      moves[Math.floor(random() * moves.length)] ?? moves[0],
+      fen,
+      rules,
+      random,
+      true,
+    );
   }
 
   const depth = difficulty === 2 ? 1 : difficulty === 3 ? 2 : difficulty === 4 ? 3 : 4;
@@ -142,11 +178,23 @@ export function chooseComputerMove(
 
   if (difficulty === 2) {
     const pool = scored.slice(0, Math.min(6, scored.length));
-    return asComputerMove(pool[Math.floor(random() * pool.length)]?.move ?? scored[0].move);
+    return asComputerMove(
+      pool[Math.floor(random() * pool.length)]?.move ?? scored[0].move,
+      fen,
+      rules,
+      random,
+      true,
+    );
   }
   if (difficulty === 3) {
     const pool = scored.slice(0, Math.min(3, scored.length));
-    return asComputerMove(pool[Math.floor(random() * pool.length)]?.move ?? scored[0].move);
+    return asComputerMove(
+      pool[Math.floor(random() * pool.length)]?.move ?? scored[0].move,
+      fen,
+      rules,
+      random,
+      false,
+    );
   }
-  return asComputerMove(scored[0].move);
+  return asComputerMove(scored[0].move, fen, rules, random, false);
 }
