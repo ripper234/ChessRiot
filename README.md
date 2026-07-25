@@ -2,7 +2,7 @@
 
 Play the current game at [chessriot.ripper234.chatgpt.site](https://chessriot.ripper234.chatgpt.site).
 
-ChessRiot v0.8.2 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
+ChessRiot v0.9.0 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
 
 Found something confusing or have a cool rule request? Use **Feedback** inside
 the game or [open a GitHub issue](https://github.com/ripper234/ChessRiot/issues).
@@ -31,7 +31,10 @@ progression work, and features that still need explicit rule design.
 - Choose from 11 original visual themes during a game, including seven original illustrated backgrounds, with optional synthesized move, capture, check, and game-ending sounds.
 - Drag and drop pieces with mouse or touch, while tap, click, and keyboard input still work. Your legal move appears immediately while Riot Bot thinks, and short move and capture animations make both plies visible.
 - See explicit White and Black player cards, captured pieces, a highlighted checked king, and check-specific move guidance.
-- Step through any game from the start with a read-only, keyboard-accessible replay viewer.
+- Step backward and forward through committed positions directly on the live
+  board, or open the full read-only, keyboard-accessible replay viewer.
+- Optionally enable Confirm every move on the current device before any human
+  move is sent.
 - See a short checkmate finisher using the actual winning piece, with reduced-motion support.
 - End an active game by resignation, cancel a waiting game, or start a separate new game without deleting history.
 - Start from one compact new-game screen at `/app`.

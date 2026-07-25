@@ -44,13 +44,29 @@ import {
   reactionPreset,
 } from "@/lib/game-reactions";
 import { optimisticMoveSnapshot, shouldAcceptGameSnapshot } from "@/lib/game-snapshots";
+import {
+  buildReplayFrames,
+  nextHistoryCursor,
+  previousHistoryCursor,
+  replayFrameLabel,
+  resolvedHistoryPly,
+  type HistoryCursor,
+} from "@/lib/game-replay";
 import { legalMagicMoves, magicSecondStep } from "@/lib/game-rules";
 import { hasMagicRule, type DoubleMovePiece } from "@/lib/magic-rules";
 import { magicDraftTapDecision } from "@/lib/magic-turn-ui";
+import {
+  describeMoveIntent,
+  moveIntentStillValid,
+  readMoveConfirmationPreference,
+  type MoveIntent,
+  writeMoveConfirmationPreference,
+} from "@/lib/move-confirmation";
 import type { DrawClaim, GameSnapshot, Promotion } from "@/lib/game-types";
 import { APP_VERSION } from "@/lib/version";
 import { Brand } from "./Brand";
 import { CheckmateFinisher } from "./CheckmateFinisher";
+import { HistoryControls } from "./HistoryControls";
 import { ReactionPanel } from "./ReactionPanel";
 import { ReplayViewer } from "./ReplayViewer";
 import { TurnDeadline } from "./TurnDeadline";
@@ -151,6 +167,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [soundOn, setSoundOn] = useState(true);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [effects, setEffects] = useState<BoardEffect[]>([]);
+  const [historyPly, setHistoryPly] = useState<HistoryCursor>(null);
+  const [confirmEveryMove, setConfirmEveryMove] = useState(false);
+  const [pendingMove, setPendingMove] = useState<MoveIntent | null>(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [ending, setEnding] = useState(false);
   const [reactions, setReactions] = useState<PublicReaction[]>([]);
@@ -173,6 +192,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const previousFinisherGame = useRef<GameSnapshot | null>(null);
   const finisherTimer = useRef<number | null>(null);
   const reactionTrigger = useRef<HTMLButtonElement | null>(null);
+  const moveConfirmDialog = useRef<HTMLDialogElement | null>(null);
+  const moveConfirmReturnFocus = useRef<HTMLElement | null>(null);
+  const moveCommitInFlight = useRef(false);
   const postGameReactionsOpen = Boolean(
     game?.status === "completed"
     && postGameReactionWindowOpen(game.updatedAt),
@@ -303,6 +325,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
         previousFinisherGame.current = null;
         dragRef.current = null;
         setDrag(null);
+        setHistoryPly(null);
+        setPendingMove(null);
       }
       activeToken.current = token;
       if (token) {
@@ -369,6 +393,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       setInviteUrl("");
     }
     setSoundOn(readSoundPreference());
+    setConfirmEveryMove(readMoveConfirmationPreference());
     void loadGame();
     const reloadSeat = () => void loadGame();
     window.addEventListener("hashchange", reloadSeat);
@@ -531,10 +556,21 @@ export function GameRoom({ gameId }: { gameId: string }) {
     setSelected(null);
     setPromotionMove(null);
     setMagicDraft(null);
+    setPendingMove(null);
     setConfirmEnd(false);
     dragRef.current = null;
     setDrag(null);
   }, [game?.version]);
+
+  useEffect(() => {
+    const dialog = moveConfirmDialog.current;
+    if (!dialog) return;
+    if (pendingMove && !dialog.open) {
+      dialog.showModal();
+    } else if (!pendingMove && dialog.open) {
+      dialog.close();
+    }
+  }, [pendingMove]);
 
   useEffect(() => {
     if (!promotionMove) return;
@@ -545,23 +581,60 @@ export function GameRoom({ gameId }: { gameId: string }) {
     return () => window.removeEventListener("keydown", cancelOnEscape);
   }, [promotionMove]);
 
+  const history = useMemo(() => {
+    try {
+      return {
+        frames: buildReplayFrames(
+          serverGame?.moves ?? [],
+          serverGame?.initialFen,
+        ),
+        error: false,
+      };
+    } catch {
+      return {
+        frames: buildReplayFrames([]),
+        error: true,
+      };
+    }
+  }, [serverGame?.initialFen, serverGame?.moves]);
+  const latestHistoryPly = Math.max(0, history.frames.length - 1);
+  const visibleHistoryPly = resolvedHistoryPly(historyPly, latestHistoryPly);
+  const viewingHistory = historyPly !== null && !history.error;
+  const historyFrame = history.frames[visibleHistoryPly] ?? history.frames[0];
+
+  useEffect(() => {
+    if (history.error && historyPly !== null) setHistoryPly(null);
+  }, [history.error, historyPly]);
+
   const chess = useMemo(
     () => game
       ? new Chess(
-        openingIntro
+        viewingHistory
+          ? historyFrame.fen
+          : openingIntro
           ? game.initialFen
           : magicDraft?.fen ?? game.fen,
       )
       : null,
-    [game, openingIntro, magicDraft],
+    [game, historyFrame.fen, magicDraft, openingIntro, viewingHistory],
+  );
+  const liveChess = useMemo(
+    () => game ? new Chess(game.fen) : null,
+    [game],
   );
   const legalMoves = useMemo<Move[]>(() => {
-    if (!chess || !selected) return [];
+    if (!chess || !selected || viewingHistory) return [];
     return legalMagicMoves(chess, game?.magicRules ?? null, selected);
-  }, [chess, game?.magicRules, selected]);
+  }, [chess, game?.magicRules, selected, viewingHistory]);
+  const presentedMoves = useMemo(
+    () => viewingHistory
+      ? (serverGame?.moves ?? []).slice(0, visibleHistoryPly)
+      : game?.moves ?? [],
+    [game?.moves, serverGame?.moves, viewingHistory, visibleHistoryPly],
+  );
   const lostPieces = useMemo(
-    () => game ? capturedPiecesByVictimColor(game.moves) : { w: [], b: [] },
-    [game],
+    () => capturedPiecesByVictimColor(presentedMoves),
+    [presentedMoves],
   );
   const checkedKingSquare = useMemo(
     () => chess ? findCheckedKingSquare(chess) : null,
@@ -580,6 +653,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const canMove = Boolean(
     game
     && !openingIntro
+    && !viewingHistory
     && game.status === "active"
     && game.turn === game.you.color
     && !busy,
@@ -587,13 +661,15 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const botThinking = Boolean(
     openingIntro || (
     game &&
-    chess &&
+    liveChess &&
     game.mode === "solo" &&
     game.status === "active" &&
     game.turn !== game.you.color &&
-    !chess.isGameOver()),
+    !liveChess.isGameOver()),
   );
-  const lastMove = openingIntro ? undefined : game?.moves.at(-1);
+  const lastMove = openingIntro && !viewingHistory
+    ? undefined
+    : presentedMoves.at(-1);
   const lastMoveEndpoints: string[] = lastMove
     ? actionEndpointSquares(lastMove)
     : [];
@@ -617,18 +693,66 @@ export function GameRoom({ gameId }: { gameId: string }) {
     });
   }
 
-  async function sendMove(
+  function requestMove(
     from: Square,
     to: Square,
     promotion?: Promotion,
     second?: { from: Square; to: Square },
-  ) {
-    if (!game || !canMove) return;
-    const token = activeToken.current;
-    const preview = game.mode === "solo"
-      ? optimisticMoveSnapshot(game, from, to, promotion, { second })
+  ): void {
+    if (!game || !canMove || moveCommitInFlight.current) return;
+    const piece = new Chess(game.fen).get(from)?.type ?? null;
+    const intent: MoveIntent = {
+      from,
+      to,
+      ...(promotion ? { promotion } : {}),
+      ...(second ? { second } : {}),
+      expectedVersion: game.version,
+      piece,
+    };
+    if (!confirmEveryMove) {
+      void commitMove(intent);
+      return;
+    }
+    moveConfirmReturnFocus.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
       : null;
-    const authoritativeVersion = game.version;
+    setPromotionMove(null);
+    setPendingMove(intent);
+  }
+
+  function closeMoveConfirmation(): void {
+    if (moveConfirmDialog.current?.open) moveConfirmDialog.current.close();
+    setPendingMove(null);
+  }
+
+  function cancelMoveConfirmation(): void {
+    closeMoveConfirmation();
+  }
+
+  async function commitMove(intent: MoveIntent) {
+    const currentGame = serverGame;
+    if (busy || moveCommitInFlight.current) return;
+    if (
+      !currentGame
+      || !moveIntentStillValid(intent, currentGame)
+    ) {
+      closeMoveConfirmation();
+      setMessage("The position changed. Choose your move again.");
+      return;
+    }
+    moveCommitInFlight.current = true;
+    closeMoveConfirmation();
+    const token = activeToken.current;
+    const preview = currentGame.mode === "solo"
+      ? optimisticMoveSnapshot(
+        currentGame,
+        intent.from,
+        intent.to,
+        intent.promotion,
+        { second: intent.second },
+      )
+      : null;
+    const authoritativeVersion = intent.expectedVersion;
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 15_000);
     setBusy(true);
@@ -645,11 +769,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
         headers: requestHeaders(token, true),
         signal: controller.signal,
         body: JSON.stringify({
-          from,
-          to,
-          ...(promotion ? { promotion } : {}),
-          ...(second ? { second } : {}),
-          expectedVersion: game.version,
+          from: intent.from,
+          to: intent.to,
+          ...(intent.promotion ? { promotion: intent.promotion } : {}),
+          ...(intent.second ? { second: intent.second } : {}),
+          expectedVersion: intent.expectedVersion,
           requestId: generateUuid(),
         }),
       });
@@ -685,6 +809,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       if (latestVersion.current <= authoritativeVersion) setOptimisticGame(null);
     } finally {
       window.clearTimeout(timeout);
+      moveCommitInFlight.current = false;
       setBusy(false);
     }
   }
@@ -745,7 +870,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
         playInvalidSound();
         return;
       }
-      void sendMove(
+      requestMove(
         magicDraft.from,
         magicDraft.to,
         undefined,
@@ -783,7 +908,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
         return;
       }
     }
-    void sendMove(from, to);
+    requestMove(from, to);
   }
 
   function tapSquare(square: Square) {
@@ -794,6 +919,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     if (soundOn) void unlockGameSounds();
     if (!chess || !game) return;
     if (!canMove) {
+      if (viewingHistory) return;
       if (game.status === "active") playInvalidSound();
       return;
     }
@@ -919,6 +1045,31 @@ export function GameRoom({ gameId }: { gameId: string }) {
     setSelected(current.from);
   }
 
+  function showHistory(next: HistoryCursor): void {
+    if (!serverGame || next === historyPly || (history.error && next !== null)) return;
+    setSelected(null);
+    setPromotionMove(null);
+    setMagicDraft(null);
+    setPendingMove(null);
+    dragRef.current = null;
+    setDrag(null);
+    setEffects([]);
+    setMessage("");
+    setHistoryPly(next);
+  }
+
+  function stepHistoryBack(): void {
+    showHistory(previousHistoryCursor(historyPly, latestHistoryPly));
+  }
+
+  function stepHistoryForward(): void {
+    showHistory(nextHistoryCursor(historyPly, latestHistoryPly));
+  }
+
+  function returnToLive(): void {
+    showHistory(null);
+  }
+
   async function shareInvite() {
     if (!inviteUrl) return;
     const markShared = () => {
@@ -951,6 +1102,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
     setSoundOn(next);
     writeSoundPreference(next);
     if (next && await unlockGameSounds()) playGameSound("move");
+  }
+
+  function toggleMoveConfirmation(enabled: boolean): void {
+    setConfirmEveryMove(enabled);
+    writeMoveConfirmationPreference(enabled);
   }
 
   async function sendReaction(key: ReactionKey) {
@@ -1057,7 +1213,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
   if (!game || !chess) return null;
 
   const turnName = game.turn === "w" ? game.players.white.name : game.players.black?.name ?? "Black";
-  const statusText = game.status === "waiting"
+  const displayCheck = viewingHistory ? chess.isCheck() : game.check;
+  const statusText = viewingHistory
+    ? replayFrameLabel(historyFrame)
+    : game.status === "waiting"
     ? "Waiting for Player 2"
     : openingIntro
       ? "White opens"
@@ -1065,7 +1224,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       ? outcomeText(game)
       : magicDraft
         ? `Magic turn: move that ${PIECE_NAMES[magicDraft.piece]} again or finish`
-      : game.check
+      : displayCheck
         ? game.turn === game.you.color ? "CHECK! Protect your king" : `${turnName} is in check`
         : game.turn === game.you.color ? "Your turn" : `${turnName}’s turn`;
   const draggedPiece = drag ? chess.get(drag.from) : null;
@@ -1145,16 +1304,25 @@ export function GameRoom({ gameId }: { gameId: string }) {
           </div>
 
           <div
-            className={`turn-panel ${game.turn === game.you.color ? "mine" : "theirs"} ${game.status}${game.check ? " check" : ""}`}
-            role={game.check ? "alert" : "status"}
-            aria-live={game.check ? "assertive" : "polite"}
+            className={`turn-panel ${viewingHistory ? "history" : game.turn === game.you.color ? "mine" : "theirs"} ${game.status}${displayCheck && !viewingHistory ? " check" : ""}`}
+            role={displayCheck && !viewingHistory ? "alert" : "status"}
+            aria-live={displayCheck && !viewingHistory ? "assertive" : "polite"}
           >
-            <span>{game.status === "completed" ? "⚑" : magicDraft ? "✦" : game.check ? "!" : "◆"}</span>
+            <span>{viewingHistory ? "↶" : game.status === "completed" ? "⚑" : magicDraft ? "✦" : displayCheck ? "!" : "◆"}</span>
             <div>
-              <small>{magicDraft ? "MAGIC MOVE" : game.check && game.status !== "completed" ? "CHECK" : "MATCH STATUS"}</small>
+              <small>{viewingHistory ? "MOVE HISTORY" : magicDraft ? "MAGIC MOVE" : displayCheck && game.status !== "completed" ? "CHECK" : "MATCH STATUS"}</small>
               <strong>{statusText}</strong>
             </div>
-            {busy || botThinking ? <b>{ending ? "ENDING GAME…" : openingIntro ? "WHITE OPENING…" : botThinking ? "RIOT BOT THINKING…" : "LOCKING MOVE…"}</b> : null}
+            {!viewingHistory && (busy || botThinking) ? <b>{ending ? "ENDING GAME…" : openingIntro ? "WHITE OPENING…" : botThinking ? "RIOT BOT THINKING…" : "LOCKING MOVE…"}</b> : null}
+            <HistoryControls
+              currentPly={visibleHistoryPly}
+              latestPly={latestHistoryPly}
+              viewingHistory={viewingHistory}
+              unavailable={history.error}
+              onBack={stepHistoryBack}
+              onForward={stepHistoryForward}
+              onLive={returnToLive}
+            />
           </div>
           {game.magicRules ? (
             <div className="magic-game-banner" role="note">
@@ -1174,15 +1342,15 @@ export function GameRoom({ gameId }: { gameId: string }) {
               <button
                 type="button"
                 className="primary-button"
-                disabled={busy}
-                onClick={() => void sendMove(magicDraft.from, magicDraft.to)}
+                disabled={busy || viewingHistory}
+                onClick={() => requestMove(magicDraft.from, magicDraft.to)}
               >
                 FINISH TURN
               </button>
               <button
                 type="button"
                 className="quiet-button"
-                disabled={busy}
+                disabled={busy || viewingHistory}
                 onClick={() => {
                   setMagicDraft(null);
                   setSelected(null);
@@ -1208,7 +1376,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 <button
                   type="button"
                   key={claim}
-                  disabled={busy}
+                  disabled={busy || viewingHistory}
                   onClick={() => void claimDraw(claim)}
                 >
                   {claim === "threefold_repetition"
@@ -1219,9 +1387,20 @@ export function GameRoom({ gameId }: { gameId: string }) {
             </div>
           ) : null}
 
-          <div className="board-wrap" aria-busy={busy || botThinking} data-interactive={canMove ? "true" : "false"}>
-            {finisher ? <CheckmateFinisher finisher={finisher} /> : null}
-            <div className="chessboard" role="grid" aria-label="Chess board">
+          <div
+            className="board-wrap"
+            aria-busy={!viewingHistory && (busy || botThinking)}
+            data-interactive={canMove ? "true" : "false"}
+            data-history={viewingHistory ? "true" : "false"}
+          >
+            {finisher && !viewingHistory ? <CheckmateFinisher finisher={finisher} /> : null}
+            <div
+              className="chessboard"
+              role="grid"
+              aria-label={viewingHistory
+                ? `Historical chess board, ${replayFrameLabel(historyFrame)}`
+                : "Chess board"}
+            >
               {squares.map((square, index) => {
                 const piece = chess.get(square);
                 const legal = legalMoves.some((move) => move.to === square);
@@ -1230,7 +1409,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 const isLast = lastMoveEndpoints.includes(square);
                 const isCheckedKing = checkedKingSquare === square;
                 const isDragOver = drag?.moved && drag.over === square && legal;
-                const effect = effects.find((candidate) => candidate.to === square);
+                const effect = viewingHistory
+                  ? undefined
+                  : effects.find((candidate) => candidate.to === square);
                 const file = square[0];
                 const rank = square[1];
                 const showRank = index % 8 === 0;
@@ -1301,9 +1482,24 @@ export function GameRoom({ gameId }: { gameId: string }) {
           <details className="game-tools">
             <summary>
               <span>MORE</span>
-              <b>Actions, replay and move log</b>
+              <b>Settings, actions, replay and move log</b>
             </summary>
             <div className="game-tools-content">
+              <section className="side-card move-settings-card">
+                <h2>MOVE SETTINGS</h2>
+                <label className="move-confirm-setting">
+                  <input
+                    type="checkbox"
+                    checked={confirmEveryMove}
+                    onChange={(event) => toggleMoveConfirmation(event.currentTarget.checked)}
+                  />
+                  <span>
+                    <strong>CONFIRM EVERY MOVE</strong>
+                    <small>Ask “Are you sure?” before a move is sent. Stored on this device.</small>
+                  </span>
+                  <b>{confirmEveryMove ? "ON" : "OFF"}</b>
+                </label>
+              </section>
               <section className="side-card actions-card">
                 <h2>GAME ACTIONS</h2>
                 <Link className="secondary-button" href="/app">NEW GAME</Link>
@@ -1328,7 +1524,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 ) : null}
               </section>
               <ReplayViewer
-                moves={game.moves}
+                moves={serverGame?.moves ?? game.moves}
+                initialFen={serverGame?.initialFen ?? game.initialFen}
                 orientation={game.you.color}
                 magicRules={game.magicRules ?? null}
               />
@@ -1386,7 +1583,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 key={piece}
                 aria-label={`Promote to ${PIECE_NAMES[piece]}`}
                 autoFocus={piece === "q"}
-                onClick={() => void sendMove(promotionMove.from, promotionMove.to, piece)}
+                onClick={() => requestMove(promotionMove.from, promotionMove.to, piece)}
               >
                 {PIECES[game.you.color][piece]}
               </button>
@@ -1394,6 +1591,52 @@ export function GameRoom({ gameId }: { gameId: string }) {
           </div><button className="cancel-promotion" onClick={() => setPromotionMove(null)}>CANCEL</button></div>
         </div>
       ) : null}
+
+      <dialog
+        className="move-confirm-dialog"
+        ref={moveConfirmDialog}
+        aria-labelledby="move-confirm-title"
+        aria-describedby="move-confirm-description"
+        onCancel={(event) => {
+          event.preventDefault();
+          cancelMoveConfirmation();
+        }}
+        onClose={() => {
+          setPendingMove(null);
+          window.requestAnimationFrame(() => moveConfirmReturnFocus.current?.focus());
+        }}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) cancelMoveConfirmation();
+        }}
+      >
+        <div className="move-confirm-card">
+          <small>MOVE CONFIRMATION</small>
+          <h2 id="move-confirm-title">ARE YOU SURE?</h2>
+          <p id="move-confirm-description">
+            {pendingMove ? describeMoveIntent(pendingMove) : "Confirm this move?"}
+          </p>
+          <div>
+            <button
+              className="quiet-button"
+              type="button"
+              autoFocus
+              onClick={cancelMoveConfirmation}
+            >
+              KEEP THINKING
+            </button>
+            <button
+              className="primary-button"
+              type="button"
+              disabled={!pendingMove || busy || moveCommitInFlight.current}
+              onClick={() => {
+                if (pendingMove) void commitMove(pendingMove);
+              }}
+            >
+              CONFIRM MOVE
+            </button>
+          </div>
+        </div>
+      </dialog>
     </main>
   );
 }

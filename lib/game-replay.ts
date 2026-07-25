@@ -20,8 +20,11 @@ type ReplayMove = Pick<
  * Reconstructs immutable client-side positions from the public move log.
  * This never reads from or writes to the game API.
  */
-export function buildReplayFrames(moves: ReplayMove[]): ReplayFrame[] {
-  let chess = new Chess();
+export function buildReplayFrames(
+  moves: ReplayMove[],
+  initialFen?: string,
+): ReplayFrame[] {
+  let chess = initialFen ? new Chess(initialFen) : new Chess();
   const frames: ReplayFrame[] = [{
     ply: 0,
     fen: chess.fen(),
@@ -76,4 +79,33 @@ export function replayFrameLabel(frame: ReplayFrame): string {
   if (frame.ply === 0) return "Start position";
   const side = frame.mover === "w" ? "White" : "Black";
   return `Move ${frame.moveNumber}, ${side}: ${frame.san ?? "move"}`;
+}
+
+export type HistoryCursor = number | null;
+
+export function resolvedHistoryPly(
+  cursor: HistoryCursor,
+  latestPly: number,
+): number {
+  const safeLatest = Math.max(0, latestPly);
+  if (cursor === null) return safeLatest;
+  return Math.max(0, Math.min(cursor, safeLatest));
+}
+
+export function previousHistoryCursor(
+  cursor: HistoryCursor,
+  latestPly: number,
+): HistoryCursor {
+  const current = resolvedHistoryPly(cursor, latestPly);
+  if (current === 0) return latestPly === 0 ? null : 0;
+  return current - 1;
+}
+
+export function nextHistoryCursor(
+  cursor: HistoryCursor,
+  latestPly: number,
+): HistoryCursor {
+  if (cursor === null) return null;
+  const current = resolvedHistoryPly(cursor, latestPly);
+  return current >= Math.max(0, latestPly) - 1 ? null : current + 1;
 }

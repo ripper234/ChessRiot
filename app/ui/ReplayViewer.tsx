@@ -32,12 +32,14 @@ const RANKS = ["8", "7", "6", "5", "4", "3", "2", "1"];
 
 interface ReplayViewerProps {
   moves: PublicMove[];
+  initialFen?: string;
   orientation: Color;
   magicRules: PublicMagicRules | null;
 }
 
 export function ReplayViewer({
   moves,
+  initialFen,
   orientation,
   magicRules,
 }: ReplayViewerProps) {
@@ -47,11 +49,11 @@ export function ReplayViewer({
   const [requestedFrame, setRequestedFrame] = useState(0);
   const replay = useMemo(() => {
     try {
-      return { frames: buildReplayFrames(moves), error: false };
+      return { frames: buildReplayFrames(moves, initialFen), error: false };
     } catch {
       return { frames: buildReplayFrames([]), error: true };
     }
-  }, [moves]);
+  }, [initialFen, moves]);
   const frameIndex = Math.min(requestedFrame, replay.frames.length - 1);
   const frame = replay.frames[frameIndex];
   const chess = useMemo(() => new Chess(frame.fen), [frame.fen]);

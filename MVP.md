@@ -23,6 +23,8 @@
 - Authorized, rate-limited preset cheers for joined two-player games, with a
   15-minute Good Game and Thanks courtesy window after completion
 - A read-only, step-by-step replay viewer
+- Always-visible Back and Forward history controls on the live board
+- An opt-in, device-local confirmation before every human move
 - A short reduced-motion-safe checkmate finisher
 - Installable online PWA metadata and subtle release updates
 - Pointer and touch drag-and-drop with tap, click, and keyboard fallback

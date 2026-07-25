@@ -130,6 +130,23 @@
 - Drag a legal move with mouse and touch and verify exactly one move is submitted.
 - Drop off-board or on an illegal square and verify the piece snaps back with no mutation.
 - Verify tap/click and keyboard moves still work after drag-and-drop is enabled.
+- Use the always-visible Previous and Next controls from both White and Black
+  orientation. Verify the main board, last-move highlight, checked king, and
+  captured pieces match the selected committed ply.
+- Stay on a historical ply while a Solo bot reply or Multiplayer poll adds a
+  move. Verify the board remains pinned, the total increases, Forward reaches
+  the new position, and Go Live returns to current play.
+- Verify history browsing never submits a move, claim, or Magic turn and
+  suppresses live move effects and the checkmate finisher.
+- Verify Confirm every move is off by default. Enable it under Move Settings,
+  reload and open another game on the same device, and verify it remains on.
+- With confirmation enabled, verify tap, pointer drag, keyboard activation,
+  promotion, Magic Finish Turn, and a two-leg Magic move each open exactly one
+  dialog and send no move before CONFIRM MOVE.
+- Verify KEEP THINKING, Escape, and backdrop cancellation send no move. Verify
+  CONFIRM MOVE sends exactly one move, a rapid second activation cannot
+  duplicate it, bot replies never prompt, and a changed game version dismisses
+  the stale intent.
 - In an active joined two-player game, send each preset cheer from both seats
   and verify both players see the same bounded stream.
 - Verify identical reaction retries are idempotent, conflicting request reuse

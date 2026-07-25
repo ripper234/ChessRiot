@@ -11,6 +11,20 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.9.0",
+    date: "2026-07-25",
+    title: "History at hand",
+    summary: "Browse earlier positions directly on the board and optionally confirm every move before sending it.",
+    changes: [
+      "Added always-visible Back and Forward arrows that step through committed positions without changing the live game.",
+      "Kept historical viewing pinned when a new move arrives, with a direct Go Live control and frame-specific check, captures, and last-move highlights.",
+      "Added a device-local Confirm every move setting that is off by default.",
+      "Applied one confirmation to every human move path, including tap, drag, promotion, and complete atomic Magic turns.",
+      "Blocked stale and duplicate confirmations before they can submit a move.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.9.0`,
+  },
+  {
     version: "0.8.2",
     date: "2026-07-25",
     title: "One front door",

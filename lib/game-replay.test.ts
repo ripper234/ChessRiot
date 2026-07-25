@@ -1,7 +1,13 @@
 import { Chess } from "chess.js";
 import { describe, expect, it } from "vitest";
 import { applyCandidate, INITIAL_FEN, type CandidateMove } from "./game-rules";
-import { buildReplayFrames, replayFrameLabel } from "./game-replay";
+import {
+  buildReplayFrames,
+  nextHistoryCursor,
+  previousHistoryCursor,
+  replayFrameLabel,
+  resolvedHistoryPly,
+} from "./game-replay";
 import type { PublicMove } from "./game-types";
 import type { CompiledMagicRules } from "./magic-rules";
 
@@ -151,5 +157,40 @@ describe("game replay", () => {
       color: "w",
       type: "n",
     });
+  });
+
+  it("replays from the game's actual initial position", () => {
+    const initial = new Chess();
+    initial.move("e4");
+    const frames = buildReplayFrames([
+      move(1, "b", "c7", "c5", "c5"),
+    ], initial.fen());
+
+    expect(frames[0].fen).toBe(initial.fen());
+    expect(new Chess(frames[1].fen).get("c5")).toMatchObject({
+      color: "b",
+      type: "p",
+    });
+  });
+
+  it("keeps a historical cursor pinned while new moves arrive and returns forward to live", () => {
+    let cursor = previousHistoryCursor(null, 4);
+    expect(cursor).toBe(3);
+    expect(resolvedHistoryPly(cursor, 6)).toBe(3);
+
+    cursor = nextHistoryCursor(cursor, 6);
+    expect(cursor).toBe(4);
+    cursor = nextHistoryCursor(cursor, 6);
+    expect(cursor).toBe(5);
+    cursor = nextHistoryCursor(cursor, 6);
+    expect(cursor).toBeNull();
+    expect(resolvedHistoryPly(cursor, 6)).toBe(6);
+  });
+
+  it("bounds history navigation at the start and disables it for an empty game", () => {
+    expect(previousHistoryCursor(null, 0)).toBeNull();
+    expect(previousHistoryCursor(0, 5)).toBe(0);
+    expect(nextHistoryCursor(null, 5)).toBeNull();
+    expect(resolvedHistoryPly(99, 5)).toBe(5);
   });
 });

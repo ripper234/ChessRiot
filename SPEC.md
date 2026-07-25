@@ -1,4 +1,25 @@
-# ChessRiot v0.8.2 specification
+# ChessRiot v0.9.0 specification
+
+## v0.9.0 release additions
+
+- Every game keeps Previous and Next position arrows visible beside the live
+  match status. They reuse the main board, preserve the player's orientation,
+  and never mutate the game.
+- Historical viewing uses only committed server history. It remains pinned to
+  the selected ply when polling adds a newer move, and Forward or Go Live
+  returns to the current position.
+- Historical boards derive their own last-move highlight, checked king, and
+  captured pieces. Move effects, draw claims, and playable interactions remain
+  live-only.
+- Confirm every move is an opt-in, device-local setting under Move Settings.
+  It is off by default.
+- When enabled, one accessible confirmation appears before every human move
+  submission, including tap, pointer drag, keyboard activation, promotion, and
+  a completed one- or two-leg Magic turn. Bot moves and non-move actions do not
+  prompt.
+- A confirmation is valid only for the authoritative version on which it was
+  opened. Position changes and duplicate confirmation clicks cannot submit a
+  stale or second move.
 
 ## v0.8.2 release additions
 
