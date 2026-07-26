@@ -178,6 +178,33 @@ export async function ensureSchema(): Promise<void> {
           created_at TEXT NOT NULL
         )`),
         db.prepare("CREATE INDEX IF NOT EXISTS feedback_created_idx ON feedback (created_at DESC)"),
+        db.prepare(`CREATE TABLE IF NOT EXISTS demo_video_jobs (
+          id TEXT PRIMARY KEY NOT NULL,
+          status TEXT NOT NULL
+            CHECK (status IN ('narrating', 'rendering', 'publishing', 'ready', 'failed')),
+          requested_at TEXT NOT NULL,
+          narration_ready_at TEXT,
+          published_at TEXT,
+          duration_seconds INTEGER,
+          size_bytes INTEGER,
+          media_key TEXT,
+          error_code TEXT
+        )`),
+        db.prepare(`CREATE INDEX IF NOT EXISTS demo_video_jobs_requested_idx
+          ON demo_video_jobs (requested_at DESC)`),
+        db.prepare(`CREATE TABLE IF NOT EXISTS demo_video_generation_lock (
+          id INTEGER PRIMARY KEY NOT NULL
+            CHECK (id = 1),
+          job_id TEXT NOT NULL,
+          expires_at INTEGER NOT NULL
+        )`),
+        db.prepare(`CREATE TABLE IF NOT EXISTS demo_video_nonces (
+          nonce TEXT PRIMARY KEY NOT NULL,
+          used_at TEXT NOT NULL,
+          expires_at INTEGER NOT NULL
+        )`),
+        db.prepare(`CREATE INDEX IF NOT EXISTS demo_video_nonces_expiry_idx
+          ON demo_video_nonces (expires_at)`),
       ]);
 
       const columns = await db

@@ -1276,12 +1276,16 @@ try {
       requestId: concurrentId,
     }),
   });
-  const concurrentResponses = await Promise.all([concurrentMove(), concurrentMove()]);
-  assert.deepEqual(concurrentResponses.map((response) => response.status), [200, 200]);
-  const concurrentStates = await Promise.all(concurrentResponses.map(body));
-  assert.equal(concurrentStates[0].game.moves.length, 1);
-  assert.equal(concurrentStates[1].game.moves.length, 1);
-  repetitionVersion = concurrentStates[0].game.version;
+  const concurrentResults = await Promise.all(
+    [concurrentMove(), concurrentMove()].map(async (pendingResponse) => {
+      const response = await pendingResponse;
+      return { status: response.status, state: await body(response) };
+    }),
+  );
+  assert.deepEqual(concurrentResults.map((result) => result.status), [200, 200]);
+  assert.equal(concurrentResults[0].state.game.moves.length, 1);
+  assert.equal(concurrentResults[1].state.game.moves.length, 1);
+  repetitionVersion = concurrentResults[0].state.game.version;
   for (const [token, from, to] of [
     [repetitionBlack, "g8", "f6"],
     [repetitionWhite, "f3", "g1"],

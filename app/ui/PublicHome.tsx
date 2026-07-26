@@ -6,7 +6,10 @@ export function PublicHome() {
     <main className="public-shell">
       <header className="topbar public-topbar">
         <Brand />
-        <Link className="public-nav-link" href="/changelog">WHAT&apos;S NEW</Link>
+        <nav className="public-nav" aria-label="ChessRiot">
+          <Link className="public-nav-link" href="/demo">90-SEC DEMO</Link>
+          <Link className="public-nav-link" href="/changelog">WHAT&apos;S NEW</Link>
+        </nav>
       </header>
       <section className="public-hero">
         <div className="public-copy">
@@ -18,6 +21,9 @@ export function PublicHome() {
           </p>
           <Link className="public-play-button" href="/app">
             PLAY CHESS <span aria-hidden="true">→</span>
+          </Link>
+          <Link className="public-demo-link" href="/demo">
+            WATCH THE 90-SECOND DEMO <span aria-hidden="true">▶</span>
           </Link>
           <ul aria-label="ChessRiot highlights">
             <li>Solo or multiplayer</li>

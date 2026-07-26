@@ -191,3 +191,49 @@ export const feedback = sqliteTable(
     check("feedback_status_check", sql`${table.status} IN ('new', 'reviewed', 'closed')`),
   ],
 );
+
+export const demoVideoJobs = sqliteTable(
+  "demo_video_jobs",
+  {
+    id: text("id").primaryKey().notNull(),
+    status: text("status").notNull(),
+    requestedAt: text("requested_at").notNull(),
+    narrationReadyAt: text("narration_ready_at"),
+    publishedAt: text("published_at"),
+    durationSeconds: integer("duration_seconds"),
+    sizeBytes: integer("size_bytes"),
+    mediaKey: text("media_key"),
+    errorCode: text("error_code"),
+  },
+  (table) => [
+    index("demo_video_jobs_requested_idx").on(table.requestedAt),
+    check(
+      "demo_video_jobs_status_check",
+      sql`${table.status} IN ('narrating', 'rendering', 'publishing', 'ready', 'failed')`,
+    ),
+  ],
+);
+
+export const demoVideoGenerationLock = sqliteTable(
+  "demo_video_generation_lock",
+  {
+    id: integer("id").primaryKey().notNull(),
+    jobId: text("job_id").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+  },
+  (table) => [
+    check("demo_video_generation_lock_id_check", sql`${table.id} = 1`),
+  ],
+);
+
+export const demoVideoNonces = sqliteTable(
+  "demo_video_nonces",
+  {
+    nonce: text("nonce").primaryKey().notNull(),
+    usedAt: text("used_at").notNull(),
+    expiresAt: integer("expires_at").notNull(),
+  },
+  (table) => [
+    index("demo_video_nonces_expiry_idx").on(table.expiresAt),
+  ],
+);

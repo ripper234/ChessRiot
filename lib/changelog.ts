@@ -11,6 +11,19 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.11.0",
+    date: "2026-07-26",
+    title: "ChessRiot in 90 seconds",
+    summary: "A narrated, captioned walkthrough now shows Solo, themes, replay, and private multiplayer before you start a game.",
+    changes: [
+      "Added a public 90-second demo page linked directly from the homepage.",
+      "Built the walkthrough from current Development interface captures with narration, subtitles, and audio.",
+      "Separated video regeneration from application releases by publishing validated media through a versioned R2 manifest.",
+      "Added a signed, owner-only, rate-limited regeneration lane for the ChessRiot Control panel.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.11.0`,
+  },
+  {
     version: "0.10.2",
     date: "2026-07-26",
     title: "Cleaner foundations",
