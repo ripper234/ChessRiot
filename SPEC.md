@@ -1,4 +1,20 @@
-# ChessRiot v0.9.2 specification
+# ChessRiot v0.10.1 specification
+
+## v0.10.1 release additions
+
+- Magic Rules remain visible in new-game setup, but the interior is a
+  **Coming Soon** placeholder with no rule input or compilation action.
+- The stable release contains no runtime LLM compiler endpoint or OpenAI call.
+- Runtime Magic development continues on `feature/runtime-magic-rules` in an
+  isolated preview lane. Existing stored Magic games remain readable for
+  backwards compatibility.
+
+## v0.9.3 release additions
+
+- The new-game screen selects Solo on first load and immediately shows the
+  Level 3 Riot Bot control. Multiplayer remains one explicit tap away.
+- Standard chess still begins with White. A Solo game assigned to the human as
+  Black commits Riot Bot's White opening before the game is returned.
 
 ## v0.9.2 release additions
 
@@ -91,8 +107,8 @@
 
 ## v0.7 release additions
 
-- New Solo and Multiplayer games offer an optional Magic Rules box. It is off
-  by default, and its prompt and compiled rules belong only to that game.
+- The stable new-game screen shows Magic Rules as a Coming Soon placeholder and
+  cannot create a new rule document.
 - The prompt compiler accepts a short paragraph made from supported clauses,
   normalizes it, stores a versioned rule document, and rejects any clause it
   cannot interpret. Prompt text is never executed as code or copied into
@@ -217,10 +233,9 @@ This file and `MVP.md` are the source of truth for the current milestone.
 
 1. The player opens the fixed public homepage and selects Play now, or opens
    `/app` directly.
-2. The player enters a display name and chooses Solo or Multiplayer. No account
-   or human check is required.
-3. The player may enable Magic Rules and enter a supported rule paragraph. With
-   the box off, the game uses standard chess.
+2. The player enters a display name. Solo is selected by default; Multiplayer
+   remains available without an account or human check.
+3. The player sees Magic Rules as Coming Soon. New games use standard chess.
 4. Solo reveals a five-step Bot level bar that starts at Level 3, Medium. Colors are assigned evenly and deterministically from the idempotent create request. If Riot Bot is White, its legal opening is committed before the game appears.
 5. Multiplayer asks for a one, three, or five-day move pace, then opens White's reusable private game URL and shows a separate one-use invitation URL.
 6. Black opens that invitation on another device, reviews any Magic Rules,
@@ -231,8 +246,8 @@ This file and `MVP.md` are the source of truth for the current milestone.
 
 ## Rules and persistence
 
-- Standard chess is the default, implemented with chess.js. A game may instead
-  carry one immutable, compiler-versioned set of supported Magic Rules.
+- Standard chess is the only new-game option, implemented with chess.js.
+  Previously stored games may carry an immutable legacy Magic document.
 - D1 stores current FEN, status, version, mode, bot level, Magic prompt and
   compiled rules, players, hashed keys, and immutable ordered turn actions.
 - Every move carries an expected version and idempotency key.

@@ -11,6 +11,30 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.10.1",
+    date: "2026-07-26",
+    title: "Magic safely paused",
+    summary: "Magic Rules remain visible, but new rule entry is paused while the feature develops in isolation.",
+    changes: [
+      "Replaced new-game Magic rule entry with a clear Coming Soon placeholder.",
+      "Removed the runtime LLM compiler, its endpoint, and its token-consuming path from the stable release.",
+      "Moved active Magic development to an isolated feature branch and preview lane.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.10.1`,
+  },
+  {
+    version: "0.9.3",
+    date: "2026-07-26",
+    title: "Solo from the start",
+    summary: "New games now open in Solo mode, while preserving White's first move in every game.",
+    changes: [
+      "Selected Solo by default on the new-game screen and showed the Level 3 Riot Bot control immediately.",
+      "Kept Multiplayer one tap away without changing either mode's saved behavior.",
+      "Added regression coverage for the default selection and the existing White-first invariant.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.9.3`,
+  },
+  {
     version: "0.9.2",
     date: "2026-07-25",
     title: "First-move history fix",

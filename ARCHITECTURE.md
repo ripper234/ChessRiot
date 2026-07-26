@@ -2,8 +2,8 @@
 
 - `app/`: Vinext pages, client interactions, and HTTP APIs.
 - `lib/game-rules.ts`: pure chess.js adapter and terminal-state logic.
-- `lib/magic-rules.ts`: bounded prompt compiler and versioned per-game rule
-  schema.
+- `lib/magic-rules.ts`: legacy deterministic rule documents retained only so
+  previously created Magic games remain readable.
 - `lib/computer-player.ts`: bounded server-side move search for Riot Bot.
 - `lib/computer-turn.ts`: recovery path for a pending Solo computer turn.
 - `lib/account-auth.ts`: trusted hosting identity and stable guest-id derivation.
@@ -25,13 +25,11 @@ pending Riot Bot turn in the background. Every authorized game read runs the
 same pending-turn recovery, so refresh or browser closure cannot strand the
 game. A White bot opening is committed during create.
 
-Magic prompt text is normalized and compiled only through an explicit
-allowlist. The immutable versioned result, not the prose, drives legality.
-Unsupported clauses fail game creation. A valid two-step rook or knight action
-is replayed as two chess.js moves but stored and counted as one application
-turn, so no partially committed variant state can become authoritative.
-Original v1 documents remain valid for rook games; v2 adds the knight rule
-without changing those stored games.
+Stable new-game setup contains no Magic prompt, compiler action, runtime LLM
+endpoint, or model call. Legacy immutable Magic documents remain supported for
+previously created games so their history does not break. New runtime Magic
+work lives on `feature/runtime-magic-rules` and must return through an isolated
+preview and explicit merge.
 
 Mutation provenance uses the exact URL origin plus browser-controlled
 `Sec-Fetch-Site`. A Sites-sandboxed opaque `Origin: null` is accepted only with

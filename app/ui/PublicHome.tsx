@@ -13,8 +13,8 @@ export function PublicHome() {
           <p className="public-eyebrow"><span /> CHESS, BUT ALIVE</p>
           <h1>REAL CHESS.<br /><em>TOTAL PLAY.</em></h1>
           <p>
-            Play Riot Bot or challenge someone you know. Add optional Magic
-            Rules when ordinary chess is not unruly enough.
+            Play Riot Bot or challenge someone you know. Magic Rules are
+            brewing on a separate experimental branch.
           </p>
           <Link className="public-play-button" href="/app">
             PLAY CHESS <span aria-hidden="true">→</span>
@@ -22,7 +22,7 @@ export function PublicHome() {
           <ul aria-label="ChessRiot highlights">
             <li>Solo or multiplayer</li>
             <li>Three-day turns</li>
-            <li>Optional Magic Rules</li>
+            <li>Magic Rules coming soon</li>
           </ul>
         </div>
         <div className="public-board-card" aria-hidden="true">

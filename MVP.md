@@ -10,8 +10,8 @@
 - Two separate devices or browsers
 - Create, invite, and join
 - Standard legal rules and complete endings by default
-- Optional per-game Magic Rules for atomic two-step rook or knight turns, no
-  promotion, no castling, and no en passant, with unsupported prompts rejected
+- A visible Magic Rules Coming Soon placeholder, with no new rule entry or
+  compilation in the stable release
 - Durable game state and move history
 - Compatibility with existing account memberships and private-seat links
 - Turn enforcement and stale-write protection
@@ -43,6 +43,7 @@
 - Collectible skins or account-bound cosmetics
 - Native apps and app-store packaging
 - Arbitrary executable rule code or silently interpreted unsupported prompts
+- New Magic Rules until the isolated preview is explicitly approved and merged
 - Google sign-in and Telegram release announcements until their external
   credentials and explicit feature flags are configured
 - Cross-device account history until an account provider is deliberately

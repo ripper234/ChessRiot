@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import type {
   AiDifficulty,
   GameMode,
@@ -22,10 +22,6 @@ import {
   type RecentGame,
 } from "@/lib/client-storage";
 import { APP_VERSION } from "@/lib/version";
-import {
-  compileMagicPrompt,
-  MAGIC_PROMPT_MAX_LENGTH,
-} from "@/lib/magic-rules";
 import { Brand } from "./Brand";
 
 interface PendingCreate {
@@ -45,19 +41,13 @@ const DIFFICULTY_LABELS: Record<AiDifficulty, string> = {
 export function CreateGame() {
   const router = useRouter();
   const [name, setName] = useState("");
-  const [mode, setMode] = useState<GameMode>("multiplayer");
+  const [mode, setMode] = useState<GameMode>("solo");
   const [difficulty, setDifficulty] = useState<AiDifficulty>(3);
   const [turnPaceDays, setTurnPaceDays] = useState<TurnPaceDays>(3);
-  const [magicEnabled, setMagicEnabled] = useState(false);
-  const [magicPrompt, setMagicPrompt] = useState("");
   const [recent, setRecent] = useState<RecentGame[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const pending = useRef<PendingCreate | null>(null);
-  const magicPreview = useMemo(
-    () => magicEnabled ? compileMagicPrompt(magicPrompt) : null,
-    [magicEnabled, magicPrompt],
-  );
 
   useEffect(() => {
     try {
@@ -72,14 +62,6 @@ export function CreateGame() {
     event.preventDefault();
     const cleanName = name.trim();
     if (!cleanName) return;
-    if (magicEnabled && (!magicPreview || !magicPreview.ok)) {
-      setError(
-        magicPreview && !magicPreview.ok
-          ? magicPreview.message
-          : "Describe the magic rule in a short sentence.",
-      );
-      return;
-    }
     if (!canUseGameStorage()) {
       setError("Allow browser storage so the opening animation and invitation can be restored.");
       return;
@@ -101,9 +83,6 @@ export function CreateGame() {
           mode,
           ...(mode === "solo" ? { difficulty } : {}),
           ...(mode === "multiplayer" ? { turnPaceDays } : {}),
-          ...(magicEnabled && magicPreview?.ok
-            ? { magicPrompt: magicPreview.prompt }
-            : {}),
           ...pending.current,
         }),
       });
@@ -192,56 +171,19 @@ export function CreateGame() {
               </label>
             </div>
           </fieldset>
-          <div className={`magic-box${magicEnabled ? " enabled" : ""}`}>
-            <label className="magic-toggle">
-              <input
-                type="checkbox"
-                checked={magicEnabled}
-                disabled={busy}
-                onChange={(event) => {
-                  setMagicEnabled(event.target.checked);
-                  setError("");
-                  pending.current = null;
-                }}
-              />
+          <div className="magic-box coming-soon">
+            <div className="magic-toggle">
               <span aria-hidden="true">✦</span>
               <div>
                 <strong>MAGIC RULES</strong>
-                <small>Optional rules for this game</small>
+                <small>Optional rules for future games</small>
               </div>
-              <b>{magicEnabled ? "ON" : "OFF"}</b>
-            </label>
-            {magicEnabled ? (
-              <div className="magic-prompt">
-                <label htmlFor="magic-rule-prompt">Describe the rule</label>
-                <textarea
-                  id="magic-rule-prompt"
-                  value={magicPrompt}
-                  maxLength={MAGIC_PROMPT_MAX_LENGTH}
-                  rows={3}
-                  disabled={busy}
-                  placeholder="e.g. “Knights move twice.”"
-                  onChange={(event) => {
-                    setMagicPrompt(event.target.value);
-                    setError("");
-                    pending.current = null;
-                  }}
-                />
-                {magicPreview?.ok ? (
-                  <div className="magic-understood" role="status">
-                    <span>MAGIC READY</span>
-                    <p>{magicPreview.labels.join(" · ")}</p>
-                  </div>
-                ) : magicPrompt.trim() && magicPreview && !magicPreview.ok ? (
-                  <p className="magic-error" role="alert">{magicPreview.message}</p>
-                ) : (
-                  <small>
-                    Try “Knights move twice”, “Rooks move twice”, “Pawns never
-                    promote”, “No castling”, or “No en passant”.
-                  </small>
-                )}
-              </div>
-            ) : null}
+              <b>SOON</b>
+            </div>
+            <div className="magic-coming-soon" role="status">
+              <strong>COMING SOON</strong>
+              <p>Magic Rules are being developed safely on a separate preview branch.</p>
+            </div>
           </div>
           {mode === "solo" ? (
             <div className="difficulty-control">
