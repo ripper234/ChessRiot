@@ -1,4 +1,11 @@
-# ChessRiot v0.11.0-magic.1 specification
+# ChessRiot v0.11.0-magic.4 specification
+
+## Refactor merge additions
+
+- Refactored shared board presentation, game-creation payloads, status text, and
+  client request helpers without changing preview functionality.
+- Added regression coverage for both board orientations, outcome and live-status
+  text, create payloads, and API error/header handling.
 
 ## Magic branch preview additions
 

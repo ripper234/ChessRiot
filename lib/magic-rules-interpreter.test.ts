@@ -85,7 +85,7 @@ describe("runtime Magic interpreter", () => {
     await expect(interpretMagicPrompt("Queens explode")).resolves.toEqual({
       ok: false,
       code: "unsupported",
-      message: "Exploding queens are outside the deterministic rule engine.",
+      message: "This rule cannot be compiled safely yet.",
     });
   });
 

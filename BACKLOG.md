@@ -14,13 +14,13 @@
 | CR-008 | Desktop install, move alerts, and time limits | Install support and selectable one, three, or five-day move deadlines are live. Account-wide alerts are dormant in guest mode; closed-app push still needs subscription infrastructure. |
 | CR-009 | A winning piece defeats the king on checkmate | Shipped as a short, theme-aware, reduced-motion-safe finisher. |
 | CR-010 | Subtle release updates and optional louder alerts | The unseen-release blue dot is shipped. Account-wide move alerts are dormant in guest mode. |
-| CR-011 | Per-game Magic Rules | Shipped with immutable, allowlisted rules for atomic two-step rooks or knights, no promotion, no castling, and no en passant. Unsupported prose is rejected. |
-| CR-012 | Isolated branch preview environments | Planned. Complicated features use opt-in `feature/*` previews, collapsed by default in Control, before merging to Development. |
+| CR-011 | Per-game Magic Rules | Experimental on `feature/runtime-magic-rules`. Stable environments show Coming Soon. |
+| CR-012 | Isolated branch preview environments | Shipped for Magic. Control exposes an opt-in, owner-only preview with separate data. |
 | CR-013 | Optional confirmation before every move | Shipped as a default-off, browser-local setting covering tap, drag, keyboard, promotion, and complete Magic turns. |
 | CR-015 | Solo is the default mode | Shipped in v0.9.3. The new-game screen opens with Solo selected and Level 3 visible. |
 | CR-016 | White always begins | Verified in v0.9.3. White is always the first mover; Riot Bot commits the opening before a Black-side human can act. |
-| CR-017 | Understand Magic Rules at runtime | Shipped in v0.10.0. A runtime LLM translates natural wording into a strict validated rule document; gameplay never depends on live model judgment. |
-| CR-018 | Numeric move counts | Shipped in v0.10.0 through one generic two-to-six-step same-piece engine, including equivalent wording such as “twice,” “2 times,” and “3 times.” |
+| CR-017 | Understand Magic Rules at runtime | Experimental on the feature branch. Before release, define a safe general rule language that can express movement changes without exposing internal compiler limits as product rules. |
+| CR-018 | Numeric move counts | Experimental on the feature branch as one test of the general rule language, not a special-case module. |
 
 This is the durable product backlog recovered from
 [GitHub issue #11](https://github.com/ripper234/ChessRiot/issues/11) and

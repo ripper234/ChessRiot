@@ -1,6 +1,6 @@
 "use client";
 
-import { Chess, type Move, type PieceSymbol, type Square } from "chess.js";
+import { Chess, type Move, type Square } from "chess.js";
 import Link from "next/link";
 import {
   type CSSProperties,
@@ -12,6 +12,7 @@ import {
   useState,
 } from "react";
 import { boardEffects, type BoardEffect } from "@/lib/game-effects";
+import { apiErrorMessage, requestHeaders } from "@/lib/client-http";
 import {
   generateUuid,
   hasSeatTokenInHash,
@@ -31,9 +32,14 @@ import {
 import {
   actionEndpointSquares,
   capturedPiecesByVictimColor,
+  CHESS_PIECE_GLYPHS,
+  CHESS_PIECE_NAMES,
   checkedKingSquare as findCheckedKingSquare,
+  DIFFICULTY_LABELS,
+  gameStatusText,
   illegalDestinationMessage,
   isDarkSquare,
+  orientedBoardSquares,
   pieceCannotAnswerCheckMessage,
 } from "@/lib/game-presentation";
 import { classifyGameFinisher, type GameFinisher } from "@/lib/game-finishers";
@@ -71,18 +77,7 @@ import { ReactionPanel } from "./ReactionPanel";
 import { ReplayViewer } from "./ReplayViewer";
 import { TurnDeadline } from "./TurnDeadline";
 
-const PIECES: Record<"w" | "b", Record<PieceSymbol, string>> = {
-  // Filled glyphs let CSS provide unmistakable light and dark piece colors.
-  w: { p: "♟", n: "♞", b: "♝", r: "♜", q: "♛", k: "♚" },
-  b: { p: "♟", n: "♞", b: "♝", r: "♜", q: "♛", k: "♚" },
-};
-const PIECE_NAMES: Record<PieceSymbol, string> = {
-  p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king",
-};
-const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
-const RANKS = ["8", "7", "6", "5", "4", "3", "2", "1"];
 const CONNECTION_MESSAGE = "Connection interrupted. We’ll keep trying.";
-const DIFFICULTY_LABELS = ["", "Easy", "Relaxed", "Medium", "Tough", "Brutal"];
 const REACTION_HIDDEN_KEY_PREFIX = "chessriot:reactions:hidden:";
 const FINISHER_DURATION_MS = 1_300;
 const OPENING_INTRO_DURATION_MS = 360;
@@ -116,51 +111,6 @@ interface PendingPromotion {
   from: Square;
   to: Square;
   continuation?: boolean;
-}
-
-function apiMessage(data: unknown, fallback: string): string {
-  if (
-    typeof data === "object" && data !== null &&
-    typeof (data as { error?: { message?: unknown } }).error?.message === "string"
-  ) return (data as { error: { message: string } }).error.message;
-  return fallback;
-}
-
-function outcomeText(game: GameSnapshot): string {
-  if (!game.outcome) return "";
-  if (game.outcome.reason === "checkmate") {
-    const winner = game.outcome.winner === "w" ? game.players.white.name : game.players.black?.name;
-    return `${winner ?? "Winner"} wins by checkmate`;
-  }
-  if (game.outcome.reason === "resignation") {
-    const winner = game.outcome.winner === "w" ? game.players.white.name : game.players.black?.name;
-    return `${winner ?? "Winner"} wins by resignation`;
-  }
-  if (game.outcome.reason === "timeout") {
-    const winner = game.outcome.winner === "w" ? game.players.white.name : game.players.black?.name;
-    return `${winner ?? "Winner"} wins on time`;
-  }
-  if (game.outcome.reason === "cancelled") return "Game cancelled";
-  const labels: Record<string, string> = {
-    stalemate: "Draw by stalemate",
-    threefold_repetition: "Draw by repetition",
-    insufficient_material: "Draw by insufficient material",
-    fifty_move: "Draw by the fifty-move rule",
-    fivefold_repetition: "Draw by automatic fivefold repetition",
-    seventy_five_move: "Draw by the seventy-five-move rule",
-    draw: "Draw",
-  };
-  return labels[game.outcome.reason] ?? "Game over";
-}
-
-function requestHeaders(
-  token: string | null,
-  jsonBody = false,
-): Record<string, string> {
-  return {
-    ...(jsonBody ? { "content-type": "application/json" } : {}),
-    ...(token ? { authorization: `Bearer ${token}` } : {}),
-  };
 }
 
 export function GameRoom({ gameId }: { gameId: string }) {
@@ -654,14 +604,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
     [chess],
   );
 
-  const squares = useMemo(() => {
-    if (!game || game.you.color === "w") {
-      return RANKS.flatMap((rank) => FILES.map((file) => `${file}${rank}` as Square));
-    }
-    return [...RANKS].reverse().flatMap((rank) =>
-      [...FILES].reverse().map((file) => `${file}${rank}` as Square),
-    );
-  }, [game]);
+  const squares = useMemo(
+    () => orientedBoardSquares(game?.you.color ?? "w"),
+    [game?.you.color],
+  );
 
   const canMove = Boolean(
     game
@@ -812,7 +758,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
         setMessage(
           data.error?.code === "must_answer_check"
             ? illegalDestinationMessage(true)
-            : apiMessage(data, "That move did not work"),
+            : apiErrorMessage(data, "That move did not work"),
         );
         if (data.error?.code !== "stale_position") playInvalidSound();
       } else if (!data.game) {
@@ -852,7 +798,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       };
       if (data.game) acceptGame(data.game);
       if (!response.ok) {
-        setMessage(apiMessage(data, "That draw cannot be claimed now"));
+        setMessage(apiErrorMessage(data, "That draw cannot be claimed now"));
         playInvalidSound();
       }
     } catch {
@@ -874,7 +820,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       setSelected(from);
       setMessage(
         magicDraft
-          ? `Move the same ${PIECE_NAMES[magicDraft.piece]} again, or finish the turn.`
+          ? `Move the same ${CHESS_PIECE_NAMES[magicDraft.piece]} again, or finish the turn.`
           : illegalDestinationMessage(game.check),
       );
       playInvalidSound();
@@ -883,7 +829,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     if (magicDraft) {
       if (from !== magicDraft.pieceSquare) {
         setSelected(magicDraft.pieceSquare);
-        setMessage(`Move the same ${PIECE_NAMES[magicDraft.piece]} again, or finish the turn.`);
+        setMessage(`Move the same ${CHESS_PIECE_NAMES[magicDraft.piece]} again, or finish the turn.`);
         playInvalidSound();
         return;
       }
@@ -920,9 +866,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
           fen: continuation.chess.fen(),
         });
         setSelected(firstMove.to);
-        setMessage(
-          `Move that ${PIECE_NAMES[continuation.piece]} again, or finish the turn.`,
-        );
+        setMessage(`Move that ${CHESS_PIECE_NAMES[continuation.piece]} again, or finish the turn.`);
         return;
       }
     }
@@ -983,7 +927,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     setSelected(selectedMove.to);
     setPromotionMove(null);
     setMessage(
-      `Magic move ${nextContinuation.length + 1} of ${next.maxMoves}. Move that ${PIECE_NAMES[next.piece]} again, or finish the turn.`,
+      `Magic move ${nextContinuation.length + 1} of ${next.maxMoves}. Move that ${CHESS_PIECE_NAMES[next.piece]} again, or finish the turn.`,
     );
   }
 
@@ -1013,7 +957,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       }
       setSelected(magicDraft.pieceSquare);
       if (decision === "reject") {
-        setMessage(`Move the same ${PIECE_NAMES[magicDraft.piece]} again, or finish the turn.`);
+        setMessage(`Move the same ${CHESS_PIECE_NAMES[magicDraft.piece]} again, or finish the turn.`);
         playInvalidSound();
       }
       return;
@@ -1205,7 +1149,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
         error?: { message?: string };
       };
       if (!response.ok || !data.reaction) {
-        setReactionMessage(apiMessage(data, "Could not send that reaction"));
+        setReactionMessage(apiErrorMessage(data, "Could not send that reaction"));
         return;
       }
       setReactions((current) => {
@@ -1253,7 +1197,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
         error?: { message?: string };
       };
       if (data.game) acceptGame(data.game);
-      if (!response.ok) setMessage(apiMessage(data, "Could not end the game"));
+      if (!response.ok) setMessage(apiErrorMessage(data, "Could not end the game"));
     } catch {
       setMessage("Could not end the game. Refreshing the board…");
       await loadGame(latestVersion.current);
@@ -1292,21 +1236,15 @@ export function GameRoom({ gameId }: { gameId: string }) {
   }
   if (!game || !chess) return null;
 
-  const turnName = game.turn === "w" ? game.players.white.name : game.players.black?.name ?? "Black";
   const displayCheck = viewingHistory ? chess.isCheck() : game.check;
-  const statusText = viewingHistory
-    ? replayFrameLabel(historyFrame)
-    : game.status === "waiting"
-    ? "Waiting for Player 2"
-    : openingIntro
-      ? "White opens"
-    : game.status === "completed"
-      ? outcomeText(game)
-      : magicDraft
-        ? `Magic turn: move that ${PIECE_NAMES[magicDraft.piece]} again or finish`
-      : displayCheck
-        ? game.turn === game.you.color ? "CHECK! Protect your king" : `${turnName} is in check`
-        : game.turn === game.you.color ? "Your turn" : `${turnName}’s turn`;
+  const statusText = gameStatusText({
+    game,
+    viewingHistory,
+    historyLabel: replayFrameLabel(historyFrame),
+    openingIntro,
+    magicPiece: magicDraft?.piece,
+    displayCheck,
+  });
   const draggedPiece = drag ? chess.get(drag.from) : null;
   const burstPreset = reactionBurst ? reactionPreset(reactionBurst.key) : null;
   const reactionsAvailable = Boolean(
@@ -1346,8 +1284,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 <span className="captured-by">
                   <small>CAPTURED</small>
                   <b>{lostPieces.b.length ? lostPieces.b.map((piece, index) => (
-                    <i className="piece-b" key={`white-captured-${piece}-${index}`} aria-label={`black ${PIECE_NAMES[piece]}`}>
-                      {PIECES.b[piece]}
+                    <i className="piece-b" key={`white-captured-${piece}-${index}`} aria-label={`black ${CHESS_PIECE_NAMES[piece]}`}>
+                      {CHESS_PIECE_GLYPHS.b[piece]}
                     </i>
                   )) : "—"}</b>
                 </span>
@@ -1368,8 +1306,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 <span className="captured-by">
                   <small>CAPTURED</small>
                   <b>{lostPieces.w.length ? lostPieces.w.map((piece, index) => (
-                    <i className="piece-w" key={`black-captured-${piece}-${index}`} aria-label={`white ${PIECE_NAMES[piece]}`}>
-                      {PIECES.w[piece]}
+                    <i className="piece-w" key={`black-captured-${piece}-${index}`} aria-label={`white ${CHESS_PIECE_NAMES[piece]}`}>
+                      {CHESS_PIECE_GLYPHS.w[piece]}
                     </i>
                   )) : "—"}</b>
                 </span>
@@ -1423,7 +1361,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
             <div
               className="magic-turn-actions"
               role="group"
-              aria-label={`Finish or cancel the ${PIECE_NAMES[magicDraft.piece]} magic move`}
+              aria-label={`Finish or cancel the ${CHESS_PIECE_NAMES[magicDraft.piece]} magic move`}
             >
               <button
                 type="button"
@@ -1511,7 +1449,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                   <button
                     type="button"
                     role="gridcell"
-                    aria-label={`${square}${piece ? ` ${piece.color === "w" ? "white" : "black"} ${PIECE_NAMES[piece.type]}` : " empty"}${isCheckedKing ? ", in check" : ""}${legal ? ", legal destination" : ""}`}
+                    aria-label={`${square}${piece ? ` ${piece.color === "w" ? "white" : "black"} ${CHESS_PIECE_NAMES[piece.type]}` : " empty"}${isCheckedKing ? ", in check" : ""}${legal ? ", legal destination" : ""}`}
                     aria-disabled={!canMove}
                     aria-selected={isSelected}
                     data-square={square}
@@ -1532,7 +1470,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                         onPointerUp={finishPieceDrag}
                         onPointerCancel={cancelPieceDrag}
                       >
-                        {PIECES[piece.color][piece.type]}
+                        {CHESS_PIECE_GLYPHS[piece.color][piece.type]}
                       </span>
                     ) : null}
                   </button>
@@ -1659,7 +1597,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
           style={{ left: drag.x, top: drag.y }}
           aria-hidden="true"
         >
-          {PIECES[draggedPiece.color][draggedPiece.type]}
+          {CHESS_PIECE_GLYPHS[draggedPiece.color][draggedPiece.type]}
         </span>
       ) : null}
 
@@ -1670,7 +1608,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
               <button
                 className={`piece-${game.you.color}`}
                 key={piece}
-                aria-label={`Promote to ${PIECE_NAMES[piece]}`}
+                aria-label={`Promote to ${CHESS_PIECE_NAMES[piece]}`}
                 autoFocus={piece === "q"}
                 onClick={() => {
                   if (promotionMove.continuation) {
@@ -1680,7 +1618,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                   }
                 }}
               >
-                {PIECES[game.you.color][piece]}
+                {CHESS_PIECE_GLYPHS[game.you.color][piece]}
               </button>
             ))}
           </div><button className="cancel-promotion" onClick={() => setPromotionMove(null)}>CANCEL</button></div>

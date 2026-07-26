@@ -2,7 +2,7 @@
 
 Play the current game at [chessriot.ripper234.chatgpt.site](https://chessriot.ripper234.chatgpt.site).
 
-ChessRiot v0.11.0-magic.1 is the isolated preview of runtime Magic Rules for solo play against Riot Bot or asynchronous play with someone you know.
+ChessRiot v0.11.0-magic.4 is the isolated preview of runtime Magic Rules for solo play against Riot Bot or asynchronous play with someone you know.
 
 Found something confusing or have a cool rule request? Use **Feedback** inside
 the game or [open a GitHub issue](https://github.com/ripper234/ChessRiot/issues).

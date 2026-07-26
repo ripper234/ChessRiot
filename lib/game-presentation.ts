@@ -1,9 +1,35 @@
 import { Chess, type PieceSymbol, type Square } from "chess.js";
-import type { Color, Promotion, PublicMove } from "./game-types";
+import type {
+  AiDifficulty,
+  Color,
+  GameSnapshot,
+  Promotion,
+  PublicMove,
+} from "./game-types";
 
 export type CapturedPieces = Record<Color, PieceSymbol[]>;
 
 const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"] as const;
+const RANKS = ["8", "7", "6", "5", "4", "3", "2", "1"] as const;
+export const CHESS_PIECE_GLYPHS: Record<Color, Record<PieceSymbol, string>> = {
+  w: { p: "♟", n: "♞", b: "♝", r: "♜", q: "♛", k: "♚" },
+  b: { p: "♟", n: "♞", b: "♝", r: "♜", q: "♛", k: "♚" },
+};
+export const CHESS_PIECE_NAMES: Record<PieceSymbol, string> = {
+  p: "pawn",
+  n: "knight",
+  b: "bishop",
+  r: "rook",
+  q: "queen",
+  k: "king",
+};
+export const DIFFICULTY_LABELS: Record<AiDifficulty, string> = {
+  1: "Easy",
+  2: "Relaxed",
+  3: "Medium",
+  4: "Tough",
+  5: "Brutal",
+};
 const CAPTURE_ORDER: Record<PieceSymbol, number> = {
   q: 0,
   r: 1,
@@ -16,6 +42,80 @@ const CAPTURE_ORDER: Record<PieceSymbol, number> = {
 export function isDarkSquare(square: Square): boolean {
   const file = FILES.indexOf(square[0] as typeof FILES[number]);
   return (file + Number(square[1])) % 2 === 1;
+}
+
+export function orientedBoardSquares(orientation: Color): Square[] {
+  const files = orientation === "w" ? FILES : [...FILES].reverse();
+  const ranks = orientation === "w" ? RANKS : [...RANKS].reverse();
+  return ranks.flatMap((rank) =>
+    files.map((file) => `${file}${rank}` as Square),
+  );
+}
+
+export function outcomeText(game: GameSnapshot): string {
+  if (!game.outcome) return "";
+  if (
+    game.outcome.reason === "checkmate"
+    || game.outcome.reason === "resignation"
+    || game.outcome.reason === "timeout"
+  ) {
+    const winner = game.outcome.winner === "w"
+      ? game.players.white.name
+      : game.players.black?.name;
+    const ending = game.outcome.reason === "timeout"
+      ? "on time"
+      : `by ${game.outcome.reason}`;
+    return `${winner ?? "Winner"} wins ${ending}`;
+  }
+  if (game.outcome.reason === "cancelled") return "Game cancelled";
+  const labels: Record<string, string> = {
+    stalemate: "Draw by stalemate",
+    threefold_repetition: "Draw by repetition",
+    insufficient_material: "Draw by insufficient material",
+    fifty_move: "Draw by the fifty-move rule",
+    fivefold_repetition: "Draw by automatic fivefold repetition",
+    seventy_five_move: "Draw by the seventy-five-move rule",
+    draw: "Draw",
+  };
+  return labels[game.outcome.reason] ?? "Game over";
+}
+
+interface GameStatusTextInput {
+  game: GameSnapshot;
+  viewingHistory: boolean;
+  historyLabel: string;
+  openingIntro: boolean;
+  magicPiece?: PieceSymbol | null;
+  displayCheck: boolean;
+}
+
+export function gameStatusText(input: GameStatusTextInput): string {
+  const {
+    game,
+    viewingHistory,
+    historyLabel,
+    openingIntro,
+    magicPiece,
+    displayCheck,
+  } = input;
+  if (viewingHistory) return historyLabel;
+  if (game.status === "waiting") return "Waiting for Player 2";
+  if (openingIntro) return "White opens";
+  if (game.status === "completed") return outcomeText(game);
+  if (magicPiece) {
+    return `Magic turn: move that ${CHESS_PIECE_NAMES[magicPiece]} again or finish`;
+  }
+  const turnName = game.turn === "w"
+    ? game.players.white.name
+    : game.players.black?.name ?? "Black";
+  if (displayCheck) {
+    return game.turn === game.you.color
+      ? "CHECK! Protect your king"
+      : `${turnName} is in check`;
+  }
+  return game.turn === game.you.color
+    ? "Your turn"
+    : `${turnName}’s turn`;
 }
 
 export function actionEndpointSquares(

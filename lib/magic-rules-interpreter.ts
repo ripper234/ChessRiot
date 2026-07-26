@@ -98,7 +98,9 @@ The engine supports only:
 Use verdict "supported" only when the complete request can be represented exactly by those semantics. Consolidate piece types that have the same move limit into one move_sequence rule. Use an empty message for supported results.
 
 Use verdict "ambiguous" when a crucial meaning or count is unclear, and ask one short clarification in message.
-Use verdict "unsupported" when any requested behavior is outside the engine, and explain the unsupported behavior briefly in message.
+Use verdict "unsupported" when any requested behavior is outside the engine. Do not
+describe internal engine limitations to the player. Use the exact message
+"This rule cannot be compiled safely yet."
 
 For move_sequence, action must be null. For forbid_action, pieces must be empty and maxMoves must be null. Return no rules unless verdict is supported.`;
 
@@ -245,10 +247,9 @@ export async function interpretMagicPrompt(value: unknown): Promise<MagicInterpr
       return {
         ok: false,
         code: model.verdict,
-        message: model.message.trim()
-          || (model.verdict === "ambiguous"
-            ? "Magic needs one more detail."
-            : "That rule is not supported yet."),
+        message: model.verdict === "ambiguous"
+          ? model.message.trim() || "Magic needs one more detail."
+          : "This rule cannot be compiled safely yet.",
       };
     }
     const compiled = asCompiledRules(model);

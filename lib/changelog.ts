@@ -11,14 +11,17 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
-    version: "0.11.0-magic.1",
+    version: "0.11.0-magic.4",
     date: "2026-07-26",
     title: "Magic branch preview",
     summary: "Runtime Magic Rules now develop in an isolated preview lane rather than the stable release.",
     changes: [
       "Renamed the explicit action to Compile Rules.",
       "Added a thinking spinner, green compiled indicator, and red failure indicator with the compiler error.",
+      "Stopped exposing internal engine limitations as player-facing rule guidance; unsupported compiles now fail with a concise safety message.",
       "Marked every page clearly as the feature/runtime-magic-rules preview.",
+      "Merged centralized board orientation, piece labels, difficulty labels, outcome text, live status text, new-game payloads, and client request helpers from main.",
+      "Added shared regression tests while preserving the feature preview behavior.",
     ],
     githubUrl: `${REPOSITORY_URL}/tree/feature/runtime-magic-rules`,
   },
