@@ -1,8 +1,9 @@
 # ChessRiot
 
 Play the current game at [chessriot.ripper234.chatgpt.site](https://chessriot.ripper234.chatgpt.site).
+[Join for updates on WhatsApp](https://chat.whatsapp.com/FaBgiUgl73vLdeqzcqx0vX).
 
-ChessRiot v0.11.0-magic.4 is the isolated preview of runtime Magic Rules for solo play against Riot Bot or asynchronous play with someone you know.
+ChessRiot v0.12.0-magic.0 is the isolated preview of runtime Magic Rules for solo play against Riot Bot or asynchronous play with someone you know.
 
 Found something confusing or have a cool rule request? Use **Feedback** inside
 the game or [open a GitHub issue](https://github.com/ripper234/ChessRiot/issues).
@@ -16,6 +17,8 @@ progression work, and features that still need explicit rule design.
   to Multiplayer whenever you want to challenge someone you know.
 - Use an identity-independent public homepage at `/`; saved game themes and
   hosting login state cannot change it.
+- Open `/demo` from the public homepage for a narrated, captioned 90-second
+  walkthrough of the current Development experience.
 - Play Riot Bot at one of five levels, starting at Level 3, Medium, as either
   color. White always moves first; if the bot is White, it opens automatically.
 - Create a multiplayer game with one, three, or five days per move, then share one private invitation link. Missing the deadline loses the game.
@@ -78,7 +81,7 @@ Prepare releases with `npm run release:patch`, `npm run release:minor`, or `npm 
 
 ## Stack
 
-Vinext/React, Cloudflare Workers and D1, TypeScript, and chess.js.
+Vinext/React, Cloudflare Workers, D1 and R2, TypeScript, and chess.js.
 
 ## Checks
 

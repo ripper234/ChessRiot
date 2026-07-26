@@ -12,13 +12,15 @@ import {
 
 interface Env {
   ASSETS: Fetcher;
+  BUCKET: R2Bucket;
   DB: D1Database;
   CHESSRIOT_ENV?: string;
   CONTROL_ORIGIN?: string;
+  OPENAI_API_KEY?: string;
   OBSERVABILITY_HASH_SECRET?: string;
   OPS_READ_SECRET?: string;
   ACCOUNT_ID_SECRET?: string;
-  OPENAI_API_KEY?: string;
+  VIDEO_REGEN_SHARED_SECRET?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -38,10 +40,12 @@ const worker = {
     globalThis.__CHESSRIOT_DB__ = env.DB;
     globalThis.__CHESSRIOT_ENV__ = env.CHESSRIOT_ENV;
     globalThis.__CHESSRIOT_CONTROL_ORIGIN__ = env.CONTROL_ORIGIN;
+    globalThis.__CHESSRIOT_DEMO_BUCKET__ = env.BUCKET;
+    globalThis.__CHESSRIOT_OPENAI_API_KEY__ = env.OPENAI_API_KEY;
     globalThis.__CHESSRIOT_OBSERVABILITY_HASH_SECRET__ = env.OBSERVABILITY_HASH_SECRET;
     globalThis.__CHESSRIOT_OPS_READ_SECRET__ = env.OPS_READ_SECRET;
     globalThis.__CHESSRIOT_ACCOUNT_ID_SECRET__ = env.ACCOUNT_ID_SECRET;
-    globalThis.__CHESSRIOT_OPENAI_API_KEY__ = env.OPENAI_API_KEY;
+    globalThis.__CHESSRIOT_VIDEO_REGEN_SHARED_SECRET__ = env.VIDEO_REGEN_SHARED_SECRET;
     const url = new URL(request.url);
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
@@ -61,6 +65,7 @@ const worker = {
     }
     const startedAt = performance.now();
     const observation = url.pathname.startsWith("/api/")
+      && url.pathname !== "/api/demo-video/publish"
       ? prepareRequestObservation(request)
       : null;
     try {

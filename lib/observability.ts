@@ -182,6 +182,9 @@ async function requestDetails(request: Request): Promise<RequestDetails> {
     clientEvent: null,
   };
   if (!["POST", "PUT", "PATCH"].includes(request.method)) return details;
+  if (!(request.headers.get("content-type") ?? "").includes("application/json")) {
+    return details;
+  }
   try {
     const body: unknown = await request.json();
     if (!body || typeof body !== "object" || Array.isArray(body)) return details;

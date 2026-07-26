@@ -58,3 +58,12 @@ parallel automatic Production deployment from repository pushes.
 - Staging’s primary button manually promotes the exact Development version.
 - Production’s primary button manually promotes the exact Staging version.
 - Specific-version changes always require a separate manual action.
+
+## Demo-video media releases
+
+- Adding or changing the `/demo` application route follows the normal source
+  release path.
+- Regenerating the fixed 90-second video publishes only validated R2 media and
+  its manifest. It does not deploy source or promote any environment.
+- The previous video remains active unless the replacement upload completes.
+- Development video regeneration never changes Staging or Production media.

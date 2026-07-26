@@ -1,0 +1,17 @@
+This is ChessRiot: real chess, total play. A bold browser arena for Riot Bot games and private matches.
+
+Enter a display name and Solo is ready immediately. No account setup or CAPTCHA stands between you and the board.
+
+Choose five Riot Bot levels, then move by drag, tap, click, or keyboard. Color, turn, latest move, and board position stay clear.
+
+Pick from eleven original visual themes, from Blockfield and Toybox to Arcane Cards and Neon Grid. ChessRiot remembers your choice.
+
+Use Back and Forward to inspect earlier positions, then return to Live. More opens settings, replay, and the move log.
+
+For a real opponent, choose Multiplayer and one, three, or five days per move. Three days is the default.
+
+Create the game and ChessRiot prepares one private invitation. The first person to claim it joins as Black.
+
+Every move is saved, so you can close the browser and resume later from your private seat link.
+
+Magic Rules are coming soon. Choose your game, choose your arena, and make your move.

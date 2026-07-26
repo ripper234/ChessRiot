@@ -40,6 +40,7 @@ test("renders an identity-independent public homepage and guest play route", asy
   assert.match(signedOutHtml, /REAL CHESS/);
   assert.match(signedOutHtml, /TOTAL PLAY/);
   assert.match(signedOutHtml, /href="\/app"/);
+  assert.match(signedOutHtml, /href="\/demo"/);
   assert.match(signedOutHtml, /<html(?![^>]*data-theme)[^>]*>/i);
   assert.doesNotMatch(signedOutHtml, /SIGN IN|Playing as|SWITCH ACCOUNT/i);
   assert.doesNotMatch(signedOutHtml, /Play chess/);
@@ -117,6 +118,27 @@ test("renders an identity-independent public homepage and guest play route", asy
   assert.match(gameHtml, /aria-label="Choose visual theme"/);
   assert.match(gameHtml, /Classic/);
   assert.match(gameHtml, /Blockfield/);
+});
+
+test("renders the narrated 90-second demo page", async () => {
+  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
+  workerUrl.searchParams.set("test", `demo-${process.pid}-${Date.now()}`);
+  const { default: worker } = await import(workerUrl.href);
+  const response = await worker.fetch(
+    new Request("http://localhost/demo", { headers: { accept: "text/html" } }),
+    renderEnv(),
+    { waitUntil() {}, passThroughOnException() {} },
+  );
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /90 SECONDS/);
+  assert.match(html, /1:30 EXPLAINER/);
+  assert.match(html, /AI-GENERATED NARRATION/);
+  assert.match(html, /src="\/demo-assets\/chessriot-demo\.mp4"/);
+  assert.match(html, /READ VIDEO TRANSCRIPT/);
+  assert.match(html, /Magic Rules are coming soon/);
+  assert.match(html, /The narration voice is AI-generated/);
+  assert.doesNotMatch(html, /INTERPRET RULES|COMPILE RULES/);
 });
 
 test("retires the old verification and human-check routes", async () => {

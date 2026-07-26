@@ -13,9 +13,25 @@
 - `lib/game-auth.ts`: hybrid account-membership and private-seat authorization.
 - `lib/observability.ts`: central request observation, safe event storage, correlation, and retention.
 - `lib/ops-auth.ts`: short-lived signed observability-read grant verification.
+- `lib/demo-video.ts`: fixed narration, signed generation requests, bounded
+  job state, and atomic generated-media manifest handling.
 - `lib/game-store.ts`: D1 reads and public snapshot shaping.
 - `db/schema.ts` and `drizzle/`: durable game and move schema.
 - `worker/index.ts`: Cloudflare Worker entry and runtime binding handoff.
+
+The `/demo` page always has a bundled 90-second MP4 and VTT fallback. Generated
+media is stored under immutable R2 keys, then activated by replacing
+`demo-video/latest.json` only after the video and captions are both present.
+That manifest-last publish keeps the prior video live on any failure and makes
+later regeneration independent of application deployment.
+
+Control is the only browser surface that can start regeneration. Its Worker
+requires the exact owner identity and same-origin Fetch Metadata, then signs a
+fixed narration or publish request with a shared HMAC secret. The game Worker
+validates a short timestamp, single-use nonce, job state, duration, MIME type,
+and byte limits. One active job, a 30-minute cooldown, and daily/monthly request
+caps bound narration spend. Neither side accepts a caller-provided script,
+asset URL, model, or voice.
 
 The server is authoritative. The client submits a move, a bounded optional
 continuation by the same Magic-enabled piece, the expected version, and an

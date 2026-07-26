@@ -11,6 +11,32 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.12.0-magic.0",
+    date: "2026-07-26",
+    title: "Magic preview meets the demo",
+    summary: "The isolated runtime Magic Rules preview now shares the stable demo and secure media-regeneration foundation.",
+    changes: [
+      "Merged the complete v0.11.0 demo page, bundled explainer, and independent generated-media path into the Magic preview.",
+      "Preserved Compile Rules, its thinking and result states, generic multi-move rules, replay, persistence, and Riot Bot behavior.",
+      "Combined the Magic compiler and demo narration OpenAI boundary without exposing either credential to the browser.",
+      "Resequenced demo migrations after the Magic continuation migration so existing preview databases upgrade safely.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/feature/runtime-magic-rules`,
+  },
+  {
+    version: "0.11.0",
+    date: "2026-07-26",
+    title: "ChessRiot in 90 seconds",
+    summary: "A narrated, captioned walkthrough now shows Solo, themes, replay, and private multiplayer before you start a game.",
+    changes: [
+      "Added a public 90-second demo page linked directly from the homepage.",
+      "Built the walkthrough from current Development interface captures with narration, subtitles, and audio.",
+      "Separated video regeneration from application releases by publishing validated media through a versioned R2 manifest.",
+      "Added a signed, owner-only, rate-limited regeneration lane for the ChessRiot Control panel.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.11.0`,
+  },
+  {
     version: "0.11.0-magic.4",
     date: "2026-07-26",
     title: "Magic branch preview",
@@ -24,6 +50,30 @@ export const RELEASES: ReleaseNote[] = [
       "Added shared regression tests while preserving the feature preview behavior.",
     ],
     githubUrl: `${REPOSITORY_URL}/tree/feature/runtime-magic-rules`,
+  },
+  {
+    version: "0.10.2",
+    date: "2026-07-26",
+    title: "Cleaner foundations",
+    summary: "Shared gameplay presentation and request logic is now easier to maintain without changing how ChessRiot plays.",
+    changes: [
+      "Centralized board orientation, piece labels, difficulty labels, outcome text, and live status text.",
+      "Centralized new-game request payloads and authenticated client request helpers.",
+      "Added focused regression tests while preserving the Magic Rules Coming Soon boundary.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.10.2`,
+  },
+  {
+    version: "0.10.1",
+    date: "2026-07-26",
+    title: "Magic safely paused",
+    summary: "Magic Rules remain visible, but new rule entry is paused while the feature develops in isolation.",
+    changes: [
+      "Replaced new-game Magic rule entry with a clear Coming Soon placeholder.",
+      "Removed the runtime LLM compiler, its endpoint, and its token-consuming path from the stable release.",
+      "Moved active Magic development to an isolated feature branch and preview lane.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.10.1`,
   },
   {
     version: "0.10.0",

@@ -1,4 +1,19 @@
-# ChessRiot v0.11.0-magic.4 specification
+# ChessRiot v0.12.0-magic.0 specification
+
+## v0.11.0 release additions
+
+- `/demo` presents a 90-second explainer assembled from current ChessRiot
+  interface captures, with narration, burned-in English subtitles, a readable
+  transcript, background audio, and an explicit AI-voice disclosure.
+- The public homepage links to the demo without changing the existing primary
+  play path.
+- The bundled MP4 remains available whenever generated media is absent.
+- Validated generated video and captions are published to R2 under immutable
+  keys. A small manifest switches the current media only after upload succeeds,
+  so video regeneration does not require or trigger a ChessRiot source deploy.
+- Regeneration accepts a fixed script and fixed ChessRiot assets only. Signed
+  requests, replay protection, one active job, a 30-minute cooldown, and
+  daily/monthly limits bound its OpenAI narration usage.
 
 ## Refactor merge additions
 
