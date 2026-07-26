@@ -21,22 +21,13 @@ import {
   rememberGame,
   type RecentGame,
 } from "@/lib/client-storage";
+import {
+  gameCreatePayload,
+  type PendingGameCreate,
+} from "@/lib/game-creation";
+import { DIFFICULTY_LABELS } from "@/lib/game-presentation";
 import { APP_VERSION } from "@/lib/version";
 import { Brand } from "./Brand";
-
-interface PendingCreate {
-  playerToken: string;
-  inviteToken: string;
-  requestId: string;
-}
-
-const DIFFICULTY_LABELS: Record<AiDifficulty, string> = {
-  1: "Easy",
-  2: "Relaxed",
-  3: "Medium",
-  4: "Tough",
-  5: "Brutal",
-};
 
 export function CreateGame() {
   const router = useRouter();
@@ -47,7 +38,7 @@ export function CreateGame() {
   const [recent, setRecent] = useState<RecentGame[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const pending = useRef<PendingCreate | null>(null);
+  const pending = useRef<PendingGameCreate | null>(null);
 
   useEffect(() => {
     try {
@@ -77,14 +68,14 @@ export function CreateGame() {
       const response = await fetch("/api/games", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
+        body: JSON.stringify(gameCreatePayload({
           displayName: cleanName,
           guestToken: guestIdentityToken(),
           mode,
-          ...(mode === "solo" ? { difficulty } : {}),
-          ...(mode === "multiplayer" ? { turnPaceDays } : {}),
-          ...pending.current,
-        }),
+          difficulty,
+          turnPaceDays,
+          pending: pending.current,
+        })),
       });
       const data = (await response.json()) as {
         game?: GameSnapshot;

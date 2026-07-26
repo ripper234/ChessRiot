@@ -1,10 +1,5 @@
-import type { PieceSymbol } from "chess.js";
 import type { GameFinisher } from "@/lib/game-finishers";
-
-const PIECES: Record<"w" | "b", Record<PieceSymbol, string>> = {
-  w: { p: "♟", n: "♞", b: "♝", r: "♜", q: "♛", k: "♚" },
-  b: { p: "♟", n: "♞", b: "♝", r: "♜", q: "♛", k: "♚" },
-};
+import { CHESS_PIECE_GLYPHS } from "@/lib/game-presentation";
 
 export function CheckmateFinisher({ finisher }: { finisher: GameFinisher }) {
   return (
@@ -14,11 +9,11 @@ export function CheckmateFinisher({ finisher }: { finisher: GameFinisher }) {
     >
       <div className="checkmate-duel" aria-hidden="true">
         <span className={`finisher-piece finisher-attacker piece-${finisher.winner}`}>
-          {PIECES[finisher.winner][finisher.attackingPiece]}
+          {CHESS_PIECE_GLYPHS[finisher.winner][finisher.attackingPiece]}
         </span>
         <span className="finisher-impact">✦</span>
         <span className={`finisher-piece finisher-king piece-${finisher.loser}`}>
-          {PIECES[finisher.loser].k}
+          {CHESS_PIECE_GLYPHS[finisher.loser].k}
         </span>
       </div>
       <strong>CHECKMATE</strong>

@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { Chess } from "chess.js";
-import type { PublicMove } from "./game-types";
+import type { GameSnapshot, PublicMove } from "./game-types";
 import {
   actionEndpointSquares,
   capturedPiecesByVictimColor,
+  CHESS_PIECE_GLYPHS,
+  CHESS_PIECE_NAMES,
   checkedKingSquare,
+  DIFFICULTY_LABELS,
+  gameStatusText,
   illegalDestinationMessage,
   isDarkSquare,
+  orientedBoardSquares,
+  outcomeText,
   pieceCannotAnswerCheckMessage,
 } from "./game-presentation";
 
@@ -86,6 +92,24 @@ describe("board colors", () => {
     expect(isDarkSquare("a8")).toBe(false);
     expect(isDarkSquare("h1")).toBe(false);
   });
+
+  it("uses one orientation helper for both board directions", () => {
+    const white = orientedBoardSquares("w");
+    const black = orientedBoardSquares("b");
+    expect(white).toHaveLength(64);
+    expect(white[0]).toBe("a8");
+    expect(white.at(-1)).toBe("h1");
+    expect(black[0]).toBe("h1");
+    expect(black.at(-1)).toBe("a8");
+    expect(black).toEqual([...white].reverse());
+  });
+
+  it("keeps shared piece and difficulty labels stable", () => {
+    expect(CHESS_PIECE_GLYPHS.w.n).toBe("♞");
+    expect(CHESS_PIECE_GLYPHS.b.k).toBe("♚");
+    expect(CHESS_PIECE_NAMES.q).toBe("queen");
+    expect(DIFFICULTY_LABELS[3]).toBe("Medium");
+  });
 });
 
 describe("move presentation", () => {
@@ -95,5 +119,85 @@ describe("move presentation", () => {
       to: "a3",
       second: { from: "a3", to: "h3", san: "Rh3" },
     })).toEqual(["a1", "h3"]);
+  });
+});
+
+describe("outcome presentation", () => {
+  function gameWithOutcome(
+    outcome: GameSnapshot["outcome"],
+  ): GameSnapshot {
+    return {
+      id: "game",
+      mode: "multiplayer",
+      aiDifficulty: null,
+      status: "completed",
+      version: 1,
+      initialFen: new Chess().fen(),
+      fen: new Chess().fen(),
+      turn: "b",
+      plyCount: 1,
+      players: {
+        white: { name: "White player" },
+        black: { name: "Black player" },
+      },
+      you: { color: "w", name: "White player" },
+      check: false,
+      claimableDraws: [],
+      outcome,
+      moves: [],
+      updatedAt: "2026-07-26T00:00:00.000Z",
+    };
+  }
+
+  it("formats decisive and drawn outcomes without UI-specific logic", () => {
+    expect(outcomeText(gameWithOutcome({
+      winner: "w",
+      reason: "checkmate",
+    }))).toBe("White player wins by checkmate");
+    expect(outcomeText(gameWithOutcome({
+      winner: "b",
+      reason: "timeout",
+    }))).toBe("Black player wins on time");
+    expect(outcomeText(gameWithOutcome({
+      winner: null,
+      reason: "threefold_repetition",
+    }))).toBe("Draw by repetition");
+  });
+
+  it("keeps live, check, history, and Magic status precedence explicit", () => {
+    const game = gameWithOutcome(null);
+    game.status = "active";
+    game.turn = "w";
+
+    expect(gameStatusText({
+      game,
+      viewingHistory: true,
+      historyLabel: "Move 1 of 4",
+      openingIntro: true,
+      magicPiece: "n",
+      displayCheck: true,
+    })).toBe("Move 1 of 4");
+    expect(gameStatusText({
+      game,
+      viewingHistory: false,
+      historyLabel: "",
+      openingIntro: false,
+      magicPiece: "n",
+      displayCheck: true,
+    })).toBe("Magic turn: move that knight again or finish");
+    expect(gameStatusText({
+      game,
+      viewingHistory: false,
+      historyLabel: "",
+      openingIntro: false,
+      displayCheck: true,
+    })).toBe("CHECK! Protect your king");
+    expect(gameStatusText({
+      game,
+      viewingHistory: false,
+      historyLabel: "",
+      openingIntro: false,
+      displayCheck: false,
+    })).toBe("Your turn");
   });
 });

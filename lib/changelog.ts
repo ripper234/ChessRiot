@@ -11,6 +11,18 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.10.2",
+    date: "2026-07-26",
+    title: "Cleaner foundations",
+    summary: "Shared gameplay presentation and request logic is now easier to maintain without changing how ChessRiot plays.",
+    changes: [
+      "Centralized board orientation, piece labels, difficulty labels, outcome text, and live status text.",
+      "Centralized new-game request payloads and authenticated client request helpers.",
+      "Added focused regression tests while preserving the Magic Rules Coming Soon boundary.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.10.2`,
+  },
+  {
     version: "0.10.1",
     date: "2026-07-26",
     title: "Magic safely paused",

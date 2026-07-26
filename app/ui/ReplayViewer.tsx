@@ -1,6 +1,6 @@
 "use client";
 
-import { Chess, type PieceSymbol, type Square } from "chess.js";
+import { Chess } from "chess.js";
 import {
   useEffect,
   useMemo,
@@ -11,24 +11,14 @@ import {
   buildReplayFrames,
   replayFrameLabel,
 } from "@/lib/game-replay";
-import { isDarkSquare } from "@/lib/game-presentation";
+import {
+  CHESS_PIECE_GLYPHS,
+  CHESS_PIECE_NAMES,
+  isDarkSquare,
+  orientedBoardSquares,
+} from "@/lib/game-presentation";
 import type { Color, PublicMove } from "@/lib/game-types";
 import type { PublicMagicRules } from "@/lib/magic-rules";
-
-const PIECES: Record<Color, Record<PieceSymbol, string>> = {
-  w: { p: "♟", n: "♞", b: "♝", r: "♜", q: "♛", k: "♚" },
-  b: { p: "♟", n: "♞", b: "♝", r: "♜", q: "♛", k: "♚" },
-};
-const PIECE_NAMES: Record<PieceSymbol, string> = {
-  p: "pawn",
-  n: "knight",
-  b: "bishop",
-  r: "rook",
-  q: "queen",
-  k: "king",
-};
-const FILES = ["a", "b", "c", "d", "e", "f", "g", "h"];
-const RANKS = ["8", "7", "6", "5", "4", "3", "2", "1"];
 
 interface ReplayViewerProps {
   moves: PublicMove[];
@@ -57,14 +47,10 @@ export function ReplayViewer({
   const frameIndex = Math.min(requestedFrame, replay.frames.length - 1);
   const frame = replay.frames[frameIndex];
   const chess = useMemo(() => new Chess(frame.fen), [frame.fen]);
-  const squares = useMemo(() => {
-    if (orientation === "w") {
-      return RANKS.flatMap((rank) => FILES.map((file) => `${file}${rank}` as Square));
-    }
-    return [...RANKS].reverse().flatMap((rank) =>
-      [...FILES].reverse().map((file) => `${file}${rank}` as Square),
-    );
-  }, [orientation]);
+  const squares = useMemo(
+    () => orientedBoardSquares(orientation),
+    [orientation],
+  );
 
   useEffect(() => {
     if (!open || !dialog.current || dialog.current.open) return;
@@ -171,14 +157,14 @@ export function ReplayViewer({
                   <div
                     className={`replay-square ${isDarkSquare(square) ? "dark-square" : "light-square"}${isLast ? " replay-last" : ""}`}
                     role="gridcell"
-                    aria-label={`${square}${piece ? ` ${piece.color === "w" ? "white" : "black"} ${PIECE_NAMES[piece.type]}` : " empty"}`}
+                    aria-label={`${square}${piece ? ` ${piece.color === "w" ? "white" : "black"} ${CHESS_PIECE_NAMES[piece.type]}` : " empty"}`}
                     key={square}
                   >
                     {showRank ? <span className="replay-rank">{square[1]}</span> : null}
                     {showFile ? <span className="replay-file">{square[0]}</span> : null}
                     {piece ? (
                       <span className={`replay-piece piece-${piece.color}`} aria-hidden="true">
-                        {PIECES[piece.color][piece.type]}
+                        {CHESS_PIECE_GLYPHS[piece.color][piece.type]}
                       </span>
                     ) : null}
                   </div>

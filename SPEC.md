@@ -1,4 +1,11 @@
-# ChessRiot v0.10.1 specification
+# ChessRiot v0.10.2 specification
+
+## v0.10.2 release additions
+
+- Refactored shared board presentation, game-creation payloads, status text, and
+  client request helpers without changing gameplay or the Coming Soon boundary.
+- Added regression coverage for both board orientations, outcome and live-status
+  text, create payloads, and API error/header handling.
 
 ## v0.10.1 release additions
 
