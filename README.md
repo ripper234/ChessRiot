@@ -1,6 +1,7 @@
 # ChessRiot
 
-Play the current game at [chessriot.ripper234.chatgpt.site](https://chessriot.ripper234.chatgpt.site).
+- Play the current game at [chessriot.ripper234.chatgpt.site](https://chessriot.ripper234.chatgpt.site).
+- [Join for updates on Whatsapp](https://chat.whatsapp.com/FaBgiUgl73vLdeqzcqx0vX)
 
 ChessRiot v0.10.2 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
 
