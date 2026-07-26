@@ -1,9 +1,10 @@
 # ChessRiot
 
-Play the current game at [chessriot.ripper234.chatgpt.site](https://chessriot.ripper234.chatgpt.site).
-[Join for updates on WhatsApp](https://chat.whatsapp.com/FaBgiUgl73vLdeqzcqx0vX).
-
-ChessRiot v0.11.0 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
+- Play the current game at [chessriot.ripper234.chatgpt.site](https://chessriot.ripper234.chatgpt.site).
+- [Join for updates on WhatsApp](https://chat.whatsapp.com/FaBgiUgl73vLdeqzcqx0vX).
+- [Release History](https://chessriot.ripper234.chatgpt.site/releases)
+- 
+ChessRiot is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
 
 Found something confusing or have a cool rule request? Use **Feedback** inside
 the game or [open a GitHub issue](https://github.com/ripper234/ChessRiot/issues).
