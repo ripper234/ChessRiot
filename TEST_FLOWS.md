@@ -45,23 +45,24 @@
 1. Create Solo and Multiplayer games with Magic Rules off and verify both use
    standard chess with no Magic banner.
 2. Enable the box, verify its placeholder is
-   `e.g. “Knights move twice.”`, enter
-   `Knights move twice. Rooks move twice. Pawns never get promoted.`, and
-   verify the interpreted rules before creating the game.
+   `e.g. “Knights move 3 times.”`, enter
+   `Knights move 3 times. Rooks move twice. Pawns never get promoted.`, choose
+   Interpret Rules, and verify the interpreted labels before creating the game.
+   Repeat equivalent wording in Hebrew and with “2 times”.
 3. Verify the invitation shows the same rules before Black joins and the live
    game, recent-game card, move history, and replay retain them after refresh.
 4. Clear a rook path, stage its first legal move, then finish the turn once.
-   Repeat and move that same rook a second time. Repeat through tap, pointer
-   drag, and native keyboard activation with a knight. Verify each two-leg
-   action stores both legs but advances only one version, ply, deadline, and
-   repetition position.
-5. Verify a second leg cannot switch to a different rook or knight. Verify a
-   first rook or knight move that gives check ends the turn immediately.
+   Repeat and move that same rook a second time. Move one knight three times.
+   Repeat through tap, pointer drag, and native keyboard activation. Verify
+   each sequence stores every leg but advances only one version, ply, deadline,
+   and repetition position.
+5. Verify a continuation cannot switch to a different piece or exceed the
+   interpreted limit. Verify any leg that gives check ends the turn immediately.
 6. Verify pawns cannot enter the final rank, castling is absent under no
    castling, and en passant is absent under no en passant.
 7. Verify Riot Bot follows all active Magic Rules.
 8. Retry the same create or move request id and verify identical results.
-   Change the Magic prompt or second rook leg and verify a conflict.
+   Change the Magic prompt or any continuation leg and verify a conflict.
 9. Enter an unsupported or partly unsupported paragraph and verify creation is
    rejected without creating a game or silently dropping any clause.
 

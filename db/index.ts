@@ -49,6 +49,7 @@ export async function ensureSchema(): Promise<void> {
           second_from_square TEXT,
           second_to_square TEXT,
           second_san TEXT,
+          continuation_json TEXT,
           fen_before TEXT NOT NULL,
           fen_after TEXT NOT NULL,
           created_at TEXT NOT NULL,
@@ -247,6 +248,7 @@ export async function ensureSchema(): Promise<void> {
         { name: "second_from_square", sql: "ALTER TABLE moves ADD COLUMN second_from_square TEXT" },
         { name: "second_to_square", sql: "ALTER TABLE moves ADD COLUMN second_to_square TEXT" },
         { name: "second_san", sql: "ALTER TABLE moves ADD COLUMN second_san TEXT" },
+        { name: "continuation_json", sql: "ALTER TABLE moves ADD COLUMN continuation_json TEXT" },
       ]) {
         if ((moveColumns.results ?? []).some((current) => current.name === column.name)) {
           continue;

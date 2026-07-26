@@ -129,6 +129,9 @@ interface RequestDetails {
 
 function routeEvent(method: string, pathname: string): string | null {
   if (method === "POST" && pathname === "/api/games") return "game.created";
+  if (method === "POST" && pathname === "/api/magic-rules/interpret") {
+    return "magic.interpreted";
+  }
   if (method === "POST" && /^\/api\/invitations\/[^/]+\/join$/.test(pathname)) {
     return "invitation.claimed";
   }

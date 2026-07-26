@@ -1,4 +1,44 @@
-# ChessRiot v0.9.2 specification
+# ChessRiot v0.11.0-magic.1 specification
+
+## Magic branch preview additions
+
+- The runtime Magic implementation lives on `feature/runtime-magic-rules`
+  rather than the stable release line.
+- The user action is named **Compile Rules** because it creates an immutable
+  deterministic rule document before a game starts.
+- Compilation displays an active thinking spinner, a green success indicator,
+  or a red failure indicator with the compiler error.
+- Every page carries a visible branch-preview ribbon.
+
+## v0.10.0 release additions
+
+- Magic Rules are interpreted at runtime by the OpenAI Responses API instead
+  of a phrase-specific regular-expression parser. The user explicitly reviews
+  the interpreted labels before creating the game.
+- Model output must match a strict JSON schema and then pass ChessRiot's own
+  validator. A short-lived signed interpretation token binds the normalized
+  prompt and immutable rule document to the requesting player, so the client
+  cannot alter rules and retries cannot reinterpret them differently.
+- Rule schema v3 supports one generic same-piece move sequence of two through
+  six legal moves per turn for any selected standard piece types. Each leg uses
+  the updated board, giving check ends the sequence, and the whole sequence is
+  one atomic turn, version, history item, deadline action, and repetition
+  position.
+- Move history stores a bounded continuation array while continuing to read
+  v1 and v2 two-leg games unchanged. The client, replay, captured-piece
+  reconstruction, effects, confirmation, and Riot Bot use the same generic
+  continuation path.
+- Runtime interpretation is identity-rate-limited, never logs prompt text, and
+  fails closed when the model is unavailable, ambiguous, unsupported, or
+  produces an invalid document. Natural-language interpretation never executes
+  model-generated code.
+
+## v0.9.3 release additions
+
+- The new-game screen selects Solo on first load and immediately shows the
+  Level 3 Riot Bot control. Multiplayer remains one explicit tap away.
+- Standard chess still begins with White. A Solo game assigned to the human as
+  Black commits Riot Bot's White opening before the game is returned.
 
 ## v0.9.2 release additions
 
@@ -217,8 +257,8 @@ This file and `MVP.md` are the source of truth for the current milestone.
 
 1. The player opens the fixed public homepage and selects Play now, or opens
    `/app` directly.
-2. The player enters a display name and chooses Solo or Multiplayer. No account
-   or human check is required.
+2. The player enters a display name. Solo is selected by default; Multiplayer
+   remains available without an account or human check.
 3. The player may enable Magic Rules and enter a supported rule paragraph. With
    the box off, the game uses standard chess.
 4. Solo reveals a five-step Bot level bar that starts at Level 3, Medium. Colors are assigned evenly and deterministically from the idempotent create request. If Riot Bot is White, its legal opening is committed before the game appears.

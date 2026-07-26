@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHmac, randomBytes, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -25,6 +25,25 @@ function guestIdentityForLabel(label) {
   const created = secret();
   guestIdentityByLabel.set(key, created);
   return created;
+}
+
+function guestAccountId(token) {
+  return `guest_${createHash("sha256")
+    .update(`chessriot-guest:${token}`)
+    .digest("base64url")}`;
+}
+
+function magicInterpretationToken(guestToken, prompt, compiled) {
+  const payload = Buffer.from(JSON.stringify({
+    accountId: guestAccountId(guestToken),
+    prompt,
+    compiled,
+    expiresAt: Date.now() + 15 * 60 * 1000,
+  })).toString("base64url");
+  const signature = createHmac("sha256", accountIdSecret)
+    .update(payload)
+    .digest("base64url");
+  return `${payload}.${signature}`;
 }
 
 function accountForLabel(label) {
@@ -567,26 +586,42 @@ try {
   const magicBlack = secret();
   const magicInvite = secret();
   const magicCreateRequestId = randomUUID();
-  const magicPrompt = "Knights move twice. Rooks move twice. Pawns never get promoted.";
+  const magicGuestIdentity = secret();
+  const magicPrompt = "Knights move 3 times. Rooks move twice. Pawns never get promoted.";
+  const magicCompiled = {
+    version: 3,
+    rules: [
+      { kind: "move_sequence", pieces: ["n"], maxMoves: 3 },
+      { kind: "move_sequence", pieces: ["r"], maxMoves: 2 },
+      { kind: "forbid_action", action: "promotion" },
+    ],
+  };
+  const magicToken = magicInterpretationToken(
+    magicGuestIdentity,
+    magicPrompt,
+    magicCompiled,
+  );
   const magicCreateResponse = await request(runtime, "/api/games", {
     method: "POST",
     body: JSON.stringify({
       displayName: "Magic White",
+      guestToken: magicGuestIdentity,
       mode: "multiplayer",
       playerToken: magicWhite,
       inviteToken: magicInvite,
       requestId: magicCreateRequestId,
       magicPrompt,
+      magicInterpretationToken: magicToken,
     }),
   });
   assert.equal(magicCreateResponse.status, 201);
   const magicCreated = await body(magicCreateResponse);
   const magicGameId = magicCreated.game.id;
   assert.equal(magicCreated.game.magicRules.prompt, magicPrompt);
-  assert.equal(magicCreated.game.magicRules.version, 2);
+  assert.equal(magicCreated.game.magicRules.version, 3);
   assert.deepEqual(magicCreated.game.magicRules.labels, [
-    "Knights may move twice; check ends the turn",
-    "Rooks may move twice; check ends the turn",
+    "Knights may move up to 3 times per turn; check ends the turn",
+    "Rooks may move up to 2 times per turn; check ends the turn",
     "Pawns cannot move onto the final rank",
   ]);
 
@@ -594,11 +629,13 @@ try {
     method: "POST",
     body: JSON.stringify({
       displayName: "Magic White",
+      guestToken: magicGuestIdentity,
       mode: "multiplayer",
       playerToken: magicWhite,
       inviteToken: magicInvite,
       requestId: magicCreateRequestId,
       magicPrompt,
+      magicInterpretationToken: magicToken,
     }),
   });
   assert.equal(magicCreateRetry.status, 200);
@@ -608,20 +645,30 @@ try {
     method: "POST",
     body: JSON.stringify({
       displayName: "Magic White",
+      guestToken: magicGuestIdentity,
       mode: "multiplayer",
       playerToken: magicWhite,
       inviteToken: magicInvite,
       requestId: magicCreateRequestId,
       magicPrompt: "No castling.",
+      magicInterpretationToken: magicInterpretationToken(
+        magicGuestIdentity,
+        "No castling.",
+        {
+          version: 3,
+          rules: [{ kind: "forbid_action", action: "castling" }],
+        },
+      ),
     }),
   });
   assert.equal(magicCreateConflict.status, 409);
   assert.equal((await body(magicCreateConflict)).error.code, "idempotency_conflict");
 
-  const unsupportedMagicResponse = await request(runtime, "/api/games", {
+  const unsignedMagicResponse = await request(runtime, "/api/games", {
     method: "POST",
     body: JSON.stringify({
       displayName: "Magic White",
+      guestToken: magicGuestIdentity,
       mode: "multiplayer",
       playerToken: secret(),
       inviteToken: secret(),
@@ -629,8 +676,11 @@ try {
       magicPrompt: "Knights can fly anywhere.",
     }),
   });
-  assert.equal(unsupportedMagicResponse.status, 422);
-  assert.equal((await body(unsupportedMagicResponse)).error.code, "magic_rule_unsupported");
+  assert.equal(unsignedMagicResponse.status, 422);
+  assert.equal(
+    (await body(unsignedMagicResponse)).error.code,
+    "magic_interpretation_required",
+  );
 
   const magicPreviewResponse = await request(
     runtime,
@@ -668,7 +718,7 @@ try {
     from,
     to,
     expectedVersion,
-    second,
+    continuation,
   ) => {
     const response = await request(runtime, `/api/games/${magicGameId}/moves`, {
       method: "POST",
@@ -678,7 +728,7 @@ try {
         to,
         expectedVersion,
         requestId: randomUUID(),
-        ...(second ? { second } : {}),
+        ...(continuation ? { continuation } : {}),
       }),
     });
     return { response, data: await body(response) };
@@ -691,7 +741,7 @@ try {
     "a1",
     "a3",
     3,
-    { from: "a3", to: "h3" },
+    [{ from: "a3", to: "h3" }],
   );
   assert.equal(atomicRookTurn.response.status, 200);
   assert.equal(atomicRookTurn.data.game.version, 4);
@@ -708,7 +758,10 @@ try {
     "g1",
     "f3",
     5,
-    { from: "f3", to: "e5" },
+    [
+      { from: "f3", to: "e5" },
+      { from: "e5", to: "c6" },
+    ],
   );
   assert.equal(atomicKnightTurn.response.status, 200);
   assert.equal(atomicKnightTurn.data.game.version, 6);
@@ -719,6 +772,10 @@ try {
     to: "e5",
     san: "Ne5",
   });
+  assert.deepEqual(atomicKnightTurn.data.game.moves[4].continuation, [
+    { from: "f3", to: "e5", san: "Ne5" },
+    { from: "e5", to: "c6", san: "Nc6" },
+  ]);
   const move = async (
     token,
     from,
@@ -1063,16 +1120,30 @@ try {
   assert.equal(invalidTurnPace.status, 400);
 
   const magicSoloToken = secret();
+  const magicSoloGuestIdentity = secret();
+  const magicSoloPrompt = "No castling. No en passant.";
   const magicSoloResponse = await request(runtime, "/api/games", {
     method: "POST",
     body: JSON.stringify({
       displayName: "Magic Solo",
+      guestToken: magicSoloGuestIdentity,
       mode: "solo",
       difficulty: 2,
       playerToken: magicSoloToken,
       inviteToken: secret(),
       requestId: requestIdForColor("w"),
-      magicPrompt: "No castling. No en passant.",
+      magicPrompt: magicSoloPrompt,
+      magicInterpretationToken: magicInterpretationToken(
+        magicSoloGuestIdentity,
+        magicSoloPrompt,
+        {
+          version: 3,
+          rules: [
+            { kind: "forbid_action", action: "castling" },
+            { kind: "forbid_action", action: "en_passant" },
+          ],
+        },
+      ),
     }),
   });
   assert.equal(magicSoloResponse.status, 201);

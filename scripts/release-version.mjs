@@ -22,20 +22,26 @@ function writeJson(path, value) {
 }
 
 function parseVersion(version) {
-  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
+  const match = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/.exec(version);
   if (!match) {
-    throw new Error(`Expected a stable SemVer version, received "${version}".`);
+    throw new Error(`Expected a SemVer version, received "${version}".`);
   }
-  return match.slice(1).map(Number);
+  return {
+    core: match.slice(1, 4).map(Number),
+    prerelease: match[4] ?? null,
+  };
 }
 
 function compareVersions(left, right) {
   const a = parseVersion(left);
   const b = parseVersion(right);
-  for (let index = 0; index < a.length; index += 1) {
-    if (a[index] !== b[index]) return a[index] - b[index];
+  for (let index = 0; index < a.core.length; index += 1) {
+    if (a.core[index] !== b.core[index]) return a.core[index] - b.core[index];
   }
-  return 0;
+  if (a.prerelease === b.prerelease) return 0;
+  if (a.prerelease === null) return 1;
+  if (b.prerelease === null) return -1;
+  return a.prerelease.localeCompare(b.prerelease, undefined, { numeric: true });
 }
 
 function replaceRequired(source, pattern, replacement, label) {
@@ -79,7 +85,7 @@ function checkConsistency(version) {
   }
 
   const changelog = readFileSync(changelogPath, "utf8");
-  const versions = [...changelog.matchAll(/^\s+version: "(\d+\.\d+\.\d+)",$/gm)]
+  const versions = [...changelog.matchAll(/^\s+version: "(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)",$/gm)]
     .map((match) => match[1]);
   if (versions[0] !== version) {
     throw new Error(`The newest changelog entry must be ${version}.`);
@@ -124,7 +130,11 @@ function bumpVersion(kind) {
   const packageJson = readJson(packagePath);
   const lock = readJson(lockPath);
   const current = packageJson.version;
-  const [major, minor, patch] = parseVersion(current);
+  const parsed = parseVersion(current);
+  if (parsed.prerelease !== null) {
+    throw new Error("Release bump commands require a stable starting version.");
+  }
+  const [major, minor, patch] = parsed.core;
   const next =
     kind === "major"
       ? `${major + 1}.0.0`

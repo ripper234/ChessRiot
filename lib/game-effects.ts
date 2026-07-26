@@ -14,10 +14,13 @@ export function boardEffects(
   if (!previous || next.plyCount <= previous.plyCount) return [];
   return next.moves
     .filter((move: PublicMove) => move.ply > previous.plyCount)
-    .map((move) => ({
-      ply: move.ply,
-      from: move.second?.from ?? move.from,
-      to: move.second?.to ?? move.to,
-      capture: (move.second?.san ?? move.san).includes("x"),
-    }));
+    .map((move) => {
+      const final = move.continuation?.at(-1) ?? move.second;
+      return {
+        ply: move.ply,
+        from: final?.from ?? move.from,
+        to: final?.to ?? move.to,
+        capture: (final?.san ?? move.san).includes("x"),
+      };
+    });
 }

@@ -2,8 +2,10 @@
 
 - `app/`: Vinext pages, client interactions, and HTTP APIs.
 - `lib/game-rules.ts`: pure chess.js adapter and terminal-state logic.
-- `lib/magic-rules.ts`: bounded prompt compiler and versioned per-game rule
-  schema.
+- `lib/magic-rules-interpreter.ts`: server-only OpenAI Responses boundary with
+  strict structured output.
+- `lib/magic-rules.ts`: local validation and the versioned deterministic
+  per-game rule schema.
 - `lib/computer-player.ts`: bounded server-side move search for Riot Bot.
 - `lib/computer-turn.ts`: recovery path for a pending Solo computer turn.
 - `lib/account-auth.ts`: trusted hosting identity and stable guest-id derivation.
@@ -15,8 +17,8 @@
 - `db/schema.ts` and `drizzle/`: durable game and move schema.
 - `worker/index.ts`: Cloudflare Worker entry and runtime binding handoff.
 
-The server is authoritative. The client submits a move, an optional second leg
-by the same Magic-enabled rook or knight, the expected version, and an
+The server is authoritative. The client submits a move, a bounded optional
+continuation by the same Magic-enabled piece, the expected version, and an
 idempotency key. Each mutation
 reconstructs the chess engine from immutable history and validates FEN, turn,
 and ply invariants before the candidate. Every completed human turn atomically
@@ -25,13 +27,17 @@ pending Riot Bot turn in the background. Every authorized game read runs the
 same pending-turn recovery, so refresh or browser closure cannot strand the
 game. A White bot opening is committed during create.
 
-Magic prompt text is normalized and compiled only through an explicit
-allowlist. The immutable versioned result, not the prose, drives legality.
-Unsupported clauses fail game creation. A valid two-step rook or knight action
-is replayed as two chess.js moves but stored and counted as one application
-turn, so no partially committed variant state can become authoritative.
-Original v1 documents remain valid for rook games; v2 adds the knight rule
-without changing those stored games.
+Magic prompt text is normalized and sent to a server-only runtime interpreter.
+The model must return a strict structured document from ChessRiot's bounded
+rule vocabulary. Local validation is authoritative, and a short-lived HMAC
+token binds the prompt and document to the requesting guest account before
+creation. The immutable versioned result, not the prose or a later model call,
+drives legality. Unsupported or ambiguous requests fail before game creation.
+A valid same-piece sequence is replayed as multiple chess.js moves but stored
+and counted as one application turn, so no partially committed variant state
+can become authoritative. Original v1 and v2 documents remain readable;
+v3 stores generic move limits and continuation arrays without changing older
+games.
 
 Mutation provenance uses the exact URL origin plus browser-controlled
 `Sec-Fetch-Site`. A Sites-sandboxed opaque `Origin: null` is accepted only with

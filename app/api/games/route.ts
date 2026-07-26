@@ -22,12 +22,13 @@ import { ensureSchema, getDatabase } from "@/db";
 import type { Color } from "@/lib/game-types";
 import type { AiDifficulty } from "@/lib/game-types";
 import { recordEvent } from "@/lib/observability";
+import { serializeMoveContinuation } from "@/lib/move-continuation";
 import { enforceAccountRateLimit, resolveGuestApiAccount } from "@/lib/accounts";
 import {
-  compileMagicPrompt,
   serializeMagicRules,
   type CompiledMagicRules,
 } from "@/lib/magic-rules";
+import { verifyMagicInterpretationToken } from "@/lib/magic-interpretation-token";
 
 export const dynamic = "force-dynamic";
 
@@ -69,15 +70,6 @@ export async function POST(request: Request) {
     : null;
   let magicPrompt: string | null = null;
   let magicRules: CompiledMagicRules | null = null;
-  if (body.magicPrompt !== undefined && body.magicPrompt !== null && body.magicPrompt !== "") {
-    const magic = compileMagicPrompt(body.magicPrompt);
-    if (!magic.ok) {
-      return apiError(422, "magic_rule_unsupported", magic.message);
-    }
-    magicPrompt = magic.prompt;
-    magicRules = magic.compiled;
-  }
-  const magicRulesJson = serializeMagicRules(magicRules);
   const turnPaceMatches = (value: number | null) =>
     value === turnPaceDays
     || (mode === "multiplayer" && body.turnPaceDays === undefined && value === null);
@@ -94,6 +86,23 @@ export async function POST(request: Request) {
     token: guestToken,
     displayName,
   });
+  if (body.magicPrompt !== undefined && body.magicPrompt !== null && body.magicPrompt !== "") {
+    const verified = await verifyMagicInterpretationToken(
+      body.magicInterpretationToken,
+      account.id,
+      body.magicPrompt,
+    );
+    if (!verified) {
+      return apiError(
+        422,
+        "magic_interpretation_required",
+        "Interpret the Magic Rules again before creating the game",
+      );
+    }
+    magicPrompt = verified.prompt;
+    magicRules = verified.compiled;
+  }
+  const magicRulesJson = serializeMagicRules(magicRules);
   const rate = await enforceAccountRateLimit(account.id, "game_create", 10, 60 * 60);
   if (!rate.allowed) {
     return json(
@@ -216,8 +225,8 @@ export async function POST(request: Request) {
         db.prepare(`INSERT INTO moves (
           game_id, ply, request_id, color, from_square, to_square, promotion,
           san, second_from_square, second_to_square, second_san,
-          fen_before, fen_after, created_at
-        ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+          continuation_json, fen_before, fen_after, created_at
+        ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
           .bind(
             id,
             crypto.randomUUID(),
@@ -229,6 +238,7 @@ export async function POST(request: Request) {
             openingCandidate.second?.from ?? null,
             openingCandidate.second?.to ?? null,
             opening.secondMove?.san ?? null,
+            serializeMoveContinuation(opening.continuationMoves),
             opening.fenBefore,
             opening.fenAfter,
             now,

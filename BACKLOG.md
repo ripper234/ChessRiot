@@ -2,7 +2,7 @@
 
 ## Backlog chat cards
 
-| ID | Feature | Status in v0.9.1 |
+| ID | Feature | Status in v0.9.3 |
 |---|---|---|
 | CR-001 | Always-visible exact version | Shipped throughout the game app with a changelog link. The fixed public homepage intentionally omits runtime chrome. |
 | CR-002 | In-app feedback and GitHub contribution path | Shipped with isolated per-environment storage. |
@@ -17,6 +17,10 @@
 | CR-011 | Per-game Magic Rules | Shipped with immutable, allowlisted rules for atomic two-step rooks or knights, no promotion, no castling, and no en passant. Unsupported prose is rejected. |
 | CR-012 | Isolated branch preview environments | Planned. Complicated features use opt-in `feature/*` previews, collapsed by default in Control, before merging to Development. |
 | CR-013 | Optional confirmation before every move | Shipped as a default-off, browser-local setting covering tap, drag, keyboard, promotion, and complete Magic turns. |
+| CR-015 | Solo is the default mode | Shipped in v0.9.3. The new-game screen opens with Solo selected and Level 3 visible. |
+| CR-016 | White always begins | Verified in v0.9.3. White is always the first mover; Riot Bot commits the opening before a Black-side human can act. |
+| CR-017 | Understand Magic Rules at runtime | Shipped in v0.10.0. A runtime LLM translates natural wording into a strict validated rule document; gameplay never depends on live model judgment. |
+| CR-018 | Numeric move counts | Shipped in v0.10.0 through one generic two-to-six-step same-piece engine, including equivalent wording such as “twice,” “2 times,” and “3 times.” |
 
 This is the durable product backlog recovered from
 [GitHub issue #11](https://github.com/ripper234/ChessRiot/issues/11) and

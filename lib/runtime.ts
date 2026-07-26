@@ -4,6 +4,7 @@ declare global {
   var __CHESSRIOT_OBSERVABILITY_HASH_SECRET__: string | undefined;
   var __CHESSRIOT_CONTROL_ORIGIN__: string | undefined;
   var __CHESSRIOT_ACCOUNT_ID_SECRET__: string | undefined;
+  var __CHESSRIOT_OPENAI_API_KEY__: string | undefined;
 }
 
 export function appEnvironment(): string {
@@ -25,4 +26,8 @@ export function observabilityHashSecret(): string | null {
 
 export function accountIdSecret(): string | null {
   return globalThis.__CHESSRIOT_ACCOUNT_ID_SECRET__?.trim() || null;
+}
+
+export function openAiApiKey(): string | null {
+  return globalThis.__CHESSRIOT_OPENAI_API_KEY__?.trim() || null;
 }

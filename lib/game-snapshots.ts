@@ -13,6 +13,11 @@ export function optimisticMoveSnapshot(
   promotion?: Promotion,
   options: {
     second?: { from: Square; to: Square };
+    continuation?: Array<{
+      from: Square;
+      to: Square;
+      promotion?: Promotion;
+    }>;
     createdAt?: string;
   } = {},
 ): GameSnapshot | null {
@@ -23,6 +28,7 @@ export function optimisticMoveSnapshot(
       to,
       ...(promotion ? { promotion } : {}),
       ...(options.second ? { second: options.second } : {}),
+      ...(options.continuation ? { continuation: options.continuation } : {}),
     }, current.magicRules ?? null);
     const createdAt = options.createdAt ?? new Date().toISOString();
     return {
@@ -47,6 +53,12 @@ export function optimisticMoveSnapshot(
           to: outcome.move.to,
           promotion: promotion ?? null,
           san: outcome.move.san,
+          continuation: outcome.continuationMoves.map((move) => ({
+            from: move.from,
+            to: move.to,
+            promotion: move.promotion as Promotion | undefined,
+            san: move.san,
+          })),
           second: outcome.secondMove
             ? {
               from: outcome.secondMove.from,

@@ -26,6 +26,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en" suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }} /></head>
       <body>
+        <div className="branch-preview-ribbon">
+          PREVIEW · feature/runtime-magic-rules
+        </div>
         <ClientTelemetry />
         {children}
         <RouteChrome />

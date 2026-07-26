@@ -1,8 +1,9 @@
 import { Chess, type Move, type Square } from "chess.js";
 import {
   hasMagicRule,
+  magicMoveLimit,
   type CompiledMagicRules,
-  type DoubleMovePiece,
+  type MagicPiece,
 } from "./magic-rules";
 import type {
   Color,
@@ -22,11 +23,17 @@ export interface CandidateMove {
     from: string;
     to: string;
   };
+  continuation?: Array<{
+    from: string;
+    to: string;
+    promotion?: Promotion;
+  }>;
 }
 
 export interface MoveOutcome {
   move: Move;
   secondMove: Move | null;
+  continuationMoves: Move[];
   fenBefore: string;
   fenAfter: string;
   turn: Color;
@@ -53,6 +60,11 @@ function halfmoveClock(chess: Chess): number {
 type ReplayMove = Pick<StoredMove, "from" | "to" | "promotion">
   & {
     second?: { from: string; to: string } | null;
+    continuation?: Array<{
+      from: string;
+      to: string;
+      promotion?: Promotion | null;
+    }> | null;
   }
   & Partial<Pick<StoredMove, "color" | "fenBefore" | "fenAfter">>;
 
@@ -74,17 +86,17 @@ function forceSameTurn(fen: string, color: Color): string {
 function normalizeActionCounters(
   chess: Chess,
   fenBefore: string,
-  first: Move,
-  second: Move | null,
+  moves: Move[],
 ): Chess {
   const before = fenBefore.split(" ");
   const after = chess.fen().split(" ");
   if (before.length !== 6 || after.length !== 6) {
     throw new Error("Chess position is invalid");
   }
-  const resetsHalfmove = first.piece === "p"
-    || Boolean(first.captured)
-    || Boolean(second?.captured);
+  const first = moves[0];
+  if (!first) throw new Error("Chess action is invalid");
+  const resetsHalfmove = moves.some((move) =>
+    move.piece === "p" || Boolean(move.captured));
   after[4] = resetsHalfmove
     ? "0"
     : String(Number(before[4] ?? "0") + 1);
@@ -124,10 +136,32 @@ export function legalMagicMoves(
   });
 }
 
-export interface MagicSecondStep {
+export interface MagicContinuationStep {
   chess: Chess;
   moves: Move[];
-  piece: DoubleMovePiece;
+  piece: MagicPiece;
+  maxMoves: number;
+}
+
+export function magicContinuationStep(
+  chessAfterMove: Chess,
+  pieceSquare: Square,
+  moverColor: Color,
+  rules: CompiledMagicRules | null,
+  completedMoves: number,
+): MagicContinuationStep | null {
+  if (chessAfterMove.isCheck()) return null;
+  const piece = chessAfterMove.get(pieceSquare);
+  const maxMoves = piece ? magicMoveLimit(rules, piece.type) : 1;
+  if (
+    !piece
+    || piece.color !== moverColor
+    || completedMoves >= maxMoves
+  ) return null;
+  const chess = new Chess(forceSameTurn(chessAfterMove.fen(), moverColor));
+  const moves = legalMagicMoves(chess, rules, pieceSquare)
+    .filter((move) => move.piece === piece.type && move.from === pieceSquare);
+  return moves.length > 0 ? { chess, moves, piece: piece.type, maxMoves } : null;
 }
 
 export function magicSecondStep(
@@ -135,18 +169,14 @@ export function magicSecondStep(
   pieceSquare: Square,
   moverColor: Color,
   rules: CompiledMagicRules | null,
-): MagicSecondStep | null {
-  if (chessAfterFirst.isCheck()) return null;
-  const piece = chessAfterFirst.get(pieceSquare);
-  if (
-    (piece?.type !== "r" && piece?.type !== "n")
-    || piece.color !== moverColor
-    || !hasMagicRule(rules, "double_move", piece.type)
-  ) return null;
-  const chess = new Chess(forceSameTurn(chessAfterFirst.fen(), moverColor));
-  const moves = legalMagicMoves(chess, rules, pieceSquare)
-    .filter((move) => move.piece === piece.type && move.from === pieceSquare);
-  return moves.length > 0 ? { chess, moves, piece: piece.type } : null;
+): MagicContinuationStep | null {
+  return magicContinuationStep(
+    chessAfterFirst,
+    pieceSquare,
+    moverColor,
+    rules,
+    1,
+  );
 }
 
 function applyActionToPosition(
@@ -157,6 +187,7 @@ function applyActionToPosition(
   chess: Chess;
   move: Move;
   secondMove: Move | null;
+  continuationMoves: Move[];
   fenBefore: string;
 } {
   const fenBefore = chess.fen();
@@ -175,35 +206,57 @@ function applyActionToPosition(
     throw new IllegalMoveError();
   }
 
-  let secondMove: Move | null = null;
-  if (candidate.second) {
-    if (move.piece !== "r" && move.piece !== "n") {
-      throw new IllegalMoveError("Only an enabled magic piece can move twice");
+  if (
+    candidate.second
+    && candidate.continuation
+    && (
+      candidate.continuation[0]?.from !== candidate.second.from
+      || candidate.continuation[0]?.to !== candidate.second.to
+    )
+  ) {
+    throw new IllegalMoveError("Move continuation is invalid");
+  }
+  const requestedContinuation = candidate.continuation
+    ?? (candidate.second ? [candidate.second] : []);
+  const continuationMoves: Move[] = [];
+  let pieceSquare = move.to;
+  for (const [index, leg] of requestedContinuation.entries()) {
+    const legPromotion = "promotion" in leg ? leg.promotion : undefined;
+    const step = magicContinuationStep(
+      chess,
+      pieceSquare,
+      move.color,
+      rules,
+      index + 1,
+    );
+    if (!step || leg.from !== pieceSquare) {
+      throw new IllegalMoveError("That piece cannot continue its Magic move from there");
     }
-    const secondStep = magicSecondStep(chess, move.to, move.color, rules);
-    if (!secondStep || candidate.second.from !== move.to) {
-      throw new IllegalMoveError("That piece cannot move twice from there");
-    }
-    const selectedSecond = secondStep.moves.find((candidateMove) =>
-      candidateMove.from === candidate.second?.from
-      && candidateMove.to === candidate.second?.to);
-    if (!selectedSecond) throw new IllegalMoveError("The second magic move is not legal");
+    const selectedLeg = step.moves.find((candidateMove) =>
+      candidateMove.from === leg.from
+      && candidateMove.to === leg.to
+      && (candidateMove.promotion ?? undefined) === legPromotion);
+    if (!selectedLeg) throw new IllegalMoveError("That Magic move is not legal");
     try {
-      secondMove = secondStep.chess.move({
-        from: selectedSecond.from,
-        to: selectedSecond.to,
+      const applied = step.chess.move({
+        from: selectedLeg.from,
+        to: selectedLeg.to,
+        ...(selectedLeg.promotion ? { promotion: selectedLeg.promotion } : {}),
       });
-      chess = secondStep.chess;
+      continuationMoves.push(applied);
+      pieceSquare = applied.to;
+      chess = step.chess;
     } catch {
-      throw new IllegalMoveError("The second magic move is not legal");
+      throw new IllegalMoveError("That Magic move is not legal");
     }
   }
-  chess = normalizeActionCounters(chess, fenBefore, move, secondMove);
+  chess = normalizeActionCounters(chess, fenBefore, [move, ...continuationMoves]);
 
   return {
     chess,
     move,
-    secondMove,
+    secondMove: continuationMoves[0] ?? null,
+    continuationMoves,
     fenBefore,
   };
 }
@@ -234,7 +287,13 @@ export function replayWithRepetition(
           from: stored.from,
           to: stored.to,
           ...(stored.promotion ? { promotion: stored.promotion } : {}),
-          ...(stored.second ? {
+          ...(stored.continuation && stored.continuation.length > 0 ? {
+            continuation: stored.continuation.map((leg) => ({
+              from: leg.from,
+              to: leg.to,
+              ...(leg.promotion ? { promotion: leg.promotion } : {}),
+            })),
+          } : stored.second ? {
             second: {
               from: stored.second.from,
               to: stored.second.to,
@@ -298,6 +357,7 @@ export function applyCandidate(
       to: candidate.to,
       promotion: candidate.promotion ?? null,
       second: candidate.second ?? null,
+      continuation: candidate.continuation ?? null,
     },
   ], rules);
   const terminal = analyzeTerminal(chess, replayed.currentRepetitionCount, rules);
@@ -305,6 +365,7 @@ export function applyCandidate(
   return {
     move: applied.move,
     secondMove: applied.secondMove,
+    continuationMoves: applied.continuationMoves,
     fenBefore: applied.fenBefore,
     fenAfter: chess.fen(),
     turn: chess.turn(),

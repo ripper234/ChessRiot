@@ -11,6 +11,43 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.11.0-magic.1",
+    date: "2026-07-26",
+    title: "Magic branch preview",
+    summary: "Runtime Magic Rules now develop in an isolated preview lane rather than the stable release.",
+    changes: [
+      "Renamed the explicit action to Compile Rules.",
+      "Added a thinking spinner, green compiled indicator, and red failure indicator with the compiler error.",
+      "Marked every page clearly as the feature/runtime-magic-rules preview.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/feature/runtime-magic-rules`,
+  },
+  {
+    version: "0.10.0",
+    date: "2026-07-26",
+    title: "Magic understands",
+    summary: "Magic Rules now understand natural wording at runtime and execute bounded multi-move turns deterministically.",
+    changes: [
+      "Replaced phrase-specific parsing with runtime OpenAI interpretation into a strict, locally validated rule document.",
+      "Added an explicit interpretation step so players review the exact rules before creating a game.",
+      "Generalized the same-piece turn engine, persistence, replay, interface, and Riot Bot from two moves to bounded sequences of two through six moves.",
+      "Kept existing v1 and v2 Magic games readable while signing new interpretations against client tampering and nondeterministic retries.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.10.0`,
+  },
+  {
+    version: "0.9.3",
+    date: "2026-07-26",
+    title: "Solo from the start",
+    summary: "New games now open in Solo mode, while preserving White's first move in every game.",
+    changes: [
+      "Selected Solo by default on the new-game screen and showed the Level 3 Riot Bot control immediately.",
+      "Kept Multiplayer one tap away without changing either mode's saved behavior.",
+      "Added regression coverage for the default selection and the existing White-first invariant.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.9.3`,
+  },
+  {
     version: "0.9.2",
     date: "2026-07-25",
     title: "First-move history fix",

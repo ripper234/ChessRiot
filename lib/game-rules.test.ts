@@ -21,6 +21,10 @@ const DOUBLE_KNIGHT: CompiledMagicRules = {
   version: 2,
   rules: [{ kind: "double_move", piece: "n" }],
 };
+const TRIPLE_KNIGHT: CompiledMagicRules = {
+  version: 3,
+  rules: [{ kind: "move_sequence", pieces: ["n"], maxMoves: 3 }],
+};
 const NO_PROMOTION: CompiledMagicRules = {
   version: 1,
   rules: [{ kind: "no_promotion" }],
@@ -266,6 +270,46 @@ describe("ChessRiot rules adapter", () => {
       color: "w",
       type: "n",
     });
+  });
+
+  it("uses one sequence engine for three consecutive knight moves", () => {
+    const result = applyCandidate(
+      INITIAL_FEN,
+      [],
+      {
+        from: "g1",
+        to: "f3",
+        continuation: [
+          { from: "f3", to: "e5" },
+          { from: "e5", to: "c6" },
+        ],
+      },
+      TRIPLE_KNIGHT,
+    );
+    expect(result.continuationMoves).toHaveLength(2);
+    expect(result.continuationMoves.map((move) => move.to)).toEqual(["e5", "c6"]);
+    expect(new Chess(result.fenAfter).get("c6")).toMatchObject({
+      color: "w",
+      type: "n",
+    });
+    expect(result.turn).toBe("b");
+  });
+
+  it("rejects a continuation beyond the interpreted move limit", () => {
+    expect(() => applyCandidate(
+      INITIAL_FEN,
+      [],
+      {
+        from: "g1",
+        to: "f3",
+        continuation: [
+          { from: "f3", to: "e5" },
+          { from: "e5", to: "c6" },
+          { from: "c6", to: "b4" },
+        ],
+      },
+      TRIPLE_KNIGHT,
+    )).toThrow(IllegalMoveError);
   });
 
   it("requires the same knight for the second leg and ends a checking first leg", () => {

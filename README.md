@@ -2,7 +2,7 @@
 
 Play the current game at [chessriot.ripper234.chatgpt.site](https://chessriot.ripper234.chatgpt.site).
 
-ChessRiot v0.9.2 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
+ChessRiot v0.11.0-magic.1 is the isolated preview of runtime Magic Rules for solo play against Riot Bot or asynchronous play with someone you know.
 
 Found something confusing or have a cool rule request? Use **Feedback** inside
 the game or [open a GitHub issue](https://github.com/ripper234/ChessRiot/issues).
@@ -12,18 +12,21 @@ progression work, and features that still need explicit rule design.
 
 ## What works
 
-- Open `/app`, enter a display name, then choose Solo or Multiplayer without a
-  sign-in or CAPTCHA gate.
+- Open `/app`, enter a display name, and start in Solo mode by default. Switch
+  to Multiplayer whenever you want to challenge someone you know.
 - Use an identity-independent public homepage at `/`; saved game themes and
   hosting login state cannot change it.
-- Play Riot Bot at one of five levels, starting at Level 3, Medium, as either color. If the bot is White, it opens automatically.
+- Play Riot Bot at one of five levels, starting at Level 3, Medium, as either
+  color. White always moves first; if the bot is White, it opens automatically.
 - Create a multiplayer game with one, three, or five days per move, then share one private invitation link. Missing the deadline loses the game.
 - Resume recent games on the same device or use a private seat link on another
   device.
 - Play complete standard chess with server-authoritative legal move validation.
-- Optionally enable Magic Rules for one game. Supported prompts can give the
-  same rook or knight a second move in that turn, block promotion, disable
-  castling, or disable en passant; unsupported clauses are rejected clearly.
+- Optionally enable Magic Rules for one game. A runtime LLM understands
+  natural wording and languages, then stores a validated deterministic rule
+  document. Supported mechanics let selected piece types move up to two
+  through six times in one turn, block promotion, disable castling, or disable
+  en passant. Unsupported mechanics are rejected clearly.
 - Persist the board, player names, result, and immutable move history in Cloudflare D1.
 - Protect each seat with a private 256-bit bearer secret while preserving
   existing account memberships and older private links.

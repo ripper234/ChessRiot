@@ -1,5 +1,5 @@
 import { Chess, type Move, type PieceSymbol, type Square } from "chess.js";
-import { legalMagicMoves, magicSecondStep } from "./game-rules";
+import { legalMagicMoves, magicContinuationStep } from "./game-rules";
 import type { CompiledMagicRules } from "./magic-rules";
 import type { AiDifficulty, Color, Promotion } from "./game-types";
 
@@ -11,6 +11,11 @@ export interface ComputerMove {
     from: Square;
     to: Square;
   };
+  continuation?: Array<{
+    from: Square;
+    to: Square;
+    promotion?: Promotion;
+  }>;
 }
 
 const PIECE_VALUE: Record<PieceSymbol, number> = {
@@ -117,20 +122,42 @@ function asComputerMove(
     to: move.to,
     ...(move.promotion ? { promotion: move.promotion as Promotion } : {}),
   };
-  if (move.piece !== "r" && move.piece !== "n") return candidate;
-  const afterFirst = new Chess(rootFen);
-  afterFirst.move(move);
-  const secondStep = magicSecondStep(afterFirst, move.to, move.color, rules);
-  if (!secondStep) return candidate;
-  const ordered = [...secondStep.moves]
-    .sort((left, right) => movePriority(right) - movePriority(left));
-  const second = randomSecond
-    ? ordered[Math.floor(random() * ordered.length)] ?? ordered[0]
-    : ordered[0];
-  return second
+  let chess = new Chess(rootFen);
+  chess.move(move);
+  let pieceSquare = move.to;
+  const continuation: NonNullable<ComputerMove["continuation"]> = [];
+  while (true) {
+    const step = magicContinuationStep(
+      chess,
+      pieceSquare,
+      move.color,
+      rules,
+      continuation.length + 1,
+    );
+    if (!step) break;
+    const ordered = [...step.moves]
+      .sort((left, right) => movePriority(right) - movePriority(left));
+    const selected = randomSecond
+      ? ordered[Math.floor(random() * ordered.length)] ?? ordered[0]
+      : ordered[0];
+    if (!selected) break;
+    step.chess.move(selected);
+    continuation.push({
+      from: selected.from,
+      to: selected.to,
+      ...(selected.promotion ? { promotion: selected.promotion as Promotion } : {}),
+    });
+    chess = step.chess;
+    pieceSquare = selected.to;
+  }
+  return continuation.length > 0
     ? {
       ...candidate,
-      second: { from: second.from, to: second.to },
+      second: {
+        from: continuation[0].from,
+        to: continuation[0].to,
+      },
+      continuation,
     }
     : candidate;
 }

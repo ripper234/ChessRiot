@@ -45,6 +45,7 @@ export const moves = sqliteTable(
     secondFromSquare: text("second_from_square"),
     secondToSquare: text("second_to_square"),
     secondSan: text("second_san"),
+    continuationJson: text("continuation_json"),
     fenBefore: text("fen_before").notNull(),
     fenAfter: text("fen_after").notNull(),
     createdAt: text("created_at").notNull(),

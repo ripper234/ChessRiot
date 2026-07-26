@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import type {
   AiDifficulty,
   GameMode,
@@ -23,15 +23,22 @@ import {
 } from "@/lib/client-storage";
 import { APP_VERSION } from "@/lib/version";
 import {
-  compileMagicPrompt,
   MAGIC_PROMPT_MAX_LENGTH,
+  normalizeMagicPrompt,
 } from "@/lib/magic-rules";
 import { Brand } from "./Brand";
+import { MagicCompileStatus } from "./MagicCompileStatus";
 
 interface PendingCreate {
   playerToken: string;
   inviteToken: string;
   requestId: string;
+}
+
+interface MagicInterpretation {
+  prompt: string;
+  labels: string[];
+  interpretationToken: string;
 }
 
 const DIFFICULTY_LABELS: Record<AiDifficulty, string> = {
@@ -45,19 +52,19 @@ const DIFFICULTY_LABELS: Record<AiDifficulty, string> = {
 export function CreateGame() {
   const router = useRouter();
   const [name, setName] = useState("");
-  const [mode, setMode] = useState<GameMode>("multiplayer");
+  const [mode, setMode] = useState<GameMode>("solo");
   const [difficulty, setDifficulty] = useState<AiDifficulty>(3);
   const [turnPaceDays, setTurnPaceDays] = useState<TurnPaceDays>(3);
   const [magicEnabled, setMagicEnabled] = useState(false);
   const [magicPrompt, setMagicPrompt] = useState("");
+  const [magicInterpretation, setMagicInterpretation] =
+    useState<MagicInterpretation | null>(null);
+  const [interpretingMagic, setInterpretingMagic] = useState(false);
+  const [magicCompileError, setMagicCompileError] = useState("");
   const [recent, setRecent] = useState<RecentGame[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const pending = useRef<PendingCreate | null>(null);
-  const magicPreview = useMemo(
-    () => magicEnabled ? compileMagicPrompt(magicPrompt) : null,
-    [magicEnabled, magicPrompt],
-  );
 
   useEffect(() => {
     try {
@@ -68,16 +75,69 @@ export function CreateGame() {
     setRecent(readRecentGames());
   }, []);
 
+  async function interpretMagic(): Promise<void> {
+    const cleanName = name.trim();
+    if (!cleanName) {
+      setMagicCompileError("Enter your display name before compiling Magic Rules.");
+      setError("");
+      return;
+    }
+    const normalized = normalizeMagicPrompt(magicPrompt);
+    if (!normalized.ok) {
+      setMagicCompileError(normalized.message);
+      setError("");
+      return;
+    }
+    setInterpretingMagic(true);
+    setError("");
+    setMagicCompileError("");
+    setMagicInterpretation(null);
+    pending.current = null;
+    try {
+      const response = await fetch("/api/magic-rules/interpret", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          displayName: cleanName,
+          guestToken: guestIdentityToken(),
+          prompt: normalized.prompt,
+        }),
+      });
+      const data = (await response.json()) as {
+        prompt?: string;
+        labels?: string[];
+        interpretationToken?: string;
+        error?: { message?: string };
+      };
+      if (
+        !response.ok
+        || typeof data.prompt !== "string"
+        || !Array.isArray(data.labels)
+        || typeof data.interpretationToken !== "string"
+      ) {
+        throw new Error(data.error?.message ?? "Magic could not interpret that rule");
+      }
+      setMagicInterpretation({
+        prompt: data.prompt,
+        labels: data.labels,
+        interpretationToken: data.interpretationToken,
+      });
+    } catch (caught) {
+      setMagicCompileError(
+        caught instanceof Error ? caught.message : "Magic could not compile that rule",
+      );
+    } finally {
+      setInterpretingMagic(false);
+    }
+  }
+
   async function createGame(event: FormEvent) {
     event.preventDefault();
     const cleanName = name.trim();
     if (!cleanName) return;
-    if (magicEnabled && (!magicPreview || !magicPreview.ok)) {
-      setError(
-        magicPreview && !magicPreview.ok
-          ? magicPreview.message
-          : "Describe the magic rule in a short sentence.",
-      );
+    const normalizedMagic = magicEnabled ? normalizeMagicPrompt(magicPrompt) : null;
+    if (magicEnabled && (!normalizedMagic?.ok || magicInterpretation?.prompt !== normalizedMagic.prompt)) {
+      setError("Interpret the Magic Rules before creating the game.");
       return;
     }
     if (!canUseGameStorage()) {
@@ -101,8 +161,11 @@ export function CreateGame() {
           mode,
           ...(mode === "solo" ? { difficulty } : {}),
           ...(mode === "multiplayer" ? { turnPaceDays } : {}),
-          ...(magicEnabled && magicPreview?.ok
-            ? { magicPrompt: magicPreview.prompt }
+          ...(magicEnabled && magicInterpretation
+            ? {
+              magicPrompt: magicInterpretation.prompt,
+              magicInterpretationToken: magicInterpretation.interpretationToken,
+            }
             : {}),
           ...pending.current,
         }),
@@ -150,6 +213,8 @@ export function CreateGame() {
             value={name}
             onChange={(event) => {
               setName(event.target.value);
+              setMagicInterpretation(null);
+              setMagicCompileError("");
               pending.current = null;
             }}
             maxLength={24}
@@ -200,6 +265,8 @@ export function CreateGame() {
                 disabled={busy}
                 onChange={(event) => {
                   setMagicEnabled(event.target.checked);
+                  setMagicInterpretation(null);
+                  setMagicCompileError("");
                   setError("");
                   pending.current = null;
                 }}
@@ -220,26 +287,36 @@ export function CreateGame() {
                   maxLength={MAGIC_PROMPT_MAX_LENGTH}
                   rows={3}
                   disabled={busy}
-                  placeholder="e.g. “Knights move twice.”"
+                  placeholder="e.g. “Knights move 3 times.”"
                   onChange={(event) => {
                     setMagicPrompt(event.target.value);
+                    setMagicInterpretation(null);
+                    setMagicCompileError("");
                     setError("");
                     pending.current = null;
                   }}
                 />
-                {magicPreview?.ok ? (
-                  <div className="magic-understood" role="status">
-                    <span>MAGIC READY</span>
-                    <p>{magicPreview.labels.join(" · ")}</p>
-                  </div>
-                ) : magicPrompt.trim() && magicPreview && !magicPreview.ok ? (
-                  <p className="magic-error" role="alert">{magicPreview.message}</p>
-                ) : (
-                  <small>
-                    Try “Knights move twice”, “Rooks move twice”, “Pawns never
-                    promote”, “No castling”, or “No en passant”.
-                  </small>
-                )}
+                <button
+                  type="button"
+                  className="quiet-button"
+                  disabled={busy || interpretingMagic || !name.trim() || !magicPrompt.trim()}
+                  onClick={() => void interpretMagic()}
+                >
+                  COMPILE RULES
+                </button>
+                <MagicCompileStatus
+                  state={
+                    interpretingMagic
+                      ? "thinking"
+                      : magicInterpretation
+                        ? "success"
+                        : magicCompileError
+                          ? "failure"
+                          : "idle"
+                  }
+                  labels={magicInterpretation?.labels}
+                  message={magicCompileError}
+                />
               </div>
             ) : null}
           </div>
@@ -290,7 +367,7 @@ export function CreateGame() {
             </fieldset>
           )}
           {error ? <p className="form-error" role="alert">{error}</p> : null}
-          <button className="primary-button" disabled={busy || !name.trim()}>
+          <button className="primary-button" disabled={busy || interpretingMagic || !name.trim()}>
             {busy
               ? "STARTING…"
               : mode === "solo" ? "PLAY RIOT BOT  →" : "CREATE GAME  →"}

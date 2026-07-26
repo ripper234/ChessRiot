@@ -18,6 +18,7 @@ interface Env {
   OBSERVABILITY_HASH_SECRET?: string;
   OPS_READ_SECRET?: string;
   ACCOUNT_ID_SECRET?: string;
+  OPENAI_API_KEY?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -40,6 +41,7 @@ const worker = {
     globalThis.__CHESSRIOT_OBSERVABILITY_HASH_SECRET__ = env.OBSERVABILITY_HASH_SECRET;
     globalThis.__CHESSRIOT_OPS_READ_SECRET__ = env.OPS_READ_SECRET;
     globalThis.__CHESSRIOT_ACCOUNT_ID_SECRET__ = env.ACCOUNT_ID_SECRET;
+    globalThis.__CHESSRIOT_OPENAI_API_KEY__ = env.OPENAI_API_KEY;
     const url = new URL(request.url);
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];

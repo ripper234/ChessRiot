@@ -17,6 +17,7 @@ import type { Promotion } from "@/lib/game-types";
 import { isUuid, requestIsSameOrigin } from "@/lib/validation";
 import { recordEvent } from "@/lib/observability";
 import { hasMagicRule } from "@/lib/magic-rules";
+import { serializeMoveContinuation } from "@/lib/move-continuation";
 
 export const dynamic = "force-dynamic";
 
@@ -30,22 +31,49 @@ function isSecondMove(value: unknown): value is { from: string; to: string } {
   return isSquare(candidate.from) && isSquare(candidate.to);
 }
 
+interface RequestedContinuation {
+  from: string;
+  to: string;
+  promotion?: Promotion;
+}
+
+function isContinuation(value: unknown): value is RequestedContinuation[] {
+  return Array.isArray(value)
+    && value.length > 0
+    && value.length <= 5
+    && value.every((leg) => {
+      if (!leg || typeof leg !== "object" || Array.isArray(leg)) return false;
+      const candidate = leg as {
+        from?: unknown;
+        to?: unknown;
+        promotion?: unknown;
+      };
+      return isSquare(candidate.from)
+        && isSquare(candidate.to)
+        && (candidate.promotion === undefined || isPromotion(candidate.promotion));
+    });
+}
+
 function sameMoveRequest(
   move: Awaited<ReturnType<typeof readMoves>>[number] | undefined,
   color: "w" | "b",
   from: string,
   to: string,
   promotion: Promotion | undefined,
-  second: { from: string; to: string } | undefined,
+  continuation: RequestedContinuation[],
 ): boolean {
+  const storedContinuation = move?.continuation ?? [];
   return Boolean(
     move
     && move.color === color
     && move.from === from
     && move.to === to
     && (move.promotion ?? undefined) === promotion
-    && (move.second?.from ?? undefined) === second?.from
-    && (move.second?.to ?? undefined) === second?.to
+    && storedContinuation.length === continuation.length
+    && storedContinuation.every((leg, index) =>
+      leg.from === continuation[index]?.from
+      && leg.to === continuation[index]?.to
+      && (leg.promotion ?? undefined) === continuation[index]?.promotion)
   );
 }
 
@@ -80,6 +108,7 @@ export async function POST(
   const to = body?.to;
   const promotion = body?.promotion;
   const second = body?.second;
+  const continuation = body?.continuation;
   const expectedVersion = body?.expectedVersion;
   const requestId = body?.requestId;
   if (
@@ -87,6 +116,8 @@ export async function POST(
     !isSquare(to) ||
     (promotion !== undefined && !isPromotion(promotion)) ||
     (second !== undefined && !isSecondMove(second)) ||
+    (continuation !== undefined && !isContinuation(continuation)) ||
+    (second !== undefined && continuation !== undefined) ||
     !Number.isInteger(expectedVersion) ||
     (expectedVersion as number) < 0 ||
     !isUuid(requestId)
@@ -94,6 +125,9 @@ export async function POST(
     return apiError(400, "invalid_request", "Move request is invalid");
   }
   const secondMove = second as { from: string; to: string } | undefined;
+  const continuationMoves = continuation !== undefined
+    ? continuation as RequestedContinuation[]
+    : secondMove ? [secondMove] : [];
 
   const { color } = authorization;
   let game: GameRow | null = authorization.game;
@@ -108,7 +142,7 @@ export async function POST(
       from,
       to,
       promotion as Promotion | undefined,
-      secondMove,
+      continuationMoves,
     )) {
       return apiError(409, "idempotency_conflict", "This move request id was already used");
     }
@@ -150,12 +184,7 @@ export async function POST(
       from,
       to,
       ...(promotion ? { promotion: promotion as Promotion } : {}),
-      ...(secondMove ? {
-        second: {
-          from: secondMove.from,
-          to: secondMove.to,
-        },
-      } : {}),
+      ...(continuationMoves.length > 0 ? { continuation: continuationMoves } : {}),
     }, magicRules);
   } catch (error) {
     if (error instanceof IllegalMoveError) {
@@ -209,8 +238,8 @@ export async function POST(
     .prepare(`INSERT INTO moves (
       game_id, ply, request_id, color, from_square, to_square, promotion,
       san, second_from_square, second_to_square, second_san,
-      fen_before, fen_after, created_at
-    ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      continuation_json, fen_before, fen_after, created_at
+    ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       FROM games WHERE id = ? AND version = ? AND last_mutation_nonce = ?`)
     .bind(
       id,
@@ -221,9 +250,10 @@ export async function POST(
       to,
       promotion ?? null,
       outcome.move.san,
-      secondMove?.from ?? null,
-      secondMove?.to ?? null,
+      continuationMoves[0]?.from ?? null,
+      continuationMoves[0]?.to ?? null,
       outcome.secondMove?.san ?? null,
+      serializeMoveContinuation(outcome.continuationMoves),
       outcome.fenBefore,
       outcome.fenAfter,
       now,
@@ -246,7 +276,7 @@ export async function POST(
         from,
         to,
         promotion as Promotion | undefined,
-        secondMove,
+        continuationMoves,
       )) {
         return json({ game: snapshot(game, storedMoves, color) });
       }
@@ -272,7 +302,7 @@ export async function POST(
         from,
         to,
         promotion as Promotion | undefined,
-        secondMove,
+        continuationMoves,
       )) {
         return json({ game: snapshot(game, storedMoves, color) });
       }

@@ -86,8 +86,19 @@ test("renders an identity-independent public homepage and guest play route", asy
   assert.doesNotMatch(html, /aria-label="Choose visual theme"/);
   assert.match(html, /App updates/);
   assert.match(html, /manifest\.webmanifest/);
-  assert.match(html, /Time per move/);
-  assert.match(html, /Three days is the default/);
+  assert.match(
+    html,
+    /<input(?=[^>]*name="game-mode")(?=[^>]*value="solo")(?=[^>]*checked)[^>]*>/,
+  );
+  assert.doesNotMatch(
+    html,
+    /<input(?=[^>]*name="game-mode")(?=[^>]*value="multiplayer")(?=[^>]*checked)[^>]*>/,
+  );
+  assert.match(html, /Riot Bot level/);
+  assert.doesNotMatch(html, /Time per move/);
+  assert.match(html, /COMPILE RULES/);
+  assert.doesNotMatch(html, /INTERPRET RULES/);
+  assert.match(html, /PREVIEW · feature\/runtime-magic-rules/);
   assert.match(html, /Send feedback/);
   assert.match(html, /view issues or send a pull request on GitHub/);
   assert.doesNotMatch(html, /human check|captcha|turnstile/i);
