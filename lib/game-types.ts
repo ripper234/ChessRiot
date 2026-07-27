@@ -19,6 +19,13 @@ export type Termination =
   | "timeout"
   | "draw";
 
+export interface MoveContinuation {
+  from: string;
+  to: string;
+  promotion?: Promotion | null;
+  san: string;
+}
+
 export interface StoredMove {
   ply: number;
   requestId: string;
@@ -27,6 +34,7 @@ export interface StoredMove {
   to: string;
   promotion: Promotion | null;
   san: string;
+  continuation?: MoveContinuation[];
   second: {
     from: string;
     to: string;
@@ -44,6 +52,7 @@ export interface PublicMove {
   to: string;
   promotion: Promotion | null;
   san: string;
+  continuation?: MoveContinuation[];
   second?: {
     from: string;
     to: string;

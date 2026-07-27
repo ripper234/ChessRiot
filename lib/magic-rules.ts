@@ -1,26 +1,47 @@
 export const MAGIC_PROMPT_MAX_LENGTH = 500;
-export const MAGIC_RULES_VERSION = 2 as const;
+export const MAGIC_RULES_VERSION = 3 as const;
+export const PREVIOUS_MAGIC_RULES_VERSION = 2 as const;
 export const LEGACY_MAGIC_RULES_VERSION = 1 as const;
+export const MAGIC_MAX_MOVES_PER_TURN = 6;
 
+export type MagicPiece = "p" | "n" | "b" | "r" | "q" | "k";
 export type DoubleMovePiece = "r" | "n";
+export type ForbiddenAction = "promotion" | "castling" | "en_passant";
 
-type SharedMagicRule =
+type SharedLegacyMagicRule =
   | { kind: "no_promotion" }
   | { kind: "no_castling" }
   | { kind: "no_en_passant" };
 
 export type LegacyMagicRule =
   | { kind: "double_move"; piece: "r" }
-  | SharedMagicRule;
+  | SharedLegacyMagicRule;
+
+export type PreviousMagicRule =
+  | { kind: "double_move"; piece: DoubleMovePiece }
+  | SharedLegacyMagicRule;
 
 export type MagicRule =
-  | { kind: "double_move"; piece: DoubleMovePiece }
-  | SharedMagicRule;
+  | {
+    kind: "move_sequence";
+    pieces: MagicPiece[];
+    maxMoves: number;
+  }
+  | {
+    kind: "forbid_action";
+    action: ForbiddenAction;
+  };
+
+export type AnyMagicRule = LegacyMagicRule | PreviousMagicRule | MagicRule;
 
 export type CompiledMagicRules =
   | {
     version: typeof LEGACY_MAGIC_RULES_VERSION;
     rules: LegacyMagicRule[];
+  }
+  | {
+    version: typeof PREVIOUS_MAGIC_RULES_VERSION;
+    rules: PreviousMagicRule[];
   }
   | {
     version: typeof MAGIC_RULES_VERSION;
@@ -32,204 +53,218 @@ export type PublicMagicRules = CompiledMagicRules & {
   labels: string[];
 };
 
-export type MagicPromptResult =
-  | {
-    ok: true;
-    prompt: string;
-    compiled: CompiledMagicRules;
-    labels: string[];
-  }
-  | {
-    ok: false;
-    message: string;
-    unsupported: string[];
-  };
+export type MagicPromptValidation =
+  | { ok: true; prompt: string }
+  | { ok: false; message: string };
 
-function ruleKey(rule: MagicRule): string {
-  return "piece" in rule ? `${rule.kind}:${rule.piece}` : rule.kind;
-}
+const PIECE_NAMES: Record<MagicPiece, string> = {
+  p: "Pawns",
+  n: "Knights",
+  b: "Bishops",
+  r: "Rooks",
+  q: "Queens",
+  k: "Kings",
+};
 
-function isLegacyMagicRule(rule: MagicRule): rule is LegacyMagicRule {
-  return rule.kind !== "double_move" || rule.piece === "r";
-}
+const ALL_MAGIC_PIECES: MagicPiece[] = ["p", "n", "b", "r", "q", "k"];
 
-export function magicRuleLabel(rule: MagicRule): string {
-  switch (rule.kind) {
-    case "double_move":
-      return rule.piece === "r"
-        ? "Rooks may move twice; check ends the turn"
-        : "Knights may move twice; check ends the turn";
-    case "no_promotion":
-      return "Pawns cannot move onto the final rank";
-    case "no_castling":
-      return "No castling";
-    case "no_en_passant":
-      return "No en passant";
-  }
-}
-
-function normalizeClause(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[“”]/g, "\"")
-    .replace(/[’]/g, "'")
-    .replace(
-      /^(?:(?:please|also)\s+|rule\s*:?\s*|make\s+it\s+so\s+(?:that\s+)?)+/,
-      "",
-    )
-    .replace(/\s+/g, " ")
-    .replace(/[!?]+$/g, "")
-    .trim();
-}
-
-function splitClauses(prompt: string): string[] {
-  return prompt
-    .split(/(?:[\n.;]+|,\s*|\s+(?:and|plus|but)\s+)/i)
-    .map(normalizeClause)
-    .filter(Boolean);
-}
-
-function parseClause(clause: string): MagicRule | null {
-  if (
-    /^(?:the\s+)?rooks?\s+(?:(?:can|may)\s+)?moves?\s+twice(?:\s+per\s+turn)?$/.test(clause)
-    || /^(?:the\s+)?rooks?\s+(?:gets?|has|have)\s+two\s+moves(?:\s+per\s+turn)?$/.test(clause)
-    || /^(?:צריח|צריחים)\s+(?:זז|זזים|נע|נעים)\s+פעמיים$/.test(clause)
-  ) {
-    return { kind: "double_move", piece: "r" };
-  }
-
-  if (
-    /^(?:the\s+)?knights?\s+(?:(?:can|may)\s+)?moves?\s+twice(?:\s+per\s+turn)?$/.test(clause)
-    || /^(?:the\s+)?knights?\s+(?:gets?|has|have)\s+two\s+moves(?:\s+per\s+turn)?$/.test(clause)
-    || /^(?:פרש|פרשים)\s+(?:זז|זזים|נע|נעים)\s+פעמיים$/.test(clause)
-  ) {
-    return { kind: "double_move", piece: "n" };
-  }
-
-  if (
-    /^(?:the\s+)?pawns?\s+(?:never|cannot|can't|do\s+not|don't)\s+(?:(?:get|be)\s+)?promot(?:e|ed)$/.test(clause)
-    || /^(?:no|disable|forbid)\s+pawn\s+promotion$/.test(clause)
-    || /^(?:חייל|חיילים|רגלי|רגלים)\s+לא\s+(?:מוכתר|מוכתרים|מקודם|מקודמים)$/.test(clause)
-  ) {
-    return { kind: "no_promotion" };
-  }
-
-  if (
-    /^(?:no|disable|forbid)\s+castling$/.test(clause)
-    || /^castling\s+(?:is\s+)?(?:not\s+allowed|disabled|forbidden)$/.test(clause)
-    || /^(?:בלי|ללא)\s+הצרחה$/.test(clause)
-  ) {
-    return { kind: "no_castling" };
-  }
-
-  if (
-    /^(?:no|disable|forbid)\s+en[\s-]*passant$/.test(clause)
-    || /^en[\s-]*passant\s+(?:is\s+)?(?:not\s+allowed|disabled|forbidden)$/.test(clause)
-  ) {
-    return { kind: "no_en_passant" };
-  }
-
-  return null;
-}
-
-export function compileMagicPrompt(value: unknown): MagicPromptResult {
+export function normalizeMagicPrompt(value: unknown): MagicPromptValidation {
   if (typeof value !== "string") {
-    return {
-      ok: false,
-      message: "Describe the magic rule in a short sentence.",
-      unsupported: [],
-    };
+    return { ok: false, message: "Describe the magic rule in a short sentence." };
   }
   const normalized = value.normalize("NFKC");
   if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(normalized)) {
-    return {
-      ok: false,
-      message: "Magic Rules contain unsupported control characters.",
-      unsupported: [],
-    };
+    return { ok: false, message: "Magic Rules contain unsupported control characters." };
   }
   const prompt = normalized.trim().replace(/\s+/g, " ");
   if (!prompt) {
-    return {
-      ok: false,
-      message: "Describe the magic rule in a short sentence.",
-      unsupported: [],
-    };
+    return { ok: false, message: "Describe the magic rule in a short sentence." };
   }
   if (prompt.length > MAGIC_PROMPT_MAX_LENGTH) {
     return {
       ok: false,
       message: `Keep Magic Rules under ${MAGIC_PROMPT_MAX_LENGTH} characters.`,
-      unsupported: [],
     };
   }
-
-  const clauses = splitClauses(normalized);
-  const parsed = clauses.map((clause) => ({ clause, rule: parseClause(clause) }));
-  const unsupported = parsed.filter((item) => !item.rule).map((item) => item.clause);
-  if (unsupported.length > 0) {
-    return {
-      ok: false,
-      message: `Magic does not understand: “${unsupported[0]}”.`,
-      unsupported,
-    };
-  }
-
-  const rules = parsed
-    .map((item) => item.rule)
-    .filter((rule): rule is MagicRule => Boolean(rule));
-  const deduplicated = [...new Map(rules.map((rule) => [ruleKey(rule), rule])).values()];
-  if (deduplicated.length === 0) {
-    return {
-      ok: false,
-      message: "Try a rule such as “Knights move twice.”",
-      unsupported: [],
-    };
-  }
-  if (deduplicated.length > 6) {
-    return {
-      ok: false,
-      message: "Use up to six Magic Rules in one game.",
-      unsupported: [],
-    };
-  }
-
-  const legacyRules = deduplicated.filter(isLegacyMagicRule);
-  // Keep the original v1 document for the original rule vocabulary. This
-  // preserves retry identity and stored-game semantics across the upgrade.
-  const compiled: CompiledMagicRules = legacyRules.length === deduplicated.length
-    ? {
-      version: LEGACY_MAGIC_RULES_VERSION,
-      rules: legacyRules,
-    }
-    : {
-      version: MAGIC_RULES_VERSION,
-      rules: deduplicated,
-    };
-  return {
-    ok: true,
-    prompt,
-    compiled,
-    labels: deduplicated.map(magicRuleLabel),
-  };
+  return { ok: true, prompt };
 }
 
-function isMagicRule(value: unknown, version: 1 | 2): value is MagicRule {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as { kind?: unknown; piece?: unknown };
+function sortedUniquePieces(pieces: MagicPiece[]): MagicPiece[] {
+  const selected = new Set(pieces);
+  return ALL_MAGIC_PIECES.filter((piece) => selected.has(piece));
+}
+
+function ruleKey(rule: AnyMagicRule): string {
+  if (rule.kind === "double_move") return `move_sequence:${rule.piece}`;
+  if (rule.kind === "move_sequence") {
+    return `move_sequence:${sortedUniquePieces(rule.pieces).join("")}`;
+  }
+  if (rule.kind === "forbid_action") return `forbid_action:${rule.action}`;
+  return rule.kind;
+}
+
+function isMagicPiece(value: unknown): value is MagicPiece {
+  return typeof value === "string" && ALL_MAGIC_PIECES.includes(value as MagicPiece);
+}
+
+function isForbiddenAction(value: unknown): value is ForbiddenAction {
+  return value === "promotion" || value === "castling" || value === "en_passant";
+}
+
+function isLegacyRule(value: unknown, version: 1 | 2): value is PreviousMagicRule {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const candidate = value as {
+    kind?: unknown;
+    piece?: unknown;
+    pieces?: unknown;
+    maxMoves?: unknown;
+    action?: unknown;
+    [key: string]: unknown;
+  };
+  const keys = Object.keys(candidate);
   if (
     candidate.kind === "no_promotion"
     || candidate.kind === "no_castling"
     || candidate.kind === "no_en_passant"
   ) {
-    return candidate.piece === undefined;
+    return keys.length === 1;
   }
-  if (candidate.kind === "double_move") {
-    return candidate.piece === "r"
-      || (version === MAGIC_RULES_VERSION && candidate.piece === "n");
+  if (candidate.kind !== "double_move") return false;
+  return (
+    candidate.piece === "r"
+    || (version === PREVIOUS_MAGIC_RULES_VERSION && candidate.piece === "n")
+  )
+    && keys.length === 2;
+}
+
+function isV3Rule(value: unknown): value is MagicRule {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const candidate = value as {
+    kind?: unknown;
+    piece?: unknown;
+    pieces?: unknown;
+    maxMoves?: unknown;
+    action?: unknown;
+    [key: string]: unknown;
+  };
+  const keys = Object.keys(candidate);
+  if (candidate.kind === "forbid_action") {
+    return isForbiddenAction(candidate.action)
+      && keys.length === 2;
   }
-  return false;
+  if (candidate.kind !== "move_sequence") return false;
+  return Array.isArray(candidate.pieces)
+    && candidate.pieces.length > 0
+    && candidate.pieces.length <= ALL_MAGIC_PIECES.length
+    && candidate.pieces.every(isMagicPiece)
+    && new Set(candidate.pieces).size === candidate.pieces.length
+    && Number.isInteger(candidate.maxMoves)
+    && (candidate.maxMoves as number) >= 2
+    && (candidate.maxMoves as number) <= MAGIC_MAX_MOVES_PER_TURN
+    && keys.length === 3;
+}
+
+export function validateCompiledMagicRules(value: unknown): CompiledMagicRules {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Compiled magic rules are invalid");
+  }
+  const candidate = value as {
+    version?: unknown;
+    rules?: unknown;
+    [key: string]: unknown;
+  };
+  if (
+    Object.keys(candidate).some((key) => key !== "version" && key !== "rules")
+    || !Array.isArray(candidate.rules)
+    || candidate.rules.length === 0
+    || candidate.rules.length > 6
+  ) {
+    throw new Error("Compiled magic rules are invalid");
+  }
+  if (
+    candidate.version === LEGACY_MAGIC_RULES_VERSION
+    || candidate.version === PREVIOUS_MAGIC_RULES_VERSION
+  ) {
+    if (!candidate.rules.every((rule) =>
+      isLegacyRule(rule, candidate.version as 1 | 2))) {
+      throw new Error("Compiled magic rules are invalid");
+    }
+  } else if (
+    candidate.version !== MAGIC_RULES_VERSION
+    || !candidate.rules.every(isV3Rule)
+  ) {
+    throw new Error("Compiled magic rules are invalid");
+  }
+
+  const rules = candidate.rules as AnyMagicRule[];
+  const unique = new Set(rules.map(ruleKey));
+  if (unique.size !== rules.length) {
+    throw new Error("Compiled magic rules are invalid");
+  }
+
+  const moveCounts = new Map<MagicPiece, number>();
+  for (const rule of rules) {
+    if (rule.kind === "double_move") {
+      if (moveCounts.has(rule.piece)) throw new Error("Compiled magic rules are invalid");
+      moveCounts.set(rule.piece, 2);
+    }
+    if (rule.kind === "move_sequence") {
+      for (const piece of rule.pieces) {
+        if (moveCounts.has(piece)) throw new Error("Compiled magic rules are invalid");
+        moveCounts.set(piece, rule.maxMoves);
+      }
+    }
+  }
+
+  if (candidate.version === LEGACY_MAGIC_RULES_VERSION) {
+    return {
+      version: LEGACY_MAGIC_RULES_VERSION,
+      rules: (candidate.rules as LegacyMagicRule[]).map((rule) => ({ ...rule })),
+    };
+  }
+  if (candidate.version === PREVIOUS_MAGIC_RULES_VERSION) {
+    return {
+      version: PREVIOUS_MAGIC_RULES_VERSION,
+      rules: (candidate.rules as PreviousMagicRule[]).map((rule) => ({ ...rule })),
+    };
+  }
+  return {
+    version: MAGIC_RULES_VERSION,
+    rules: (candidate.rules as MagicRule[]).map((rule) =>
+      rule.kind === "move_sequence"
+        ? {
+          kind: "move_sequence",
+          pieces: sortedUniquePieces(rule.pieces),
+          maxMoves: rule.maxMoves,
+        }
+        : {
+          kind: "forbid_action",
+          action: rule.action,
+        }),
+  };
+}
+
+export function magicRuleLabel(rule: AnyMagicRule): string {
+  if (rule.kind === "double_move") {
+    return `${PIECE_NAMES[rule.piece]} may move up to 2 times per turn; check ends the turn`;
+  }
+  if (rule.kind === "move_sequence") {
+    const pieces = sortedUniquePieces(rule.pieces);
+    const subject = pieces.length === ALL_MAGIC_PIECES.length
+      ? "Every piece"
+      : pieces.map((piece) => PIECE_NAMES[piece]).join(", ");
+    return `${subject} may move up to ${rule.maxMoves} times per turn; check ends the turn`;
+  }
+  const action = rule.kind === "forbid_action"
+    ? rule.action
+    : rule.kind === "no_promotion"
+      ? "promotion"
+      : rule.kind === "no_castling"
+        ? "castling"
+        : "en_passant";
+  if (action === "promotion") return "Pawns cannot move onto the final rank";
+  if (action === "castling") return "No castling";
+  return "No en passant";
 }
 
 export function serializeMagicRules(rules: CompiledMagicRules | null): string | null {
@@ -244,45 +279,45 @@ export function parseStoredMagicRules(value: string | null | undefined): Compile
   } catch {
     throw new Error("Stored magic rules are invalid");
   }
-  if (!parsed || typeof parsed !== "object") {
+  try {
+    return validateCompiledMagicRules(parsed);
+  } catch {
     throw new Error("Stored magic rules are invalid");
   }
-  const candidate = parsed as { version?: unknown; rules?: unknown };
-  if (
-    (
-      candidate.version !== LEGACY_MAGIC_RULES_VERSION
-      && candidate.version !== MAGIC_RULES_VERSION
-    )
-    || !Array.isArray(candidate.rules)
-    || candidate.rules.length === 0
-    || candidate.rules.length > 6
-    || !candidate.rules.every((rule) =>
-      isMagicRule(rule, candidate.version as 1 | 2))
-  ) {
-    throw new Error("Stored magic rules are invalid");
-  }
-  const unique = new Set(candidate.rules.map(ruleKey));
-  if (unique.size !== candidate.rules.length) {
-    throw new Error("Stored magic rules are invalid");
-  }
-  return candidate.version === LEGACY_MAGIC_RULES_VERSION
-    ? {
-      version: LEGACY_MAGIC_RULES_VERSION,
-      rules: candidate.rules as LegacyMagicRule[],
+}
+
+export function magicMoveLimit(
+  rules: CompiledMagicRules | null | undefined,
+  piece: MagicPiece,
+): number {
+  let limit = 1;
+  for (const rule of rules?.rules ?? []) {
+    if (rule.kind === "double_move" && rule.piece === piece) limit = Math.max(limit, 2);
+    if (rule.kind === "move_sequence" && rule.pieces.includes(piece)) {
+      limit = Math.max(limit, rule.maxMoves);
     }
-    : {
-      version: MAGIC_RULES_VERSION,
-      rules: candidate.rules as MagicRule[],
-    };
+  }
+  return limit;
 }
 
 export function hasMagicRule(
   rules: CompiledMagicRules | null | undefined,
-  kind: MagicRule["kind"],
-  piece?: DoubleMovePiece,
+  kind: "double_move" | "no_promotion" | "no_castling" | "no_en_passant",
+  piece?: MagicPiece,
 ): boolean {
+  if (kind === "double_move") {
+    return piece !== undefined && magicMoveLimit(rules, piece) > 1;
+  }
+  const action: ForbiddenAction = kind === "no_promotion"
+    ? "promotion"
+    : kind === "no_castling"
+      ? "castling"
+      : "en_passant";
   return Boolean(rules?.rules.some((rule) =>
-    rule.kind === kind && (piece === undefined || ("piece" in rule && rule.piece === piece))));
+    (rule.kind === "forbid_action" && rule.action === action)
+    || (action === "promotion" && rule.kind === "no_promotion")
+    || (action === "castling" && rule.kind === "no_castling")
+    || (action === "en_passant" && rule.kind === "no_en_passant")));
 }
 
 export function publicMagicRules(

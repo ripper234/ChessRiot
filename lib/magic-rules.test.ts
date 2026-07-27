@@ -1,81 +1,51 @@
 import { describe, expect, it } from "vitest";
 import {
-  compileMagicPrompt,
   MAGIC_PROMPT_MAX_LENGTH,
+  magicMoveLimit,
+  magicRuleLabel,
+  normalizeMagicPrompt,
   parseStoredMagicRules,
   serializeMagicRules,
+  validateCompiledMagicRules,
+  type CompiledMagicRules,
 } from "./magic-rules";
 
-describe("Magic Rules compiler", () => {
-  it("compiles the two product examples into immutable canonical rules", () => {
-    const result = compileMagicPrompt(
-      "Rooks move twice. Pawns never get promoted.",
-    );
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.compiled).toEqual({
-      version: 1,
-      rules: [
-        { kind: "double_move", piece: "r" },
-        { kind: "no_promotion" },
-      ],
-    });
-    expect(result.labels).toEqual([
-      "Rooks may move twice; check ends the turn",
-      "Pawns cannot move onto the final rank",
-    ]);
-  });
+const TRIPLE_KNIGHT: CompiledMagicRules = {
+  version: 3,
+  rules: [{
+    kind: "move_sequence",
+    pieces: ["n"],
+    maxMoves: 3,
+  }],
+};
 
-  it("normalizes aliases, Unicode, whitespace, and duplicate rules", () => {
-    const result = compileMagicPrompt(
-      "  Please　make it so that rooks can move twice AND rooks have two moves.  ",
-    );
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.compiled.rules).toEqual([
-      { kind: "double_move", piece: "r" },
-    ]);
-  });
-
-  it("compiles the knight example into a v2 deterministic rule", () => {
-    const result = compileMagicPrompt("Knights move twice.");
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.compiled).toEqual({
-      version: 2,
-      rules: [{ kind: "double_move", piece: "n" }],
-    });
-    expect(result.labels).toEqual([
-      "Knights may move twice; check ends the turn",
-    ]);
-  });
-
-  it("supports safe move filters without silently accepting unknown clauses", () => {
-    const supported = compileMagicPrompt("No castling; no en passant");
-    expect(supported.ok).toBe(true);
-    const mixed = compileMagicPrompt("No castling and queens explode");
-    expect(mixed).toMatchObject({
-      ok: false,
-      unsupported: ["queens explode"],
+describe("Magic Rules documents", () => {
+  it("normalizes Unicode and whitespace without changing the player's language", () => {
+    expect(normalizeMagicPrompt("  פרשים　זזים   3 פעמים  ")).toEqual({
+      ok: true,
+      prompt: "פרשים זזים 3 פעמים",
     });
   });
 
-  it("rejects empty, overlong, control-character, and prompt-injection text", () => {
-    expect(compileMagicPrompt("")).toMatchObject({ ok: false });
-    expect(compileMagicPrompt("x".repeat(MAGIC_PROMPT_MAX_LENGTH + 1)))
+  it("rejects empty, overlong, and control-character prompts", () => {
+    expect(normalizeMagicPrompt("")).toMatchObject({ ok: false });
+    expect(normalizeMagicPrompt("x".repeat(MAGIC_PROMPT_MAX_LENGTH + 1)))
       .toMatchObject({ ok: false });
-    expect(compileMagicPrompt("Rooks move twice\u0000"))
-      .toMatchObject({ ok: false });
-    expect(compileMagicPrompt("<script>Rooks move twice</script>"))
+    expect(normalizeMagicPrompt("Knights move twice\u0000"))
       .toMatchObject({ ok: false });
   });
 
-  it("round-trips canonical storage, keeps v1 games readable, and fails closed on unknown versions", () => {
-    const result = compileMagicPrompt("Pawns never promote");
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    const serialized = serializeMagicRules(result.compiled);
-    expect(parseStoredMagicRules(serialized)).toEqual(result.compiled);
+  it("validates canonical v3 move counts and produces stable labels", () => {
+    expect(validateCompiledMagicRules(TRIPLE_KNIGHT)).toEqual(TRIPLE_KNIGHT);
+    expect(magicMoveLimit(TRIPLE_KNIGHT, "n")).toBe(3);
+    expect(magicMoveLimit(TRIPLE_KNIGHT, "r")).toBe(1);
+    expect(magicRuleLabel(TRIPLE_KNIGHT.rules[0]))
+      .toBe("Knights may move up to 3 times per turn; check ends the turn");
+  });
+
+  it("round-trips v3 storage and keeps strict v1/v2 games readable", () => {
+    expect(parseStoredMagicRules(serializeMagicRules(TRIPLE_KNIGHT)))
+      .toEqual(TRIPLE_KNIGHT);
     expect(parseStoredMagicRules(
       '{"version":1,"rules":[{"kind":"double_move","piece":"r"}]}',
     )).toEqual({
@@ -88,10 +58,31 @@ describe("Magic Rules compiler", () => {
       version: 2,
       rules: [{ kind: "double_move", piece: "n" }],
     });
-    expect(() => parseStoredMagicRules(
+  });
+
+  it("fails closed on unknown versions, fields, duplicates, and counts above the cap", () => {
+    for (const value of [
       '{"version":1,"rules":[{"kind":"double_move","piece":"n"}]}',
-    )).toThrow("Stored magic rules are invalid");
-    expect(() => parseStoredMagicRules('{"version":3,"rules":[{"kind":"no_promotion"}]}'))
-      .toThrow("Stored magic rules are invalid");
+      '{"version":4,"rules":[{"kind":"move_sequence","pieces":["n"],"maxMoves":3}]}',
+      '{"version":3,"rules":[{"kind":"move_sequence","pieces":["n"],"maxMoves":7}]}',
+      '{"version":3,"rules":[{"kind":"move_sequence","pieces":["n"],"maxMoves":3,"extra":true}]}',
+      '{"version":3,"rules":[{"kind":"move_sequence","pieces":["n"],"maxMoves":3}],"extra":true}',
+      '{"version":3,"rules":[{"kind":"move_sequence","pieces":["n"],"maxMoves":3},{"kind":"move_sequence","pieces":["n"],"maxMoves":3}]}',
+    ]) {
+      expect(() => parseStoredMagicRules(value))
+        .toThrow("Stored magic rules are invalid");
+    }
+  });
+
+  it("canonicalizes piece order without retaining caller-owned arrays", () => {
+    const pieces = ["q", "p"] as const;
+    const compiled = validateCompiledMagicRules({
+      version: 3,
+      rules: [{ kind: "move_sequence", pieces: [...pieces], maxMoves: 2 }],
+    });
+    expect(compiled).toEqual({
+      version: 3,
+      rules: [{ kind: "move_sequence", pieces: ["p", "q"], maxMoves: 2 }],
+    });
   });
 });

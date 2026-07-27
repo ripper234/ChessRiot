@@ -98,8 +98,12 @@ test("renders an identity-independent public homepage and guest play route", asy
   assert.match(html, /Riot Bot level/);
   assert.doesNotMatch(html, /Time per move/);
   assert.match(html, /MAGIC RULES/);
-  assert.match(html, /COMING SOON/);
-  assert.doesNotMatch(html, /Describe the rule|magic-rule-prompt|INTERPRET RULES|COMPILE RULES/);
+  assert.match(html, /Optional rules for this game/);
+  assert.match(
+    html,
+    /<input(?=[^>]*type="checkbox")[^>]*>/,
+  );
+  assert.doesNotMatch(html, /COMING SOON|INTERPRET RULES|COMPILE RULES/);
   assert.match(html, /Send feedback/);
   assert.match(html, /view issues or send a pull request on GitHub/);
   assert.doesNotMatch(html, /human check|captcha|turnstile/i);

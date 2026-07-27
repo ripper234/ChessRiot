@@ -27,6 +27,10 @@ import {
 } from "@/lib/game-creation";
 import { DIFFICULTY_LABELS } from "@/lib/game-presentation";
 import { APP_VERSION } from "@/lib/version";
+import {
+  MAGIC_PROMPT_MAX_LENGTH,
+  normalizeMagicPrompt,
+} from "@/lib/magic-rules";
 import { Brand } from "./Brand";
 import { ChessPiece } from "./ChessPiece";
 
@@ -36,6 +40,8 @@ export function CreateGame() {
   const [mode, setMode] = useState<GameMode>("solo");
   const [difficulty, setDifficulty] = useState<AiDifficulty>(3);
   const [turnPaceDays, setTurnPaceDays] = useState<TurnPaceDays>(3);
+  const [magicEnabled, setMagicEnabled] = useState(false);
+  const [magicPrompt, setMagicPrompt] = useState("");
   const [recent, setRecent] = useState<RecentGame[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -54,6 +60,11 @@ export function CreateGame() {
     event.preventDefault();
     const cleanName = name.trim();
     if (!cleanName) return;
+    const normalizedMagic = magicEnabled ? normalizeMagicPrompt(magicPrompt) : null;
+    if (magicEnabled && !normalizedMagic?.ok) {
+      setError(normalizedMagic?.message ?? "Describe the Magic Rule.");
+      return;
+    }
     if (!canUseGameStorage()) {
       setError("Allow browser storage so the opening animation and invitation can be restored.");
       return;
@@ -75,6 +86,7 @@ export function CreateGame() {
           mode,
           difficulty,
           turnPaceDays,
+          ...(normalizedMagic?.ok ? { magicPrompt: normalizedMagic.prompt } : {}),
           pending: pending.current,
         })),
       });
@@ -163,19 +175,47 @@ export function CreateGame() {
               </label>
             </div>
           </fieldset>
-          <div className="magic-box coming-soon">
-            <div className="magic-toggle">
+          <div className={`magic-box${magicEnabled ? " enabled" : ""}`}>
+            <label className="magic-toggle">
+              <input
+                type="checkbox"
+                checked={magicEnabled}
+                disabled={busy}
+                onChange={(event) => {
+                  setMagicEnabled(event.target.checked);
+                  setError("");
+                  pending.current = null;
+                }}
+              />
               <span aria-hidden="true">✦</span>
               <div>
                 <strong>MAGIC RULES</strong>
-                <small>Optional rules for future games</small>
+                <small>Optional rules for this game</small>
               </div>
-              <b>SOON</b>
-            </div>
-            <div className="magic-coming-soon" role="status">
-              <strong>COMING SOON</strong>
-              <p>Magic Rules are being developed safely on a separate preview branch.</p>
-            </div>
+              <b>{magicEnabled ? "ON" : "OFF"}</b>
+            </label>
+            {magicEnabled ? (
+              <div className="magic-prompt">
+                <label htmlFor="magic-rule-prompt">Describe the rule</label>
+                <textarea
+                  id="magic-rule-prompt"
+                  value={magicPrompt}
+                  maxLength={MAGIC_PROMPT_MAX_LENGTH}
+                  rows={3}
+                  disabled={busy}
+                  placeholder="e.g. “Knights move 3 times.”"
+                  onChange={(event) => {
+                    setMagicPrompt(event.target.value);
+                    setError("");
+                    pending.current = null;
+                  }}
+                />
+                <small>
+                  Magic interprets and locks the rule when you create the game.
+                  Unsupported or unclear clauses are rejected.
+                </small>
+              </div>
+            ) : null}
           </div>
           {mode === "solo" ? (
             <div className="difficulty-control">
@@ -226,7 +266,7 @@ export function CreateGame() {
           {error ? <p className="form-error" role="alert">{error}</p> : null}
           <button className="primary-button" disabled={busy || !name.trim()}>
             {busy
-              ? "STARTING…"
+              ? magicEnabled ? "COMPILING MAGIC…" : "STARTING…"
               : mode === "solo" ? "PLAY RIOT BOT  →" : "CREATE GAME  →"}
           </button>
         </form>

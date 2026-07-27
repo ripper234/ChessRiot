@@ -13,7 +13,7 @@ export interface ReplayFrame {
 
 type ReplayMove = Pick<
   PublicMove,
-  "ply" | "color" | "from" | "to" | "promotion" | "san" | "second" | "fenBefore" | "fenAfter"
+  "ply" | "color" | "from" | "to" | "promotion" | "san" | "second" | "continuation" | "fenBefore" | "fenAfter"
 >;
 
 /**
@@ -49,7 +49,11 @@ export function buildReplayFrames(
       if (stored.fenAfter) {
         chess = new Chess(stored.fenAfter);
         if (chess.turn() === stored.color) throw new Error("Turn did not advance");
-        if (stored.second) san = `${stored.san} → ${stored.second.san}`;
+        const continuation = stored.continuation
+          ?? (stored.second ? [stored.second] : []);
+        if (continuation.length > 0) {
+          san = [stored.san, ...continuation.map((move) => move.san)].join(" → ");
+        }
       } else {
         const move = chess.move({
           from: stored.from as Square,
@@ -65,7 +69,7 @@ export function buildReplayFrames(
         mover: stored.color,
         moveNumber: Math.ceil(stored.ply / 2),
         from: stored.from,
-        to: stored.second?.to ?? stored.to,
+        to: stored.continuation?.at(-1)?.to ?? stored.second?.to ?? stored.to,
       });
     } catch {
       throw new Error("Game history cannot be replayed");

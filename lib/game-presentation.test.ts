@@ -3,6 +3,7 @@ import { Chess } from "chess.js";
 import type { GameSnapshot, PublicMove } from "./game-types";
 import {
   actionEndpointSquares,
+  actionSanSequence,
   capturedPiecesByVictimColor,
   CHESS_PIECE_GLYPHS,
   CHESS_PIECE_NAMES,
@@ -119,6 +120,16 @@ describe("move presentation", () => {
       to: "a3",
       second: { from: "a3", to: "h3", san: "Rh3" },
     })).toEqual(["a1", "h3"]);
+  });
+
+  it("labels every leg of an atomic Magic action", () => {
+    expect(actionSanSequence({
+      san: "Na3",
+      continuation: [
+        { from: "a3", to: "b5", san: "Nb5" },
+        { from: "b5", to: "c7", san: "Nc7+" },
+      ],
+    })).toBe("Na3 → Nb5 → Nc7+");
   });
 });
 

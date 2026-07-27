@@ -74,6 +74,17 @@ describe("move confirmation intent", () => {
       second: { from: "f3", to: "e5" },
       piece: "n",
     })).toBe("Move knight g1 → f3 → e5?");
+    expect(describeMoveIntent({
+      ...MOVE,
+      from: "a6",
+      to: "a7",
+      continuation: [
+        { from: "a7", to: "a8", promotion: "n" },
+        { from: "a8", to: "b6" },
+      ],
+    })).toBe(
+      "Move pawn a6 → a7 → a8 → b6 and promote on a8 to knight?",
+    );
   });
 
   it("rejects a confirmation after the authoritative position changes", () => {

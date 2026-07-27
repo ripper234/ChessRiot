@@ -41,4 +41,23 @@ describe("gameCreatePayload", () => {
       ...pending,
     });
   });
+
+  it("submits the normalized Magic prompt in the create request without a preview token", () => {
+    expect(gameCreatePayload({
+      displayName: "Ron",
+      guestToken: "guest-token",
+      mode: "multiplayer",
+      difficulty: 3,
+      turnPaceDays: 3,
+      magicPrompt: "Knights move 3 times",
+      pending,
+    })).toEqual({
+      displayName: "Ron",
+      guestToken: "guest-token",
+      mode: "multiplayer",
+      turnPaceDays: 3,
+      magicPrompt: "Knights move 3 times",
+      ...pending,
+    });
+  });
 });

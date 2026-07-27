@@ -5,6 +5,10 @@ Play the current game at [chessriot.ripper234.chatgpt.site](https://chessriot.ri
 
 ChessRiot v0.12.1 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
 
+`feature/runtime-magic-rules-v2` is an undeployed candidate based on v0.12.1.
+Its branch-only Magic behavior is documented below so it can be reviewed and
+playtested without implying that Production already includes it.
+
 Found something confusing or have a cool rule request? Use **Feedback** inside
 the game or [open a GitHub issue](https://github.com/ripper234/ChessRiot/issues).
 
@@ -25,9 +29,12 @@ progression work, and features that still need explicit rule design.
 - Resume recent games on the same device or use a private seat link on another
   device.
 - Play complete standard chess with server-authoritative legal move validation.
-- See the Magic Rules concept in new-game setup. New rule entry is paused behind
-  a Coming Soon placeholder while the runtime feature develops in an isolated
-  preview branch.
+- Optionally describe a Magic Rule in natural language when creating a game.
+  The server interprets it once on a normalized, durable-cache miss, validates
+  a strict deterministic v3 document, and stores that immutable document on the
+  game. Supported rules include two-to-six consecutive moves by named piece
+  types and forbidding promotion, castling, or en passant. Unsupported or
+  partially supported requests are rejected in full.
 - Persist the board, player names, result, and immutable move history in Cloudflare D1.
 - Protect each seat with a private 256-bit bearer secret while preserving
   existing account memberships and older private links.
@@ -52,10 +59,12 @@ progression work, and features that still need explicit rule design.
 
 ## Current limits
 
-No new Magic Rules, arbitrary executable rule prompts, AI coach, closed-app push or email
-notifications, free-form chat, friend graph, matchmaking, ratings, rewards,
-collectible skins, or payments. Cross-device account history, Google sign-in,
-and Telegram release
+Magic Rules are limited to the explicit deterministic v3 vocabulary; arbitrary
+executable rules are never accepted. There is no standalone compile/preview
+action, and no model call occurs while a move is being played. AI coach,
+closed-app push or email notifications, free-form chat, friend graph,
+matchmaking, ratings, rewards, collectible skins, and payments remain out of
+scope. Cross-device account history, Google sign-in, and Telegram release
 announcements remain disabled until their external credentials are configured
 and the corresponding code is explicitly enabled. Guest-scoped throttles
 protect application resources, while volumetric denial-of-service protection

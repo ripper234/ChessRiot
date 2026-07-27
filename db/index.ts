@@ -49,6 +49,7 @@ export async function ensureSchema(): Promise<void> {
           second_from_square TEXT,
           second_to_square TEXT,
           second_san TEXT,
+          continuation_json TEXT,
           fen_before TEXT NOT NULL,
           fen_after TEXT NOT NULL,
           created_at TEXT NOT NULL,
@@ -111,6 +112,33 @@ export async function ensureSchema(): Promise<void> {
           lease_until TEXT NOT NULL,
           FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
         )`),
+        db.prepare(`CREATE TABLE IF NOT EXISTS magic_rule_compilations (
+          cache_key TEXT PRIMARY KEY NOT NULL,
+          compiler_version TEXT NOT NULL,
+          status TEXT NOT NULL CHECK (status IN ('pending', 'ready')),
+          rules_json TEXT,
+          lease_token TEXT,
+          lease_until INTEGER,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (
+            (
+              status = 'pending'
+              AND rules_json IS NULL
+              AND lease_token IS NOT NULL
+              AND lease_until IS NOT NULL
+            )
+            OR
+            (
+              status = 'ready'
+              AND rules_json IS NOT NULL
+              AND lease_token IS NULL
+              AND lease_until IS NULL
+            )
+          )
+        )`),
+        db.prepare(`CREATE INDEX IF NOT EXISTS magic_rule_compilations_lease_idx
+          ON magic_rule_compilations (status, lease_until)`),
         db.prepare(`CREATE TABLE IF NOT EXISTS game_actions (
           game_id TEXT NOT NULL,
           request_id TEXT NOT NULL,
@@ -274,6 +302,7 @@ export async function ensureSchema(): Promise<void> {
         { name: "second_from_square", sql: "ALTER TABLE moves ADD COLUMN second_from_square TEXT" },
         { name: "second_to_square", sql: "ALTER TABLE moves ADD COLUMN second_to_square TEXT" },
         { name: "second_san", sql: "ALTER TABLE moves ADD COLUMN second_san TEXT" },
+        { name: "continuation_json", sql: "ALTER TABLE moves ADD COLUMN continuation_json TEXT" },
       ]) {
         if ((moveColumns.results ?? []).some((current) => current.name === column.name)) {
           continue;

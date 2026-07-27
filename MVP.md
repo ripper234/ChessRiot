@@ -10,8 +10,8 @@
 - Two separate devices or browsers
 - Create, invite, and join
 - Standard legal rules and complete endings by default
-- A visible Magic Rules Coming Soon placeholder, with no new rule entry or
-  compilation in the stable release
+- Optional natural-language Magic Rules compiled once during game creation into
+  a strict immutable deterministic document
 - Durable game state and move history
 - Compatibility with existing account memberships and private-seat links
 - Turn enforcement and stale-write protection
@@ -43,7 +43,8 @@
 - Collectible skins or account-bound cosmetics
 - Native apps and app-store packaging
 - Arbitrary executable rule code or silently interpreted unsupported prompts
-- New Magic Rules until the isolated preview is explicitly approved and merged
+- Magic mechanics outside consecutive same-piece moves and explicit bans on
+  promotion, castling, or en passant
 - Google sign-in and Telegram release announcements until their external
   credentials and explicit feature flags are configured
 - Cross-device account history until an account provider is deliberately

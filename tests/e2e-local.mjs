@@ -17,6 +17,69 @@ const opsSecret = "local-ops-read-secret-for-e2e-tests";
 const accountIdSecret = "local-account-id-secret-for-e2e-tests";
 const accountBySeatToken = new Map();
 const guestIdentityByLabel = new Map();
+let magicCompilerCalls = 0;
+
+function magicModelForPrompt(prompt) {
+  if (
+    prompt.includes("fly anywhere")
+    || prompt.includes("explode")
+    || prompt.includes("7 times")
+  ) {
+    return {
+      verdict: "unsupported",
+      rules: [],
+      message: "That clause is outside the deterministic Magic engine.",
+    };
+  }
+  const rules = [];
+  if (prompt.includes("Knights move 3 times")) {
+    rules.push({
+      kind: "move_sequence",
+      pieces: ["n"],
+      maxMoves: 3,
+      action: null,
+    });
+  }
+  if (prompt.includes("Rooks move 2 times")) {
+    rules.push({
+      kind: "move_sequence",
+      pieces: ["r"],
+      maxMoves: 2,
+      action: null,
+    });
+  }
+  if (prompt.includes("Pawns never get promoted")) {
+    rules.push({
+      kind: "forbid_action",
+      pieces: [],
+      maxMoves: null,
+      action: "promotion",
+    });
+  }
+  if (prompt.includes("No castling")) {
+    rules.push({
+      kind: "forbid_action",
+      pieces: [],
+      maxMoves: null,
+      action: "castling",
+    });
+  }
+  if (prompt.includes("No en passant")) {
+    rules.push({
+      kind: "forbid_action",
+      pieces: [],
+      maxMoves: null,
+      action: "en_passant",
+    });
+  }
+  return rules.length > 0
+    ? { verdict: "supported", rules, message: "" }
+    : {
+      verdict: "ambiguous",
+      rules: [],
+      message: "Describe the piece and move count.",
+    };
+}
 
 function guestIdentityForLabel(label) {
   const key = String(label || "E2E Player");
@@ -96,6 +159,29 @@ function createRuntime() {
       OBSERVABILITY_HASH_SECRET: "local-observability-hash-secret-for-e2e",
       OPS_READ_SECRET: opsSecret,
       ACCOUNT_ID_SECRET: accountIdSecret,
+      OPENAI_API_KEY: "e2e-magic-key",
+    },
+    outboundService: async (outboundRequest) => {
+      if (new URL(outboundRequest.url).hostname !== "api.openai.com") {
+        return new Response("Unexpected outbound request", { status: 502 });
+      }
+      magicCompilerCalls += 1;
+      const payload = await outboundRequest.json();
+      const prompt = payload?.input?.find((item) => item.role === "user")
+        ?.content?.find((part) => part.type === "input_text")?.text;
+      const interpreted = magicModelForPrompt(String(prompt ?? ""));
+      return new Response(JSON.stringify({
+        output: [{
+          type: "message",
+          content: [{
+            type: "output_text",
+            text: JSON.stringify(interpreted),
+          }],
+        }],
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
     },
     defaultPersistRoot: persistRoot,
     d1Persist: true,
@@ -567,7 +653,8 @@ try {
   const magicBlack = secret();
   const magicInvite = secret();
   const magicCreateRequestId = randomUUID();
-  const magicPrompt = "Knights move twice. Rooks move twice. Pawns never get promoted.";
+  const magicPrompt = "Knights move 3 times. Rooks move 2 times. Pawns never get promoted.";
+  const compilerCallsBeforeMagic = magicCompilerCalls;
   const magicCreateResponse = await request(runtime, "/api/games", {
     method: "POST",
     body: JSON.stringify({
@@ -583,12 +670,13 @@ try {
   const magicCreated = await body(magicCreateResponse);
   const magicGameId = magicCreated.game.id;
   assert.equal(magicCreated.game.magicRules.prompt, magicPrompt);
-  assert.equal(magicCreated.game.magicRules.version, 2);
+  assert.equal(magicCreated.game.magicRules.version, 3);
   assert.deepEqual(magicCreated.game.magicRules.labels, [
-    "Knights may move twice; check ends the turn",
-    "Rooks may move twice; check ends the turn",
+    "Knights may move up to 3 times per turn; check ends the turn",
+    "Rooks may move up to 2 times per turn; check ends the turn",
     "Pawns cannot move onto the final rank",
   ]);
+  assert.equal(magicCompilerCalls, compilerCallsBeforeMagic + 1);
 
   const magicCreateRetry = await request(runtime, "/api/games", {
     method: "POST",
@@ -603,6 +691,7 @@ try {
   });
   assert.equal(magicCreateRetry.status, 200);
   assert.equal((await body(magicCreateRetry)).game.id, magicGameId);
+  assert.equal(magicCompilerCalls, compilerCallsBeforeMagic + 1);
 
   const magicCreateConflict = await request(runtime, "/api/games", {
     method: "POST",
@@ -617,6 +706,21 @@ try {
   });
   assert.equal(magicCreateConflict.status, 409);
   assert.equal((await body(magicCreateConflict)).error.code, "idempotency_conflict");
+  assert.equal(magicCompilerCalls, compilerCallsBeforeMagic + 1);
+
+  const cachedMagicCreate = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Cached Magic White",
+      mode: "multiplayer",
+      playerToken: secret(),
+      inviteToken: secret(),
+      requestId: randomUUID(),
+      magicPrompt: `  Knights move 3 times.   Rooks move 2 times. Pawns never get promoted. `,
+    }),
+  });
+  assert.equal(cachedMagicCreate.status, 201);
+  assert.equal(magicCompilerCalls, compilerCallsBeforeMagic + 1);
 
   const unsupportedMagicResponse = await request(runtime, "/api/games", {
     method: "POST",
@@ -626,11 +730,17 @@ try {
       playerToken: secret(),
       inviteToken: secret(),
       requestId: randomUUID(),
-      magicPrompt: "Knights can fly anywhere.",
+      magicPrompt: "Knights move 3 times and queens explode.",
     }),
   });
   assert.equal(unsupportedMagicResponse.status, 422);
   assert.equal((await body(unsupportedMagicResponse)).error.code, "magic_rule_unsupported");
+  assert.equal(magicCompilerCalls, compilerCallsBeforeMagic + 2);
+  const failedCompilationRows = await (await runtime.getD1Database("DB"))
+    .prepare(`SELECT COUNT(*) AS count FROM magic_rule_compilations
+      WHERE status <> 'ready'`)
+    .first();
+  assert.equal(failedCompilationRows.count, 0);
 
   const magicPreviewResponse = await request(
     runtime,
@@ -668,7 +778,7 @@ try {
     from,
     to,
     expectedVersion,
-    second,
+    continuation,
   ) => {
     const response = await request(runtime, `/api/games/${magicGameId}/moves`, {
       method: "POST",
@@ -678,7 +788,7 @@ try {
         to,
         expectedVersion,
         requestId: randomUUID(),
-        ...(second ? { second } : {}),
+        ...(continuation ? { continuation } : {}),
       }),
     });
     return { response, data: await body(response) };
@@ -691,7 +801,7 @@ try {
     "a1",
     "a3",
     3,
-    { from: "a3", to: "h3" },
+    [{ from: "a3", to: "h3" }],
   );
   assert.equal(atomicRookTurn.response.status, 200);
   assert.equal(atomicRookTurn.data.game.version, 4);
@@ -702,13 +812,21 @@ try {
     to: "h3",
     san: "Rh3",
   });
+  assert.deepEqual(atomicRookTurn.data.game.moves[2].continuation, [{
+    from: "a3",
+    to: "h3",
+    san: "Rh3",
+  }]);
   assert.equal((await playMagicMove(magicBlack, "g8", "f6", 4)).response.status, 200);
   const atomicKnightTurn = await playMagicMove(
     magicWhite,
     "g1",
     "f3",
     5,
-    { from: "f3", to: "e5" },
+    [
+      { from: "f3", to: "e5" },
+      { from: "e5", to: "c6" },
+    ],
   );
   assert.equal(atomicKnightTurn.response.status, 200);
   assert.equal(atomicKnightTurn.data.game.version, 6);
@@ -719,6 +837,11 @@ try {
     to: "e5",
     san: "Ne5",
   });
+  assert.deepEqual(atomicKnightTurn.data.game.moves[4].continuation, [
+    { from: "f3", to: "e5", san: "Ne5" },
+    { from: "e5", to: "c6", san: "Nc6" },
+  ]);
+  assert.equal(magicCompilerCalls, compilerCallsBeforeMagic + 2);
   const move = async (
     token,
     from,

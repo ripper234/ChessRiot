@@ -2,8 +2,12 @@
 
 - `app/`: Vinext pages, client interactions, and HTTP APIs.
 - `lib/game-rules.ts`: pure chess.js adapter and terminal-state logic.
-- `lib/magic-rules.ts`: legacy deterministic rule documents retained only so
-  previously created Magic games remain readable.
+- `lib/magic-rules.ts`: exact validation, canonicalization, labels, and
+  backwards-compatible parsing for immutable Magic rule documents.
+- `lib/magic-rules-interpreter.ts`: one bounded natural-language-to-v3 model
+  boundary used only during game creation.
+- `lib/magic-rules-compiler.ts`: normalized, compiler-versioned D1 cache with a
+  short compilation lease; failures are never cached.
 - `lib/computer-player.ts`: bounded server-side move search for Riot Bot.
 - `lib/computer-turn.ts`: recovery path for a pending Solo computer turn.
 - `lib/account-auth.ts`: trusted hosting identity and stable guest-id derivation.
@@ -31,9 +35,9 @@ and byte limits. One active job, a 30-minute cooldown, and daily/monthly request
 caps bound narration spend. Neither side accepts a caller-provided script,
 asset URL, model, or voice.
 
-The server is authoritative. The client submits a move, an optional second leg
-by the same Magic-enabled rook or knight, the expected version, and an
-idempotency key. Each mutation
+The server is authoritative. The client submits a move, zero or more
+continuation legs by the same Magic-enabled physical piece, the expected
+version, and an idempotency key. Each mutation
 reconstructs the chess engine from immutable history and validates FEN, turn,
 and ply invariants before the candidate. Every completed human turn atomically
 advances one ply and returns immediately. In Solo, the client then requests the
@@ -41,11 +45,21 @@ pending Riot Bot turn in the background. Every authorized game read runs the
 same pending-turn recovery, so refresh or browser closure cannot strand the
 game. A White bot opening is committed during create.
 
-Stable new-game setup contains no Magic prompt, compiler action, runtime LLM
-endpoint, or model call. Legacy immutable Magic documents remain supported for
-previously created games so their history does not break. New runtime Magic
-work lives on `feature/runtime-magic-rules` and must return through an isolated
-preview and explicit merge.
+On this feature branch, game creation accepts an optional Magic prompt. The
+server normalizes it, performs the idempotency lookup before any compilation,
+and reads a D1 cache keyed by the normalized prompt plus compiler version. A
+cache miss acquires a short lease and makes one bounded model request; only a
+strict, fully supported v3 document is stored. Concurrent non-owners retry,
+corrupt cache entries are discarded, and unsupported, ambiguous, provider, and
+validation failures are never cached. There is no standalone preview endpoint,
+and move, replay, bot, and recovery paths never call the interpreter.
+
+The deterministic engine fixes the eligible piece type and maximum sequence
+length at the start of the turn, then requires every continuation leg to use
+the same physical piece. A player may stop early after any legal leg. Giving
+check ends the turn immediately. All legs share one atomic ply, version,
+deadline update, and repetition position, including when a pawn promotes.
+Legacy immutable v1 and v2 documents remain readable.
 
 Mutation provenance uses the exact URL origin plus browser-controlled
 `Sec-Fetch-Site`. A Sites-sandboxed opaque `Origin: null` is accepted only with

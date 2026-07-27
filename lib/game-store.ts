@@ -7,6 +7,7 @@ import {
   publicMagicRules,
   type CompiledMagicRules,
 } from "./magic-rules";
+import { parseMoveContinuation } from "./move-continuation";
 import { recordEvent } from "./observability";
 import type {
   AiDifficulty,
@@ -60,6 +61,7 @@ interface MoveRow {
   second_from_square: string | null;
   second_to_square: string | null;
   second_san: string | null;
+  continuation_json: string | null;
   fen_before: string;
   fen_after: string;
   created_at: string;
@@ -128,25 +130,32 @@ export async function readMoves(gameId: string): Promise<StoredMove[]> {
     .prepare("SELECT * FROM moves WHERE game_id = ? ORDER BY ply ASC")
     .bind(gameId)
     .all<MoveRow>();
-  return (result.results ?? []).map((row: MoveRow) => ({
-    ply: row.ply,
-    requestId: row.request_id,
-    color: row.color,
-    from: row.from_square,
-    to: row.to_square,
-    promotion: row.promotion,
-    san: row.san,
-    second: row.second_from_square && row.second_to_square && row.second_san
+  return (result.results ?? []).map((row: MoveRow) => {
+    const legacySecond = row.second_from_square && row.second_to_square && row.second_san
       ? {
         from: row.second_from_square,
         to: row.second_to_square,
         san: row.second_san,
       }
-      : null,
-    fenBefore: row.fen_before,
-    fenAfter: row.fen_after,
-    createdAt: row.created_at,
-  }));
+      : null;
+    const continuation = row.continuation_json === null
+      ? legacySecond ? [legacySecond] : []
+      : parseMoveContinuation(row.continuation_json);
+    return {
+      ply: row.ply,
+      requestId: row.request_id,
+      color: row.color,
+      from: row.from_square,
+      to: row.to_square,
+      promotion: row.promotion,
+      san: row.san,
+      continuation,
+      second: continuation[0] ?? null,
+      fenBefore: row.fen_before,
+      fenAfter: row.fen_after,
+      createdAt: row.created_at,
+    };
+  });
 }
 
 export function playerColor(game: GameRow, tokenHash: string): Color | null {
@@ -326,6 +335,7 @@ export function snapshot(game: GameRow, moves: StoredMove[], you: Color): GameSn
       to,
       promotion,
       san,
+      continuation,
       second,
       fenBefore,
       fenAfter,
@@ -337,6 +347,7 @@ export function snapshot(game: GameRow, moves: StoredMove[], you: Color): GameSn
       to,
       promotion,
       san,
+      continuation,
       second,
       fenBefore,
       fenAfter,

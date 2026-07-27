@@ -31,6 +31,7 @@ import {
 } from "@/lib/game-sounds";
 import {
   actionEndpointSquares,
+  actionSanSequence,
   capturedPiecesByVictimColor,
   CHESS_PIECE_NAMES,
   checkedKingSquare as findCheckedKingSquare,
@@ -57,8 +58,8 @@ import {
   resolvedHistoryPly,
   type HistoryCursor,
 } from "@/lib/game-replay";
-import { legalMagicMoves, magicSecondStep } from "@/lib/game-rules";
-import { hasMagicRule, type DoubleMovePiece } from "@/lib/magic-rules";
+import { legalMagicMoves, magicContinuationStep } from "@/lib/game-rules";
+import { magicMoveLimit, type MagicPiece } from "@/lib/magic-rules";
 import { magicDraftTapDecision } from "@/lib/magic-turn-ui";
 import {
   describeMoveIntent,
@@ -96,9 +97,23 @@ interface DragState {
 interface MagicDraft {
   from: Square;
   to: Square;
+  promotion?: Promotion;
   pieceSquare: Square;
-  piece: DoubleMovePiece;
+  piece: MagicPiece;
+  initialPiece: MagicPiece;
+  continuation: Array<{
+    from: Square;
+    to: Square;
+    promotion?: Promotion;
+  }>;
+  maxMoves: number;
   fen: string;
+}
+
+interface PendingPromotion {
+  from: Square;
+  to: Square;
+  continuation?: boolean;
 }
 
 export function GameRoom({ gameId }: { gameId: string }) {
@@ -106,7 +121,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [optimisticGame, setOptimisticGame] = useState<GameSnapshot | null>(null);
   const game = optimisticGame ?? serverGame;
   const [selected, setSelected] = useState<Square | null>(null);
-  const [promotionMove, setPromotionMove] = useState<{ from: Square; to: Square } | null>(null);
+  const [promotionMove, setPromotionMove] = useState<PendingPromotion | null>(null);
   const [magicDraft, setMagicDraft] = useState<MagicDraft | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -644,7 +659,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
     from: Square,
     to: Square,
     promotion?: Promotion,
-    second?: { from: Square; to: Square },
+    continuation?: Array<{
+      from: Square;
+      to: Square;
+      promotion?: Promotion;
+    }>,
   ): void {
     if (!game || !canMove || moveCommitInFlight.current) return;
     const piece = new Chess(game.fen).get(from)?.type ?? null;
@@ -652,7 +671,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       from,
       to,
       ...(promotion ? { promotion } : {}),
-      ...(second ? { second } : {}),
+      ...(continuation && continuation.length > 0 ? { continuation } : {}),
       expectedVersion: game.version,
       piece,
     };
@@ -696,7 +715,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
         intent.from,
         intent.to,
         intent.promotion,
-        { second: intent.second },
+        { continuation: intent.continuation },
       )
       : null;
     const authoritativeVersion = intent.expectedVersion;
@@ -719,7 +738,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
           from: intent.from,
           to: intent.to,
           ...(intent.promotion ? { promotion: intent.promotion } : {}),
-          ...(intent.second ? { second: intent.second } : {}),
+          ...(intent.continuation ? { continuation: intent.continuation } : {}),
           expectedVersion: intent.expectedVersion,
           requestId: generateUuid(),
         }),
@@ -817,45 +836,132 @@ export function GameRoom({ gameId }: { gameId: string }) {
         playInvalidSound();
         return;
       }
-      requestMove(
-        magicDraft.from,
-        magicDraft.to,
-        undefined,
-        { from, to },
-      );
+      if (targetMoves.some((move) => Boolean(move.promotion))) {
+        setPromotionMove({ from, to, continuation: true });
+        return;
+      }
+      advanceMagicDraft(from, to);
       return;
     }
     if (targetMoves.some((move) => Boolean(move.promotion))) {
       setPromotionMove({ from, to });
       return;
     }
-    const firstMove = targetMoves[0];
-    if (
-      (firstMove?.piece === "r" || firstMove?.piece === "n")
-      && hasMagicRule(game.magicRules, "double_move", firstMove.piece)
-    ) {
-      const afterFirst = new Chess(game.fen);
-      afterFirst.move(firstMove);
-      const continuation = magicSecondStep(
-        afterFirst,
-        firstMove.to,
-        firstMove.color,
-        game.magicRules ?? null,
-      );
-      if (continuation) {
-        setMagicDraft({
-          from,
-          to,
-          pieceSquare: firstMove.to,
-          piece: continuation.piece,
-          fen: continuation.chess.fen(),
-        });
-        setSelected(firstMove.to);
-        setMessage(`Move that ${CHESS_PIECE_NAMES[continuation.piece]} again, or finish the turn.`);
-        return;
-      }
+    stageFirstMove(from, to);
+  }
+
+  function stageFirstMove(
+    from: Square,
+    to: Square,
+    promotion?: Promotion,
+  ): void {
+    if (!game) return;
+    const start = new Chess(game.fen);
+    const firstMove = legalMagicMoves(
+      start,
+      game.magicRules ?? null,
+      from,
+    ).find((move) =>
+      move.to === to && (move.promotion ?? undefined) === promotion);
+    if (!firstMove) {
+      setMessage("That move is not legal.");
+      playInvalidSound();
+      return;
     }
-    requestMove(from, to);
+    start.move(firstMove);
+    const sequence = {
+      initialPiece: firstMove.piece,
+      maxMoves: magicMoveLimit(game.magicRules, firstMove.piece),
+    };
+    const next = magicContinuationStep(
+      start,
+      firstMove.to,
+      firstMove.color,
+      game.magicRules ?? null,
+      1,
+      sequence,
+    );
+    if (!next) {
+      requestMove(from, to, promotion);
+      return;
+    }
+    setMagicDraft({
+      from,
+      to,
+      ...(promotion ? { promotion } : {}),
+      pieceSquare: firstMove.to,
+      piece: next.piece,
+      initialPiece: sequence.initialPiece,
+      continuation: [],
+      maxMoves: sequence.maxMoves,
+      fen: next.chess.fen(),
+    });
+    setSelected(firstMove.to);
+    setPromotionMove(null);
+    setMessage(
+      `Move that ${CHESS_PIECE_NAMES[next.piece]} again, or finish the turn.`,
+    );
+  }
+
+  function advanceMagicDraft(
+    from: Square,
+    to: Square,
+    promotion?: Promotion,
+  ): void {
+    if (!magicDraft || !game) return;
+    const staged = new Chess(magicDraft.fen);
+    const selectedMove = legalMagicMoves(
+      staged,
+      game.magicRules ?? null,
+      from,
+    ).find((move) =>
+      move.to === to && (move.promotion ?? undefined) === promotion);
+    if (!selectedMove) {
+      setMessage("That Magic move is not legal.");
+      playInvalidSound();
+      return;
+    }
+    staged.move(selectedMove);
+    const nextContinuation = [
+      ...magicDraft.continuation,
+      {
+        from,
+        to,
+        ...(promotion ? { promotion } : {}),
+      },
+    ];
+    const next = magicContinuationStep(
+      staged,
+      selectedMove.to,
+      selectedMove.color,
+      game.magicRules ?? null,
+      nextContinuation.length + 1,
+      {
+        initialPiece: magicDraft.initialPiece,
+        maxMoves: magicDraft.maxMoves,
+      },
+    );
+    if (!next) {
+      requestMove(
+        magicDraft.from,
+        magicDraft.to,
+        magicDraft.promotion,
+        nextContinuation,
+      );
+      return;
+    }
+    setMagicDraft({
+      ...magicDraft,
+      pieceSquare: selectedMove.to,
+      piece: next.piece,
+      continuation: nextContinuation,
+      fen: next.chess.fen(),
+    });
+    setSelected(selectedMove.to);
+    setPromotionMove(null);
+    setMessage(
+      `Magic move ${nextContinuation.length + 1} of ${next.maxMoves}. Move that ${CHESS_PIECE_NAMES[next.piece]} again, or finish the turn.`,
+    );
   }
 
   function tapSquare(square: Square) {
@@ -1298,7 +1404,12 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 type="button"
                 className="primary-button"
                 disabled={busy || viewingHistory}
-                onClick={() => requestMove(magicDraft.from, magicDraft.to)}
+                onClick={() => requestMove(
+                  magicDraft.from,
+                  magicDraft.to,
+                  magicDraft.promotion,
+                  magicDraft.continuation,
+                )}
               >
                 FINISH TURN
               </button>
@@ -1491,15 +1602,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
                     {Array.from({ length: Math.ceil(game.moves.length / 2) }, (_, index) => (
                       <li key={index}><span>{index + 1}.</span><b>
                         {game.moves[index * 2]
-                          ? `${game.moves[index * 2].san}${game.moves[index * 2].second
-                            ? ` → ${game.moves[index * 2].second!.san}`
-                            : ""}`
+                          ? actionSanSequence(game.moves[index * 2])
                           : ""}
                       </b><b>
                         {game.moves[index * 2 + 1]
-                          ? `${game.moves[index * 2 + 1].san}${game.moves[index * 2 + 1].second
-                            ? ` → ${game.moves[index * 2 + 1].second!.san}`
-                            : ""}`
+                          ? actionSanSequence(game.moves[index * 2 + 1])
                           : ""}
                       </b></li>
                     ))}
@@ -1537,7 +1644,13 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 key={piece}
                 aria-label={`Promote to ${CHESS_PIECE_NAMES[piece]}`}
                 autoFocus={piece === "q"}
-                onClick={() => requestMove(promotionMove.from, promotionMove.to, piece)}
+                onClick={() => {
+                  if (promotionMove.continuation) {
+                    advanceMagicDraft(promotionMove.from, promotionMove.to, piece);
+                  } else {
+                    stageFirstMove(promotionMove.from, promotionMove.to, piece);
+                  }
+                }}
               >
                 <ChessPiece type={piece} color={game.you.color} />
               </button>

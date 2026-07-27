@@ -15,12 +15,12 @@
 | CR-009 | A winning piece defeats the king on checkmate | Shipped as a short, theme-aware, reduced-motion-safe finisher. |
 | CR-010 | Subtle release updates and optional louder alerts | The unseen-release blue dot is shipped. Account-wide move alerts are dormant in guest mode. |
 | CR-011 | Per-game Magic Rules | Shipped with immutable, allowlisted rules for atomic two-step rooks or knights, no promotion, no castling, and no en passant. Unsupported prose is rejected. |
-| CR-012 | Isolated branch preview environments | In progress. Runtime Magic lives on `feature/runtime-magic-rules`; Control exposes active feature previews without promoting them to Development. |
+| CR-012 | Isolated branch preview environments | In progress. Runtime Magic v2 lives on `feature/runtime-magic-rules-v2` without changing Development or Production. |
 | CR-013 | Optional confirmation before every move | Shipped as a default-off, browser-local setting covering tap, drag, keyboard, promotion, and complete Magic turns. |
 | CR-015 | Solo is the default mode | Shipped in v0.9.3. The new-game screen opens with Solo selected and Level 3 visible. |
 | CR-016 | White always begins | Verified in v0.9.3. White is always the first mover; Riot Bot commits the opening before a Black-side human can act. |
-| CR-017 | Understand Magic Rules at runtime | Planned. Replace the fixed phrase compiler with a safe runtime interpretation boundary while preserving deterministic stored rules. |
-| CR-018 | Numeric knight move counts | Planned with CR-017. Support equivalent wording such as “2 times” and define exact behavior for counts above two before shipping. |
+| CR-017 | Understand Magic Rules at runtime | Implemented on `feature/runtime-magic-rules-v2`, awaiting review and playtest. Game creation uses one cached interpretation boundary and stores strict deterministic rules; moves make no model calls. |
+| CR-018 | Numeric knight move counts | Implemented with CR-017 on the feature branch, awaiting review and playtest. Equivalent numeric and multilingual wording compiles to exact two-to-six move limits. |
 
 This is the durable product backlog recovered from
 [GitHub issue #11](https://github.com/ripper234/ChessRiot/issues/11) and

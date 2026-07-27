@@ -24,10 +24,12 @@ import type { AiDifficulty } from "@/lib/game-types";
 import { recordEvent } from "@/lib/observability";
 import { enforceAccountRateLimit, resolveGuestApiAccount } from "@/lib/accounts";
 import {
-  compileMagicPrompt,
+  normalizeMagicPrompt,
   serializeMagicRules,
   type CompiledMagicRules,
 } from "@/lib/magic-rules";
+import { compileMagicPromptCached } from "@/lib/magic-rules-compiler";
+import { serializeMoveContinuation } from "@/lib/move-continuation";
 
 export const dynamic = "force-dynamic";
 
@@ -68,16 +70,13 @@ export async function POST(request: Request) {
     ? body.turnPaceDays === undefined ? 3 : body.turnPaceDays
     : null;
   let magicPrompt: string | null = null;
-  let magicRules: CompiledMagicRules | null = null;
   if (body.magicPrompt !== undefined && body.magicPrompt !== null && body.magicPrompt !== "") {
-    const magic = compileMagicPrompt(body.magicPrompt);
-    if (!magic.ok) {
-      return apiError(422, "magic_rule_unsupported", magic.message);
+    const normalized = normalizeMagicPrompt(body.magicPrompt);
+    if (!normalized.ok) {
+      return apiError(422, "magic_rule_invalid", normalized.message);
     }
-    magicPrompt = magic.prompt;
-    magicRules = magic.compiled;
+    magicPrompt = normalized.prompt;
   }
-  const magicRulesJson = serializeMagicRules(magicRules);
   const turnPaceMatches = (value: number | null) =>
     value === turnPaceDays
     || (mode === "multiplayer" && body.turnPaceDays === undefined && value === null);
@@ -94,13 +93,6 @@ export async function POST(request: Request) {
     token: guestToken,
     displayName,
   });
-  const rate = await enforceAccountRateLimit(account.id, "game_create", 10, 60 * 60);
-  if (!rate.allowed) {
-    return json(
-      { error: { code: "rate_limited", message: "Too many games created. Try again later." } },
-      { status: 429, headers: { "retry-after": String(rate.retryAfter) } },
-    );
-  }
 
   await ensureSchema();
   const [playerHash, inviteHash] = await Promise.all([hashSecret(playerToken), hashSecret(inviteToken)]);
@@ -115,8 +107,7 @@ export async function POST(request: Request) {
       existing.game_mode !== mode ||
       existing.ai_difficulty !== difficulty ||
       !turnPaceMatches(existing.turn_pace_days) ||
-      existing.magic_prompt !== magicPrompt ||
-      existing.magic_rules_json !== magicRulesJson
+      existing.magic_prompt !== magicPrompt
     ) {
       return apiError(409, "idempotency_conflict", "This request id was already used");
     }
@@ -128,6 +119,39 @@ export async function POST(request: Request) {
         : {}),
     });
   }
+
+  const rate = await enforceAccountRateLimit(account.id, "game_create", 10, 60 * 60);
+  if (!rate.allowed) {
+    return json(
+      { error: { code: "rate_limited", message: "Too many games created. Try again later." } },
+      { status: 429, headers: { "retry-after": String(rate.retryAfter) } },
+    );
+  }
+
+  let magicRules: CompiledMagicRules | null = null;
+  if (magicPrompt) {
+    const compilation = await compileMagicPromptCached(magicPrompt);
+    if (!compilation.ok) {
+      const code = compilation.code === "ambiguous"
+        ? "magic_rule_ambiguous"
+        : compilation.code === "unsupported"
+          ? "magic_rule_unsupported"
+          : compilation.code === "invalid_prompt"
+            ? "magic_rule_invalid"
+            : "magic_rule_unavailable";
+      return json(
+        { error: { code, message: compilation.message } },
+        {
+          status: compilation.code === "unavailable" ? 503 : 422,
+          ...(compilation.code === "unavailable"
+            ? { headers: { "retry-after": "2" } }
+            : {}),
+        },
+      );
+    }
+    magicRules = compilation.compiled;
+  }
+  const magicRulesJson = serializeMagicRules(magicRules);
 
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
@@ -216,8 +240,8 @@ export async function POST(request: Request) {
         db.prepare(`INSERT INTO moves (
           game_id, ply, request_id, color, from_square, to_square, promotion,
           san, second_from_square, second_to_square, second_san,
-          fen_before, fen_after, created_at
-        ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+          continuation_json, fen_before, fen_after, created_at
+        ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
           .bind(
             id,
             crypto.randomUUID(),
@@ -229,6 +253,7 @@ export async function POST(request: Request) {
             openingCandidate.second?.from ?? null,
             openingCandidate.second?.to ?? null,
             opening.secondMove?.san ?? null,
+            serializeMoveContinuation(opening.continuationMoves),
             opening.fenBefore,
             opening.fenAfter,
             now,
@@ -247,8 +272,7 @@ export async function POST(request: Request) {
       raced.game_mode !== mode ||
       raced.ai_difficulty !== difficulty ||
       !turnPaceMatches(raced.turn_pace_days) ||
-      raced.magic_prompt !== magicPrompt ||
-      raced.magic_rules_json !== magicRulesJson
+      raced.magic_prompt !== magicPrompt
     ) {
       return apiError(409, "idempotency_conflict", "Could not create this game");
     }

@@ -16,6 +16,7 @@ interface GameCreateInput {
   mode: GameMode;
   difficulty: AiDifficulty;
   turnPaceDays: TurnPaceDays;
+  magicPrompt?: string;
   pending: PendingGameCreate;
 }
 
@@ -26,6 +27,7 @@ export function gameCreatePayload(input: GameCreateInput) {
     mode: input.mode,
     ...(input.mode === "solo" ? { difficulty: input.difficulty } : {}),
     ...(input.mode === "multiplayer" ? { turnPaceDays: input.turnPaceDays } : {}),
+    ...(input.magicPrompt ? { magicPrompt: input.magicPrompt } : {}),
     ...input.pending,
   };
 }

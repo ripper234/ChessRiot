@@ -1,5 +1,33 @@
 # ChessRiot v0.12.1 specification
 
+## Runtime Magic Rules v2 branch candidate
+
+This undeployed feature branch is based on v0.12.1 and does not change the
+release number. It replaces the stable Coming Soon new-game boundary on this
+branch only.
+
+- Game creation accepts an optional natural-language Magic prompt in any
+  language. The server normalizes the prompt and checks request idempotency
+  before compilation.
+- A normalized prompt is interpreted once on a compiler-versioned D1 cache
+  miss. A short lease prevents concurrent duplicate provider calls. Successful
+  output must validate as an exact deterministic v3 document before it is
+  cached or stored on the game; unsupported, ambiguous, provider, and
+  validation failures are never cached.
+- Supported v3 rules let named standard piece types move two through six times
+  in one turn, or forbid promotion, castling, or en passant. Requests with any
+  unsupported clause are rejected in full. There is no token-consuming
+  standalone preview action.
+- Consecutive legs use the same physical piece. Eligibility and the maximum
+  count are fixed from that piece at the start of the turn, even if a pawn
+  promotes. The player may stop after any legal leg, and giving check ends the
+  turn immediately.
+- Every sequence commits as one atomic ply, version, deadline action, and
+  repetition position. Human moves, Riot Bot, history, replay, sound, and
+  confirmation use the same stored deterministic rules with no model call
+  during play.
+- Strict parsing retains immutable v1 and v2 game compatibility.
+
 ## v0.11.0 release additions
 
 - `/demo` presents a 90-second explainer assembled from current ChessRiot
@@ -258,7 +286,9 @@ This file and `MVP.md` are the source of truth for the current milestone.
    `/app` directly.
 2. The player enters a display name. Solo is selected by default; Multiplayer
    remains available without an account or human check.
-3. The player sees Magic Rules as Coming Soon. New games use standard chess.
+3. The player may enable Magic Rules and enter a short natural-language rule.
+   The rule is compiled and validated only when the game is created; leaving
+   Magic off creates a standard-chess game.
 4. Solo reveals a five-step Bot level bar that starts at Level 3, Medium. Colors are assigned evenly and deterministically from the idempotent create request. If Riot Bot is White, its legal opening is committed before the game appears.
 5. Multiplayer asks for a one, three, or five-day move pace, then opens White's reusable private game URL and shows a separate one-use invitation URL.
 6. Black opens that invitation on another device, reviews any Magic Rules,
@@ -269,16 +299,18 @@ This file and `MVP.md` are the source of truth for the current milestone.
 
 ## Rules and persistence
 
-- Standard chess is the only new-game option, implemented with chess.js.
-  Previously stored games may carry an immutable legacy Magic document.
+- Standard chess remains the default, implemented with chess.js. An optional
+  new-game prompt may compile to a strict immutable v3 Magic document.
+  Previously stored v1 and v2 documents remain valid.
 - D1 stores current FEN, status, version, mode, bot level, Magic prompt and
   compiled rules, players, hashed keys, and immutable ordered turn actions.
 - Every move carries an expected version and idempotency key.
 - A conditional update plus move insert runs atomically. Stale, illegal, wrong-turn, unauthorized, and completed-game moves do not mutate state.
-- A two-step rook or knight action stores both legal legs in one move row and
-  advances the turn, version, ply count, deadline, and repetition counter only
-  once. The stored schema version determines the supported double-move pieces;
-  v1 remains valid for existing rook games and v2 adds knights.
+- A v3 multi-move action stores every legal continuation leg in one move row
+  and advances the turn, version, ply count, deadline, and repetition counter
+  only once. The eligible piece and limit are fixed at turn start; all legs use
+  the same physical piece, the player may stop early, and check ends the turn.
+  Legacy second-leg columns and v1/v2 rule documents remain readable.
 - In Solo, the human move commits atomically as one ply and returns immediately.
   The client then requests Riot Bot's pending turn in the background. Riot Bot
   evaluates from its assigned color, uses bounded server-side search, and

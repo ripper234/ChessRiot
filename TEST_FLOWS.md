@@ -42,13 +42,28 @@
 
 ## Magic Rules
 
-1. Open `/app` and verify Magic Rules remains visible.
-2. Verify its interior says `COMING SOON` and contains no textarea, prompt,
-   Compile Rules action, Interpret Rules action, or network request.
-3. Create Solo and Multiplayer games and verify both use standard chess with no
-   new Magic banner.
-4. Reopen an older stored Magic game and verify its immutable rules, history,
-   replay, and legal moves remain readable for backwards compatibility.
+1. Open `/app`, leave Magic Rules off, and create Solo and Multiplayer games.
+   Verify both remain standard chess and make no model request.
+2. Enable Magic Rules and create games from equivalent normalized prompts.
+   Verify the first cache miss makes one provider request and later creations
+   reuse the validated D1 document. Verify an identical request-id retry is
+   resolved before compilation and a conflicting retry is rejected.
+3. Verify `Knights move twice`, `Knights move 2 times`, `Knights move 3 times`,
+   and the Hebrew equivalent of `Knights move 3 times` compile to exact v3
+   counts. Verify any prompt containing an unsupported clause is rejected in
+   full and neither failures nor partial rules are cached.
+4. Verify there is no standalone Compile or Interpret action or endpoint.
+5. Play a two-leg rook turn and a three-leg knight turn. Each continuation must
+   use the same physical piece; one-, two-, and three-leg early stops are legal;
+   a fourth leg under a three-move rule is rejected; and check ends the turn.
+6. Promote a Magic pawn on its first leg and verify the promoted physical piece
+   keeps the pawn's turn-start move limit for its remaining legal legs.
+7. Verify each completed sequence produces one move row, ply, version, deadline
+   update, and repetition position. Verify human, Riot Bot, replay, history,
+   confirmation, and sound agree, and provider-call counts do not change while
+   moves are made.
+8. Reopen stored v1 and v2 Magic games and verify immutable rules, history,
+   replay, and legal moves remain readable.
 
 ## Enforcement
 
@@ -123,7 +138,7 @@
   the new position, and Go Live returns to current play.
 - During the immediate Solo move preview, press Back and verify it shows the
   position immediately before the visible move rather than skipping a ply.
-- Stage the first leg of a two-step Magic move, then press Back. Verify the
+- Stage the first leg of a multi-step Magic move, then press Back. Verify the
   draft is cancelled and the latest authoritative position is shown.
 - Verify history browsing never submits a move, claim, or Magic turn and
   suppresses live move effects and the checkmate finisher. Verify the historical
@@ -131,7 +146,7 @@
 - Verify Confirm every move is off by default. Enable it under Move Settings,
   reload and open another game in the same browser, and verify it remains on.
 - With confirmation enabled, verify tap, pointer drag, keyboard activation,
-  promotion, Magic Finish Turn, and a two-leg Magic move each open exactly one
+  promotion, Magic Finish Turn, and a multi-leg Magic move each open exactly one
   dialog and send no move before CONFIRM MOVE.
 - Verify KEEP THINKING, Escape, and backdrop cancellation send no move. Verify
   CONFIRM MOVE sends exactly one move, a rapid second activation cannot

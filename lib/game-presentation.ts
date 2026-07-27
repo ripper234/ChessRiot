@@ -3,6 +3,7 @@ import type {
   AiDifficulty,
   Color,
   GameSnapshot,
+  Promotion,
   PublicMove,
 } from "./game-types";
 
@@ -118,9 +119,21 @@ export function gameStatusText(input: GameStatusTextInput): string {
 }
 
 export function actionEndpointSquares(
-  move: Pick<PublicMove, "from" | "to" | "second">,
+  move: Pick<PublicMove, "from" | "to" | "second" | "continuation">,
 ): [string, string] {
-  return [move.from, move.second?.to ?? move.to];
+  return [
+    move.from,
+    move.continuation?.at(-1)?.to ?? move.second?.to ?? move.to,
+  ];
+}
+
+export function actionSanSequence(
+  move: Pick<PublicMove, "san" | "second" | "continuation">,
+): string {
+  const continuation = move.continuation?.length
+    ? move.continuation
+    : move.second ? [move.second] : [];
+  return [move.san, ...continuation.map((leg) => leg.san)].join(" → ");
 }
 
 export function capturedPiecesByVictimColor(
@@ -142,20 +155,26 @@ export function capturedPiecesByVictimColor(
         const capturedColor: Color = first.color === "w" ? "b" : "w";
         captured[capturedColor].push(first.captured);
       }
-      if (stored.second) {
+      const continuation = stored.continuation
+        ?? (stored.second ? [stored.second] : []);
+      for (const leg of continuation) {
+        const promotion = "promotion" in leg && typeof leg.promotion === "string"
+          ? leg.promotion as Promotion
+          : undefined;
         const fields = chess.fen().split(" ");
         fields[1] = first.color;
         if (first.color === "b") {
           fields[5] = String(Math.max(1, Number(fields[5] ?? "1") - 1));
         }
         chess = new Chess(fields.join(" "));
-        const second = chess.move({
-          from: stored.second.from as Square,
-          to: stored.second.to as Square,
+        const continued = chess.move({
+          from: leg.from as Square,
+          to: leg.to as Square,
+          ...(promotion ? { promotion } : {}),
         });
-        if (second.captured) {
-          const capturedColor: Color = second.color === "w" ? "b" : "w";
-          captured[capturedColor].push(second.captured);
+        if (continued.captured) {
+          const capturedColor: Color = continued.color === "w" ? "b" : "w";
+          captured[capturedColor].push(continued.captured);
         }
       }
       if (stored.fenAfter) chess = new Chess(stored.fenAfter);

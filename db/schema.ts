@@ -45,6 +45,7 @@ export const moves = sqliteTable(
     secondFromSquare: text("second_from_square"),
     secondToSquare: text("second_to_square"),
     secondSan: text("second_san"),
+    continuationJson: text("continuation_json"),
     fenBefore: text("fen_before").notNull(),
     fenAfter: text("fen_after").notNull(),
     createdAt: text("created_at").notNull(),
@@ -111,6 +112,37 @@ export const botTurnLeases = sqliteTable("bot_turn_leases", {
   nonce: text("nonce").notNull(),
   leaseUntil: text("lease_until").notNull(),
 });
+
+export const magicRuleCompilations = sqliteTable(
+  "magic_rule_compilations",
+  {
+    cacheKey: text("cache_key").primaryKey().notNull(),
+    compilerVersion: text("compiler_version").notNull(),
+    status: text("status").notNull(),
+    rulesJson: text("rules_json"),
+    leaseToken: text("lease_token"),
+    leaseUntil: integer("lease_until"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("magic_rule_compilations_lease_idx").on(table.status, table.leaseUntil),
+    check(
+      "magic_rule_compilations_status_check",
+      sql`${table.status} IN ('pending', 'ready')`,
+    ),
+    check(
+      "magic_rule_compilations_state_check",
+      sql`(
+        (${table.status} = 'pending' AND ${table.rulesJson} IS NULL
+          AND ${table.leaseToken} IS NOT NULL AND ${table.leaseUntil} IS NOT NULL)
+        OR
+        (${table.status} = 'ready' AND ${table.rulesJson} IS NOT NULL
+          AND ${table.leaseToken} IS NULL AND ${table.leaseUntil} IS NULL)
+      )`,
+    ),
+  ],
+);
 
 export const gameActions = sqliteTable(
   "game_actions",

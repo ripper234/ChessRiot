@@ -11,6 +11,11 @@ export interface MoveIntent {
     from: Square;
     to: Square;
   };
+  continuation?: Array<{
+    from: Square;
+    to: Square;
+    promotion?: Promotion;
+  }>;
   expectedVersion: number;
   piece: PieceSymbol | null;
 }
@@ -61,10 +66,19 @@ export function writeMoveConfirmationPreference(
 
 export function describeMoveIntent(intent: MoveIntent): string {
   const piece = intent.piece ? PIECE_NAMES[intent.piece] : "piece";
-  const route = [intent.from, intent.to, ...(intent.second ? [intent.second.to] : [])]
+  const continuation: Array<{
+    from: Square;
+    to: Square;
+    promotion?: Promotion;
+  }> = intent.continuation
+    ?? (intent.second ? [intent.second] : []);
+  const route = [intent.from, intent.to, ...continuation.map((leg) => leg.to)]
     .join(" → ");
+  const continuationPromotion = continuation.find((leg) => leg.promotion);
   const promotion = intent.promotion
     ? ` and promote to ${PROMOTION_NAMES[intent.promotion]}`
+    : continuationPromotion?.promotion
+      ? ` and promote on ${continuationPromotion.to} to ${PROMOTION_NAMES[continuationPromotion.promotion]}`
     : "";
   return `Move ${piece} ${route}${promotion}?`;
 }
