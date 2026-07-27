@@ -1,3 +1,13 @@
+CREATE TABLE `game_create_intents` (
+	`request_id` text PRIMARY KEY NOT NULL,
+	`fingerprint` text NOT NULL,
+	`lease_token` text NOT NULL,
+	`lease_until` integer NOT NULL,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL
+);
+--> statement-breakpoint
+CREATE INDEX `game_create_intents_lease_idx` ON `game_create_intents` (`lease_until`);--> statement-breakpoint
 CREATE TABLE `magic_rule_compilations` (
 	`cache_key` text PRIMARY KEY NOT NULL,
 	`compiler_version` text NOT NULL,

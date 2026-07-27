@@ -46,8 +46,11 @@
    Verify both remain standard chess and make no model request.
 2. Enable Magic Rules and create games from equivalent normalized prompts.
    Verify the first cache miss makes one provider request and later creations
-   reuse the validated D1 document. Verify an identical request-id retry is
-   resolved before compilation and a conflicting retry is rejected.
+   reuse the validated D1 document. While the first provider request is held,
+   verify an identical request-id and fingerprint returns retryable `503`, a
+   different prompt with that request id returns `409`, and neither performs a
+   second rate-limit or provider action. After success, an exact retry returns
+   the existing game.
 3. Verify `Knights move twice`, `Knights move 2 times`, `Knights move 3 times`,
    and the Hebrew equivalent of `Knights move 3 times` compile to exact v3
    counts. Verify any prompt containing an unsupported clause is rejected in
@@ -64,6 +67,11 @@
    moves are made.
 8. Reopen stored v1 and v2 Magic games and verify immutable rules, history,
    replay, and legal moves remain readable.
+9. Expire and reclaim an identical pending create intent. Verify the old owner
+   cannot commit or delete the new lease, the reclaimed attempt does not make a
+   second provider call, and a retry creates exactly one game from the cached
+   rules. Verify rate-limit, provider, and rule-validation failures leave no
+   owned intent behind.
 
 ## Enforcement
 

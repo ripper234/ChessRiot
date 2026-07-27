@@ -113,6 +113,21 @@ export const botTurnLeases = sqliteTable("bot_turn_leases", {
   leaseUntil: text("lease_until").notNull(),
 });
 
+export const gameCreateIntents = sqliteTable(
+  "game_create_intents",
+  {
+    requestId: text("request_id").primaryKey().notNull(),
+    fingerprint: text("fingerprint").notNull(),
+    leaseToken: text("lease_token").notNull(),
+    leaseUntil: integer("lease_until").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("game_create_intents_lease_idx").on(table.leaseUntil),
+  ],
+);
+
 export const magicRuleCompilations = sqliteTable(
   "magic_rule_compilations",
   {

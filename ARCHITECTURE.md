@@ -46,13 +46,20 @@ same pending-turn recovery, so refresh or browser closure cannot strand the
 game. A White bot opening is committed during create.
 
 On this feature branch, game creation accepts an optional Magic prompt. The
-server normalizes it, performs the idempotency lookup before any compilation,
-and reads a D1 cache keyed by the normalized prompt plus compiler version. A
-cache miss acquires a short lease and makes one bounded model request; only a
-strict, fully supported v3 document is stored. Concurrent non-owners retry,
-corrupt cache entries are discarded, and unsupported, ambiguous, provider, and
-validation failures are never cached. There is no standalone preview endpoint,
-and move, replay, bot, and recovery paths never call the interpreter.
+server normalizes it and first resolves an already-completed idempotent create.
+Before rate limiting, cache access, or compilation, it reserves the request id
+under a fingerprint of every canonical create field. A matching active lease
+returns a retryable response, a different fingerprint conflicts, and only an
+expired matching lease may be reclaimed. The final game writes are fenced to
+the current unexpired owner and remove the intent in the same D1 batch.
+
+The compiler reads a second D1 cache keyed by the normalized prompt plus
+compiler version. A cache miss acquires a short lease and makes one bounded
+model request; only a strict, fully supported v3 document is stored. Concurrent
+non-owners retry, corrupt cache entries are discarded, and unsupported,
+ambiguous, provider, and validation failures are never cached. There is no
+standalone preview endpoint, and move, replay, bot, and recovery paths never
+call the interpreter.
 
 The deterministic engine fixes the eligible piece type and maximum sequence
 length at the start of the turn, then requires every continuation leg to use

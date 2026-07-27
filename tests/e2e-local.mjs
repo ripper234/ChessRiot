@@ -18,6 +18,7 @@ const accountIdSecret = "local-account-id-secret-for-e2e-tests";
 const accountBySeatToken = new Map();
 const guestIdentityByLabel = new Map();
 let magicCompilerCalls = 0;
+let magicCompilerBlock = null;
 
 function magicModelForPrompt(prompt) {
   if (
@@ -44,6 +45,22 @@ function magicModelForPrompt(prompt) {
     rules.push({
       kind: "move_sequence",
       pieces: ["r"],
+      maxMoves: 2,
+      action: null,
+    });
+  }
+  if (prompt.includes("Bishops move 3 times")) {
+    rules.push({
+      kind: "move_sequence",
+      pieces: ["b"],
+      maxMoves: 3,
+      action: null,
+    });
+  }
+  if (prompt.includes("Queens move 2 times")) {
+    rules.push({
+      kind: "move_sequence",
+      pieces: ["q"],
       maxMoves: 2,
       action: null,
     });
@@ -169,6 +186,13 @@ function createRuntime() {
       const payload = await outboundRequest.json();
       const prompt = payload?.input?.find((item) => item.role === "user")
         ?.content?.find((part) => part.type === "input_text")?.text;
+      if (magicCompilerBlock?.prompt === prompt) {
+        magicCompilerBlock.started();
+        await magicCompilerBlock.wait;
+      }
+      if (String(prompt).includes("Provider unavailable")) {
+        return new Response("provider unavailable", { status: 503 });
+      }
       const interpreted = magicModelForPrompt(String(prompt ?? ""));
       return new Response(JSON.stringify({
         output: [{
@@ -649,6 +673,193 @@ try {
   });
   assert.equal(unauthorized.status, 404);
 
+  const createRaceDatabase = await runtime.getD1Database("DB");
+  const gameCreateRateHits = async () => Number((await createRaceDatabase
+    .prepare(`SELECT COALESCE(SUM(hit_count), 0) AS count
+      FROM rate_limit_windows WHERE scope = 'game_create'`)
+    .first())?.count ?? 0);
+  const createRaceRateBefore = await gameCreateRateHits();
+  const createRaceCompilerBefore = magicCompilerCalls;
+  const createRaceRequestId = randomUUID();
+  const createRacePrompt = "Bishops move 3 times";
+  const createRacePlayer = secret();
+  const createRaceInvite = secret();
+  const createRaceBody = {
+    displayName: "Create Intent Race",
+    mode: "multiplayer",
+    playerToken: createRacePlayer,
+    inviteToken: createRaceInvite,
+    requestId: createRaceRequestId,
+    magicPrompt: createRacePrompt,
+  };
+  let releaseBlockedCompiler;
+  const blockedCompiler = new Promise((resolve) => {
+    releaseBlockedCompiler = resolve;
+  });
+  let markCompilerStarted;
+  const compilerStarted = new Promise((resolve) => {
+    markCompilerStarted = resolve;
+  });
+  magicCompilerBlock = {
+    prompt: createRacePrompt,
+    wait: blockedCompiler,
+    started: markCompilerStarted,
+  };
+  const createRaceOwner = request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify(createRaceBody),
+  });
+  await compilerStarted;
+  assert.equal(magicCompilerCalls, createRaceCompilerBefore + 1);
+  assert.equal(await gameCreateRateHits(), createRaceRateBefore + 1);
+
+  const createRaceConflict = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      ...createRaceBody,
+      magicPrompt: "Queens move 2 times",
+    }),
+  });
+  assert.equal(createRaceConflict.status, 409);
+  assert.equal((await body(createRaceConflict)).error.code, "idempotency_conflict");
+  assert.equal(magicCompilerCalls, createRaceCompilerBefore + 1);
+  assert.equal(await gameCreateRateHits(), createRaceRateBefore + 1);
+
+  const createRacePending = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify(createRaceBody),
+  });
+  assert.equal(createRacePending.status, 503);
+  assert.equal((await body(createRacePending)).error.code, "game_create_pending");
+  assert.ok(Number(createRacePending.headers.get("retry-after")) >= 1);
+  assert.equal(magicCompilerCalls, createRaceCompilerBefore + 1);
+  assert.equal(await gameCreateRateHits(), createRaceRateBefore + 1);
+
+  releaseBlockedCompiler();
+  const createRaceOwnerResponse = await createRaceOwner;
+  magicCompilerBlock = null;
+  assert.equal(createRaceOwnerResponse.status, 201);
+  const createRaceCreated = await body(createRaceOwnerResponse);
+  const createRaceRetry = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify(createRaceBody),
+  });
+  assert.equal(createRaceRetry.status, 200);
+  assert.equal((await body(createRaceRetry)).game.id, createRaceCreated.game.id);
+  assert.equal(magicCompilerCalls, createRaceCompilerBefore + 1);
+  assert.equal(await gameCreateRateHits(), createRaceRateBefore + 1);
+  assert.equal((await createRaceDatabase
+    .prepare("SELECT COUNT(*) AS count FROM game_create_intents WHERE request_id = ?")
+    .bind(createRaceRequestId)
+    .first()).count, 0);
+
+  const createRateLimitedRequestId = randomUUID();
+  const preparedRateLimit = await createRaceDatabase
+    .prepare(`UPDATE rate_limit_windows SET hit_count = 10
+      WHERE scope = 'game_create' AND account_id = (
+        SELECT account_id FROM game_memberships WHERE game_id = ?
+      )`)
+    .bind(createRaceCreated.game.id)
+    .run();
+  assert.equal(preparedRateLimit.meta.changes, 1);
+  const createRateLimited = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: createRaceBody.displayName,
+      mode: "multiplayer",
+      playerToken: secret(),
+      inviteToken: secret(),
+      requestId: createRateLimitedRequestId,
+    }),
+  });
+  assert.equal(createRateLimited.status, 429);
+  assert.equal((await body(createRateLimited)).error.code, "rate_limited");
+  assert.equal((await createRaceDatabase
+    .prepare("SELECT COUNT(*) AS count FROM game_create_intents WHERE request_id = ?")
+    .bind(createRateLimitedRequestId)
+    .first()).count, 0);
+
+  const staleOwnerPrompt = "Queens move 2 times";
+  const staleOwnerRequestId = randomUUID();
+  const staleOwnerBody = {
+    displayName: "Expired Intent Race",
+    mode: "multiplayer",
+    playerToken: secret(),
+    inviteToken: secret(),
+    requestId: staleOwnerRequestId,
+    magicPrompt: staleOwnerPrompt,
+  };
+  let releaseStaleOwnerCompiler;
+  const staleOwnerCompilerWait = new Promise((resolve) => {
+    releaseStaleOwnerCompiler = resolve;
+  });
+  let markStaleOwnerStarted;
+  const staleOwnerStarted = new Promise((resolve) => {
+    markStaleOwnerStarted = resolve;
+  });
+  magicCompilerBlock = {
+    prompt: staleOwnerPrompt,
+    wait: staleOwnerCompilerWait,
+    started: markStaleOwnerStarted,
+  };
+  const staleOwnerRequest = request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify(staleOwnerBody),
+  });
+  await staleOwnerStarted;
+  const staleOwnerCompilerCalls = magicCompilerCalls;
+  await createRaceDatabase
+    .prepare("UPDATE game_create_intents SET lease_until = 0 WHERE request_id = ?")
+    .bind(staleOwnerRequestId)
+    .run();
+  const reclaimedCreate = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify(staleOwnerBody),
+  });
+  assert.equal(reclaimedCreate.status, 503);
+  assert.equal((await body(reclaimedCreate)).error.code, "magic_rule_unavailable");
+  assert.equal(magicCompilerCalls, staleOwnerCompilerCalls);
+  releaseStaleOwnerCompiler();
+  const staleOwnerResponse = await staleOwnerRequest;
+  magicCompilerBlock = null;
+  assert.equal(staleOwnerResponse.status, 503);
+  assert.equal((await body(staleOwnerResponse)).error.code, "game_create_pending");
+  assert.equal((await createRaceDatabase
+    .prepare("SELECT COUNT(*) AS count FROM games WHERE create_request_id = ?")
+    .bind(staleOwnerRequestId)
+    .first()).count, 0);
+  const reclaimedRetry = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify(staleOwnerBody),
+  });
+  assert.equal(reclaimedRetry.status, 201);
+  assert.equal(magicCompilerCalls, staleOwnerCompilerCalls);
+  assert.equal((await createRaceDatabase
+    .prepare("SELECT COUNT(*) AS count FROM game_create_intents WHERE request_id = ?")
+    .bind(staleOwnerRequestId)
+    .first()).count, 0);
+
+  const providerFailureRequestId = randomUUID();
+  const providerCallsBeforeFailure = magicCompilerCalls;
+  const providerFailure = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Provider Failure",
+      mode: "multiplayer",
+      playerToken: secret(),
+      inviteToken: secret(),
+      requestId: providerFailureRequestId,
+      magicPrompt: "Provider unavailable",
+    }),
+  });
+  assert.equal(providerFailure.status, 503);
+  assert.equal((await body(providerFailure)).error.code, "magic_rule_unavailable");
+  assert.equal(magicCompilerCalls, providerCallsBeforeFailure + 1);
+  assert.equal((await createRaceDatabase
+    .prepare("SELECT COUNT(*) AS count FROM game_create_intents WHERE request_id = ?")
+    .bind(providerFailureRequestId)
+    .first()).count, 0);
+
   const magicWhite = secret();
   const magicBlack = secret();
   const magicInvite = secret();
@@ -722,6 +933,7 @@ try {
   assert.equal(cachedMagicCreate.status, 201);
   assert.equal(magicCompilerCalls, compilerCallsBeforeMagic + 1);
 
+  const unsupportedMagicRequestId = randomUUID();
   const unsupportedMagicResponse = await request(runtime, "/api/games", {
     method: "POST",
     body: JSON.stringify({
@@ -729,7 +941,7 @@ try {
       mode: "multiplayer",
       playerToken: secret(),
       inviteToken: secret(),
-      requestId: randomUUID(),
+      requestId: unsupportedMagicRequestId,
       magicPrompt: "Knights move 3 times and queens explode.",
     }),
   });
@@ -741,6 +953,10 @@ try {
       WHERE status <> 'ready'`)
     .first();
   assert.equal(failedCompilationRows.count, 0);
+  assert.equal((await (await runtime.getD1Database("DB"))
+    .prepare("SELECT COUNT(*) AS count FROM game_create_intents WHERE request_id = ?")
+    .bind(unsupportedMagicRequestId)
+    .first()).count, 0);
 
   const magicPreviewResponse = await request(
     runtime,

@@ -7,8 +7,13 @@ release number. It replaces the stable Coming Soon new-game boundary on this
 branch only.
 
 - Game creation accepts an optional natural-language Magic prompt in any
-  language. The server normalizes the prompt and checks request idempotency
-  before compilation.
+  language. The server normalizes the prompt and checks completed request
+  idempotency before compilation.
+- Before rate limiting, cache access, or provider work, a durable D1 intent
+  reserves the request id under a hash of every canonical create field.
+  Identical in-flight retries receive a retryable response, different payloads
+  conflict, and only an expired matching lease can be reclaimed. Final game
+  writes are fenced to the current owner and atomically remove the intent.
 - A normalized prompt is interpreted once on a compiler-versioned D1 cache
   miss. A short lease prevents concurrent duplicate provider calls. Successful
   output must validate as an exact deterministic v3 document before it is

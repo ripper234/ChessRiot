@@ -6,6 +6,7 @@ import {
   playerColor,
   readMoves,
   snapshot,
+  type GameRow,
 } from "@/lib/game-store";
 import { apiError, json, readJson } from "@/lib/http";
 import {
@@ -19,8 +20,7 @@ import {
   requestIsSameOrigin,
 } from "@/lib/validation";
 import { ensureSchema, getDatabase } from "@/db";
-import type { Color } from "@/lib/game-types";
-import type { AiDifficulty } from "@/lib/game-types";
+import type { AiDifficulty, Color, TurnPaceDays } from "@/lib/game-types";
 import { recordEvent } from "@/lib/observability";
 import { enforceAccountRateLimit, resolveGuestApiAccount } from "@/lib/accounts";
 import {
@@ -30,6 +30,11 @@ import {
 } from "@/lib/magic-rules";
 import { compileMagicPromptCached } from "@/lib/magic-rules-compiler";
 import { serializeMoveContinuation } from "@/lib/move-continuation";
+import {
+  acquireGameCreateIntent,
+  gameCreateFingerprint,
+  releaseGameCreateIntent,
+} from "@/lib/game-create-intent";
 
 export const dynamic = "force-dynamic";
 
@@ -96,109 +101,168 @@ export async function POST(request: Request) {
 
   await ensureSchema();
   const [playerHash, inviteHash] = await Promise.all([hashSecret(playerToken), hashSecret(inviteToken)]);
+  const matchesCreateRequest = async (candidate: GameRow): Promise<boolean> => {
+    const existingColor = await accountPlayerColor(candidate, account.id, playerHash);
+    return humanName(candidate) === displayName
+      && playerColor(candidate, playerHash) === candidate.human_color
+      && existingColor === candidate.human_color
+      && candidate.invite_token_hash === inviteHash
+      && candidate.game_mode === mode
+      && candidate.ai_difficulty === difficulty
+      && turnPaceMatches(candidate.turn_pace_days)
+      && candidate.magic_prompt === magicPrompt;
+  };
+  const completedCreateResponse = async (candidate: GameRow) => json({
+    game: snapshot(candidate, await readMoves(candidate.id), candidate.human_color),
+    ...(mode === "multiplayer"
+      ? { inviteUrl: `${new URL(request.url).origin}/join/${inviteToken}` }
+      : {}),
+  });
   const existing = await findGameByCreateRequest(requestId);
   if (existing) {
-    const existingColor = await accountPlayerColor(existing, account.id, playerHash);
-    if (
-      humanName(existing) !== displayName ||
-      playerColor(existing, playerHash) !== existing.human_color ||
-      existingColor !== existing.human_color ||
-      existing.invite_token_hash !== inviteHash ||
-      existing.game_mode !== mode ||
-      existing.ai_difficulty !== difficulty ||
-      !turnPaceMatches(existing.turn_pace_days) ||
-      existing.magic_prompt !== magicPrompt
-    ) {
+    if (!(await matchesCreateRequest(existing))) {
       return apiError(409, "idempotency_conflict", "This request id was already used");
     }
-    const game = snapshot(existing, await readMoves(existing.id), existing.human_color);
-    return json({
-      game,
-      ...(mode === "multiplayer"
-        ? { inviteUrl: `${new URL(request.url).origin}/join/${inviteToken}` }
-        : {}),
-    });
+    return completedCreateResponse(existing);
   }
 
-  const rate = await enforceAccountRateLimit(account.id, "game_create", 10, 60 * 60);
-  if (!rate.allowed) {
+  const db = getDatabase();
+  const createFingerprint = await gameCreateFingerprint({
+    accountId: account.id,
+    displayName,
+    playerHash,
+    inviteHash,
+    mode,
+    difficulty: difficulty as AiDifficulty | null,
+    turnPaceDays: turnPaceDays as TurnPaceDays | null,
+    magicPrompt,
+  });
+  const createIntent = await acquireGameCreateIntent(
+    db,
+    requestId,
+    createFingerprint,
+  );
+  if (createIntent.status === "completed") {
+    const completed = await findGameByCreateRequest(requestId);
+    if (!completed) {
+      return json(
+        { error: { code: "game_create_pending", message: "The game is finishing creation." } },
+        { status: 503, headers: { "retry-after": "1" } },
+      );
+    }
+    if (!(await matchesCreateRequest(completed))) {
+      return apiError(409, "idempotency_conflict", "This request id was already used");
+    }
+    return completedCreateResponse(completed);
+  }
+  if (createIntent.status === "conflict") {
+    return apiError(409, "idempotency_conflict", "This request id is already being used");
+  }
+  if (createIntent.status === "pending") {
     return json(
-      { error: { code: "rate_limited", message: "Too many games created. Try again later." } },
-      { status: 429, headers: { "retry-after": String(rate.retryAfter) } },
+      {
+        error: {
+          code: "game_create_pending",
+          message: "That game is already being created. Try again in a moment.",
+        },
+      },
+      {
+        status: 503,
+        headers: { "retry-after": String(createIntent.retryAfter) },
+      },
     );
   }
 
-  let magicRules: CompiledMagicRules | null = null;
-  if (magicPrompt) {
-    const compilation = await compileMagicPromptCached(magicPrompt);
-    if (!compilation.ok) {
-      const code = compilation.code === "ambiguous"
-        ? "magic_rule_ambiguous"
-        : compilation.code === "unsupported"
-          ? "magic_rule_unsupported"
-          : compilation.code === "invalid_prompt"
-            ? "magic_rule_invalid"
-            : "magic_rule_unavailable";
+  try {
+    const completedAfterLease = await findGameByCreateRequest(requestId);
+    if (completedAfterLease) {
+      if (!(await matchesCreateRequest(completedAfterLease))) {
+        return apiError(409, "idempotency_conflict", "This request id was already used");
+      }
+      return completedCreateResponse(completedAfterLease);
+    }
+
+    const rate = await enforceAccountRateLimit(account.id, "game_create", 10, 60 * 60);
+    if (!rate.allowed) {
       return json(
-        { error: { code, message: compilation.message } },
-        {
-          status: compilation.code === "unavailable" ? 503 : 422,
-          ...(compilation.code === "unavailable"
-            ? { headers: { "retry-after": "2" } }
-            : {}),
-        },
+        { error: { code: "rate_limited", message: "Too many games created. Try again later." } },
+        { status: 429, headers: { "retry-after": String(rate.retryAfter) } },
       );
     }
-    magicRules = compilation.compiled;
-  }
-  const magicRulesJson = serializeMagicRules(magicRules);
 
-  const id = crypto.randomUUID();
-  const now = new Date().toISOString();
-  const status = mode === "solo" ? "active" : "waiting";
-  const humanColor: Color = mode === "solo" ? assignedSoloColor(requestId) : "w";
-  const computerColor: Color | null = mode === "solo"
-    ? humanColor === "w" ? "b" : "w"
-    : null;
-  const botHash = mode === "solo"
-    ? await hashSecret(`riot-bot:${id}:${crypto.randomUUID()}`)
-    : null;
-  const whiteName = humanColor === "w" ? displayName : "Riot Bot";
-  const blackName = mode === "multiplayer"
-    ? null
-    : humanColor === "b" ? displayName : "Riot Bot";
-  const whiteHash = humanColor === "w" ? playerHash : botHash;
-  const blackHash = humanColor === "b"
-    ? playerHash
-    : mode === "solo" ? botHash : null;
-  const joinedAt = mode === "solo" ? now : null;
-  const openingCandidate = mode === "solo" && computerColor === "w" && difficulty
-    ? chooseComputerMove(
-      INITIAL_FEN,
-      difficulty as AiDifficulty,
-      computerColor,
-      Math.random,
-      magicRules,
-    )
-    : null;
-  if (mode === "solo" && computerColor === "w" && !openingCandidate) {
-    return apiError(500, "computer_move_failed", "The computer could not open the game");
-  }
-  const opening = openingCandidate
-    ? applyCandidate(INITIAL_FEN, [], openingCandidate, magicRules)
-    : null;
-  const initialVersion = opening ? 1 : 0;
-  const initialPly = opening ? 1 : 0;
-  const currentFen = opening?.fenAfter ?? INITIAL_FEN;
-  const turnColor = opening?.turn ?? "w";
-  try {
-    const db = getDatabase();
+    let magicRules: CompiledMagicRules | null = null;
+    if (magicPrompt) {
+      const compilation = await compileMagicPromptCached(magicPrompt);
+      if (!compilation.ok) {
+        const code = compilation.code === "ambiguous"
+          ? "magic_rule_ambiguous"
+          : compilation.code === "unsupported"
+            ? "magic_rule_unsupported"
+            : compilation.code === "invalid_prompt"
+              ? "magic_rule_invalid"
+              : "magic_rule_unavailable";
+        return json(
+          { error: { code, message: compilation.message } },
+          {
+            status: compilation.code === "unavailable" ? 503 : 422,
+            ...(compilation.code === "unavailable"
+              ? { headers: { "retry-after": "2" } }
+              : {}),
+          },
+        );
+      }
+      magicRules = compilation.compiled;
+    }
+    const magicRulesJson = serializeMagicRules(magicRules);
+
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const status = mode === "solo" ? "active" : "waiting";
+    const humanColor: Color = mode === "solo" ? assignedSoloColor(requestId) : "w";
+    const computerColor: Color | null = mode === "solo"
+      ? humanColor === "w" ? "b" : "w"
+      : null;
+    const botHash = mode === "solo"
+      ? await hashSecret(`riot-bot:${id}:${crypto.randomUUID()}`)
+      : null;
+    const whiteName = humanColor === "w" ? displayName : "Riot Bot";
+    const blackName = mode === "multiplayer"
+      ? null
+      : humanColor === "b" ? displayName : "Riot Bot";
+    const whiteHash = humanColor === "w" ? playerHash : botHash;
+    const blackHash = humanColor === "b"
+      ? playerHash
+      : mode === "solo" ? botHash : null;
+    const joinedAt = mode === "solo" ? now : null;
+    const openingCandidate = mode === "solo" && computerColor === "w" && difficulty
+      ? chooseComputerMove(
+        INITIAL_FEN,
+        difficulty as AiDifficulty,
+        computerColor,
+        Math.random,
+        magicRules,
+      )
+      : null;
+    if (mode === "solo" && computerColor === "w" && !openingCandidate) {
+      return apiError(500, "computer_move_failed", "The computer could not open the game");
+    }
+    const opening = openingCandidate
+      ? applyCandidate(INITIAL_FEN, [], openingCandidate, magicRules)
+      : null;
+    const initialVersion = opening ? 1 : 0;
+    const initialPly = opening ? 1 : 0;
+    const currentFen = opening?.fenAfter ?? INITIAL_FEN;
+    const turnColor = opening?.turn ?? "w";
+    const commitStartedAt = Date.now();
     const writes = [
       db.prepare(`INSERT INTO games (
         id, create_request_id, status, white_name, black_name, white_token_hash,
         black_token_hash, invite_token_hash, initial_fen, current_fen, turn_color, version, ply_count,
         created_at, joined_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        FROM game_create_intents
+        WHERE request_id = ? AND fingerprint = ? AND lease_token = ?
+          AND lease_until > ?`)
         .bind(
           id,
           requestId,
@@ -216,11 +280,16 @@ export async function POST(request: Request) {
           now,
           joinedAt,
           now,
+          requestId,
+          createFingerprint,
+          createIntent.leaseToken,
+          commitStartedAt,
         ),
       db.prepare(`INSERT INTO game_settings (
         game_id, game_mode, ai_difficulty, human_color, turn_pace_days,
         magic_prompt, magic_rules_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+      ) SELECT ?, ?, ?, ?, ?, ?, ?
+        FROM games WHERE id = ? AND create_request_id = ?`)
         .bind(
           id,
           mode,
@@ -229,11 +298,14 @@ export async function POST(request: Request) {
           turnPaceDays,
           magicPrompt,
           magicRulesJson,
+          id,
+          requestId,
         ),
       db.prepare(`INSERT INTO game_memberships (
         game_id, color, account_id, claimed_at
-      ) VALUES (?, ?, ?, ?)`)
-        .bind(id, humanColor, account.id, now),
+      ) SELECT ?, ?, ?, ?
+        FROM games WHERE id = ? AND create_request_id = ?`)
+        .bind(id, humanColor, account.id, now, id, requestId),
     ];
     if (opening && openingCandidate && computerColor) {
       writes.push(
@@ -241,7 +313,8 @@ export async function POST(request: Request) {
           game_id, ply, request_id, color, from_square, to_square, promotion,
           san, second_from_square, second_to_square, second_san,
           continuation_json, fen_before, fen_after, created_at
-        ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        ) SELECT ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          FROM games WHERE id = ? AND create_request_id = ?`)
           .bind(
             id,
             crypto.randomUUID(),
@@ -257,58 +330,82 @@ export async function POST(request: Request) {
             opening.fenBefore,
             opening.fenAfter,
             now,
+            id,
+            requestId,
           ),
       );
     }
-    await db.batch(writes);
-  } catch {
-    const raced = await findGameByCreateRequest(requestId);
-    if (
-      !raced ||
-      humanName(raced) !== displayName ||
-      playerColor(raced, playerHash) !== raced.human_color ||
-      await accountPlayerColor(raced, account.id, playerHash) !== raced.human_color ||
-      raced.invite_token_hash !== inviteHash ||
-      raced.game_mode !== mode ||
-      raced.ai_difficulty !== difficulty ||
-      !turnPaceMatches(raced.turn_pace_days) ||
-      raced.magic_prompt !== magicPrompt
-    ) {
-      return apiError(409, "idempotency_conflict", "Could not create this game");
+    writes.push(
+      db.prepare(`DELETE FROM game_create_intents
+        WHERE request_id = ? AND fingerprint = ? AND lease_token = ?`)
+        .bind(requestId, createFingerprint, createIntent.leaseToken),
+    );
+    let results: D1Result<unknown>[];
+    try {
+      results = await db.batch(writes);
+    } catch {
+      const raced = await findGameByCreateRequest(requestId);
+      if (!raced || !(await matchesCreateRequest(raced))) {
+        return apiError(409, "idempotency_conflict", "Could not create this game");
+      }
+      return completedCreateResponse(raced);
     }
-    return json({
-      game: snapshot(raced, await readMoves(raced.id), raced.human_color),
-      ...(mode === "multiplayer"
-        ? { inviteUrl: `${new URL(request.url).origin}/join/${inviteToken}` }
-        : {}),
-    });
-  }
+    if ((results[0]?.meta.changes ?? 0) !== 1) {
+      const raced = await findGameByCreateRequest(requestId);
+      if (raced) {
+        if (!(await matchesCreateRequest(raced))) {
+          return apiError(409, "idempotency_conflict", "This request id was already used");
+        }
+        return completedCreateResponse(raced);
+      }
+      return json(
+        {
+          error: {
+            code: "game_create_pending",
+            message: "The create lease changed. Try again in a moment.",
+          },
+        },
+        { status: 503, headers: { "retry-after": "1" } },
+      );
+    }
 
-  const created = await findGameByCreateRequest(requestId);
-  if (!created || playerColor(created, playerHash) !== created.human_color) {
-    return apiError(500, "create_failed", "Game could not be loaded after creation");
-  }
-  if (opening && openingCandidate && computerColor) {
-    await recordEvent({
-      event: "bot.move_committed",
-      outcome: "success",
-      subjectId: created.id,
-      metadata: {
-        color: computerColor,
-        difficulty: difficulty as number,
-        opening: true,
-        magic: Boolean(magicRules),
-        ruleCount: magicRules?.rules.length ?? 0,
+    const created = await findGameByCreateRequest(requestId);
+    if (!created || playerColor(created, playerHash) !== created.human_color) {
+      return apiError(500, "create_failed", "Game could not be loaded after creation");
+    }
+    if (opening && openingCandidate && computerColor) {
+      await recordEvent({
+        event: "bot.move_committed",
+        outcome: "success",
+        subjectId: created.id,
+        metadata: {
+          color: computerColor,
+          difficulty: difficulty as number,
+          opening: true,
+          magic: Boolean(magicRules),
+          ruleCount: magicRules?.rules.length ?? 0,
+        },
+      });
+    }
+    return json(
+      {
+        game: snapshot(created, await readMoves(created.id), created.human_color),
+        ...(mode === "multiplayer"
+          ? { inviteUrl: `${new URL(request.url).origin}/join/${inviteToken}` }
+          : {}),
       },
-    });
+      { status: 201 },
+    );
+  } finally {
+    try {
+      await releaseGameCreateIntent(
+        db,
+        requestId,
+        createFingerprint,
+        createIntent.leaseToken,
+      );
+    } catch {
+      // The short lease permits a safe retry if best-effort cleanup is unavailable.
+    }
   }
-  return json(
-    {
-      game: snapshot(created, await readMoves(created.id), created.human_color),
-      ...(mode === "multiplayer"
-        ? { inviteUrl: `${new URL(request.url).origin}/join/${inviteToken}` }
-        : {}),
-    },
-    { status: 201 },
-  );
 }

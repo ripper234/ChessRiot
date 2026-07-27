@@ -112,6 +112,16 @@ export async function ensureSchema(): Promise<void> {
           lease_until TEXT NOT NULL,
           FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
         )`),
+        db.prepare(`CREATE TABLE IF NOT EXISTS game_create_intents (
+          request_id TEXT PRIMARY KEY NOT NULL,
+          fingerprint TEXT NOT NULL,
+          lease_token TEXT NOT NULL,
+          lease_until INTEGER NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )`),
+        db.prepare(`CREATE INDEX IF NOT EXISTS game_create_intents_lease_idx
+          ON game_create_intents (lease_until)`),
         db.prepare(`CREATE TABLE IF NOT EXISTS magic_rule_compilations (
           cache_key TEXT PRIMARY KEY NOT NULL,
           compiler_version TEXT NOT NULL,
