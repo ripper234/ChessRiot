@@ -97,7 +97,7 @@
   `/changelog` and verify those fixed pages do not inherit it.
 - Verify every theme changes active game panels, board, captured pieces, and
   both piece colors while preserving readable White/Black contrast.
-- Verify invalid or unavailable local storage falls back to Blockfield without
+- Verify invalid or unavailable local storage falls back to Riot without
   breaking the current page.
 - Verify desktop and mobile layouts use an original visual identity and keep the full board readable without browser zoom or horizontal overflow.
 - At 1366×768, verify the player cards, captured strip, status, and complete board fit in the viewport.
@@ -105,8 +105,8 @@
 - Verify captured pawns and pieces appear under the color that lost them, including en passant.
 - Verify the checked king square and CHECK banner are visually prominent without relying on sound.
 - Verify the fixed public, create, invitation, changelog, and error states are
-  coherent, while themed block depth and shaded-face treatments stay inside
-  the active game.
+  coherent, while every active-game theme keeps solid board squares, flat
+  vector pieces, and clean state rings without bevels or hard offset shadows.
 - Verify runtime text, requests, and assets contain no third-party block-game branding.
 - Play one distinct cue for a move, capture, check, win, loss, draw, and invalid action.
 - Do not play on first load, refresh, join-only state changes, repeated polls, or an out-of-order snapshot.

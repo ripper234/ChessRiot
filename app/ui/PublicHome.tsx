@@ -1,5 +1,17 @@
 import Link from "next/link";
+import type { PieceSymbol } from "chess.js";
+import type { Color } from "@/lib/game-types";
 import { Brand } from "./Brand";
+import { ChessPiece } from "./ChessPiece";
+
+const BACK_RANK: PieceSymbol[] = ["r", "n", "b", "q", "k", "b", "n", "r"];
+const PUBLIC_POSITION: Array<{ type: PieceSymbol; color: Color } | null> = [
+  ...BACK_RANK.map((type) => ({ type, color: "b" as const })),
+  ...Array.from({ length: 8 }, () => ({ type: "p" as const, color: "b" as const })),
+  ...Array.from({ length: 32 }, () => null),
+  ...Array.from({ length: 8 }, () => ({ type: "p" as const, color: "w" as const })),
+  ...BACK_RANK.map((type) => ({ type, color: "w" as const })),
+];
 
 export function PublicHome() {
   return (
@@ -33,16 +45,11 @@ export function PublicHome() {
         </div>
         <div className="public-board-card" aria-hidden="true">
           <div className="public-board">
-            <span>♜</span><span>♞</span><span>♝</span><span>♛</span>
-            <span>♚</span><span>♝</span><span>♞</span><span>♜</span>
-            <i /><i /><i /><i /><i /><i /><i /><i />
-            <i /><i /><i /><i /><i /><i /><i /><i />
-            <i /><i /><i /><i /><i /><i /><i /><i />
-            <i /><i /><i /><i /><i /><i /><i /><i />
-            <b>♟</b><b>♟</b><b>♟</b><b>♟</b>
-            <b>♟</b><b>♟</b><b>♟</b><b>♟</b>
-            <strong>♜</strong><strong>♞</strong><strong>♝</strong><strong>♛</strong>
-            <strong>♚</strong><strong>♝</strong><strong>♞</strong><strong>♜</strong>
+            {PUBLIC_POSITION.map((piece, index) => (
+              <span key={index}>
+                {piece ? <ChessPiece type={piece.type} color={piece.color} /> : null}
+              </span>
+            ))}
           </div>
           <p>STANDARD CHESS <span>+</span> OPTIONAL CHAOS</p>
         </div>

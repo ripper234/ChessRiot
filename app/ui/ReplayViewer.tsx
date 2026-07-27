@@ -12,13 +12,13 @@ import {
   replayFrameLabel,
 } from "@/lib/game-replay";
 import {
-  CHESS_PIECE_GLYPHS,
   CHESS_PIECE_NAMES,
   isDarkSquare,
   orientedBoardSquares,
 } from "@/lib/game-presentation";
 import type { Color, PublicMove } from "@/lib/game-types";
 import type { PublicMagicRules } from "@/lib/magic-rules";
+import { ChessPiece } from "./ChessPiece";
 
 interface ReplayViewerProps {
   moves: PublicMove[];
@@ -163,8 +163,8 @@ export function ReplayViewer({
                     {showRank ? <span className="replay-rank">{square[1]}</span> : null}
                     {showFile ? <span className="replay-file">{square[0]}</span> : null}
                     {piece ? (
-                      <span className={`replay-piece piece-${piece.color}`} aria-hidden="true">
-                        {CHESS_PIECE_GLYPHS[piece.color][piece.type]}
+                      <span className="replay-piece" aria-hidden="true">
+                        <ChessPiece type={piece.type} color={piece.color} />
                       </span>
                     ) : null}
                   </div>

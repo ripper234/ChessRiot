@@ -16,8 +16,8 @@
 - Compatibility with existing account memberships and private-seat links
 - Turn enforcement and stale-write protection
 - A selectable one, three, or five-day multiplayer move deadline
-- Mobile-friendly original voxel/block-world interface
-- Eleven original, locally persistent game themes, including seven illustrated
+- Mobile-friendly original flat 2D board and piece interface
+- Eleven original, locally persistent game themes, including six illustrated
   backgrounds, with a textless picker limited to active games
 - A visible, exact release version throughout the game app
 - Authorized, rate-limited preset cheers for joined two-player games, with a

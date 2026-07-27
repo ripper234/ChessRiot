@@ -32,7 +32,6 @@ import {
 import {
   actionEndpointSquares,
   capturedPiecesByVictimColor,
-  CHESS_PIECE_GLYPHS,
   CHESS_PIECE_NAMES,
   checkedKingSquare as findCheckedKingSquare,
   DIFFICULTY_LABELS,
@@ -71,6 +70,7 @@ import {
 import type { DrawClaim, GameSnapshot, Promotion } from "@/lib/game-types";
 import { APP_VERSION } from "@/lib/version";
 import { Brand } from "./Brand";
+import { ChessPiece } from "./ChessPiece";
 import { CheckmateFinisher } from "./CheckmateFinisher";
 import { HistoryControls } from "./HistoryControls";
 import { ReactionPanel } from "./ReactionPanel";
@@ -1204,15 +1204,17 @@ export function GameRoom({ gameId }: { gameId: string }) {
         <div className="board-column">
           <div className="match-banner">
             <div className={`player-card white-player${game.you.color === "w" ? " you-player" : ""}`}>
-              <span className="player-piece piece-w" aria-hidden="true">♟</span>
+              <span className="player-piece" aria-hidden="true">
+                <ChessPiece type="p" color="w" />
+              </span>
               <div>
                 <small>WHITE{game.you.color === "w" ? " • YOU" : ""}</small>
                 <strong>{game.players.white.name}</strong>
                 <span className="captured-by">
                   <small>CAPTURED</small>
                   <b>{lostPieces.b.length ? lostPieces.b.map((piece, index) => (
-                    <i className="piece-b" key={`white-captured-${piece}-${index}`} aria-label={`black ${CHESS_PIECE_NAMES[piece]}`}>
-                      {CHESS_PIECE_GLYPHS.b[piece]}
+                    <i key={`white-captured-${piece}-${index}`} aria-label={`black ${CHESS_PIECE_NAMES[piece]}`}>
+                      <ChessPiece type={piece} color="b" />
                     </i>
                   )) : "—"}</b>
                 </span>
@@ -1226,15 +1228,17 @@ export function GameRoom({ gameId }: { gameId: string }) {
             </div>
             <div className="versus">VS</div>
             <div className={`player-card black-player${game.you.color === "b" ? " you-player" : ""}`}>
-              <span className="player-piece piece-b" aria-hidden="true">♟</span>
+              <span className="player-piece" aria-hidden="true">
+                <ChessPiece type="p" color="b" />
+              </span>
               <div>
                 <small>BLACK{game.you.color === "b" ? " • YOU" : ""}</small>
                 <strong>{game.players.black?.name ?? "Waiting…"}</strong>
                 <span className="captured-by">
                   <small>CAPTURED</small>
                   <b>{lostPieces.w.length ? lostPieces.w.map((piece, index) => (
-                    <i className="piece-w" key={`black-captured-${piece}-${index}`} aria-label={`white ${CHESS_PIECE_NAMES[piece]}`}>
-                      {CHESS_PIECE_GLYPHS.w[piece]}
+                    <i key={`black-captured-${piece}-${index}`} aria-label={`white ${CHESS_PIECE_NAMES[piece]}`}>
+                      <ChessPiece type={piece} color="w" />
                     </i>
                   )) : "—"}</b>
                 </span>
@@ -1392,7 +1396,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                         onPointerUp={finishPieceDrag}
                         onPointerCancel={cancelPieceDrag}
                       >
-                        {CHESS_PIECE_GLYPHS[piece.color][piece.type]}
+                        <ChessPiece type={piece.type} color={piece.color} />
                       </span>
                     ) : null}
                   </button>
@@ -1521,7 +1525,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
           style={{ left: drag.x, top: drag.y }}
           aria-hidden="true"
         >
-          {CHESS_PIECE_GLYPHS[draggedPiece.color][draggedPiece.type]}
+          <ChessPiece type={draggedPiece.type} color={draggedPiece.color} />
         </span>
       ) : null}
 
@@ -1530,13 +1534,12 @@ export function GameRoom({ gameId }: { gameId: string }) {
           <div className="promotion-card"><p>PROMOTE YOUR PAWN</p><div>
             {(["q", "r", "b", "n"] as Promotion[]).map((piece) => (
               <button
-                className={`piece-${game.you.color}`}
                 key={piece}
                 aria-label={`Promote to ${CHESS_PIECE_NAMES[piece]}`}
                 autoFocus={piece === "q"}
                 onClick={() => requestMove(promotionMove.from, promotionMove.to, piece)}
               >
-                {CHESS_PIECE_GLYPHS[game.you.color][piece]}
+                <ChessPiece type={piece} color={game.you.color} />
               </button>
             ))}
           </div><button className="cancel-promotion" onClick={() => setPromotionMove(null)}>CANCEL</button></div>

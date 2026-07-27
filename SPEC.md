@@ -1,4 +1,4 @@
-# ChessRiot v0.11.0 specification
+# ChessRiot v0.12.1 specification
 
 ## v0.11.0 release additions
 
@@ -176,7 +176,7 @@
   actions, replay, and history are collapsed behind one More control.
 - Captured Black pieces appear with White, and captured White pieces appear
   with Black.
-- Seven original illustrated theme backgrounds are included, and Iron Legions
+- Six original illustrated theme backgrounds are included, and Iron Legions
   plus Shadow Shogun expand the theme picker from nine to 11 choices.
 
 ## v0.4 release additions
@@ -206,8 +206,9 @@
 - A subtle dot marks an unseen release. Players can opt into opponent-move
   notifications while ChessRiot remains open and unfocused; closed-app push is
   not claimed.
-- Themes use CSS and existing chess glyphs only. They do not use third-party
-  logos, proprietary assets, or copied branded artwork.
+- Themes use CSS and one shared set of original flat SVG chess silhouettes.
+  They do not use third-party logos, proprietary assets, or copied branded
+  artwork.
 
 ## v0.3 release additions
 
@@ -317,9 +318,10 @@ This file and `MVP.md` are the source of truth for the current milestone.
 - The public homepage, create flow, invitations, changelog, loading, and error
   states use one fixed visual system regardless of identity or stored theme.
 - Eleven original visual themes cover active game panels, board, and pieces. The
-  default Blockfield theme uses grass, dirt, stone, wood, sand, water, and
-  torch-light colors. Seven themes include generated, wholly original
-  illustrations. None copy third-party game branding or assets.
+  default Riot theme uses flat teal, slate, warm ivory, and gold. Six themes
+  include generated, wholly original illustrations. Every theme keeps the same
+  front-on 2D board structure and original vector piece silhouettes. None copy
+  third-party game branding or assets.
 - Drag and drop a piece, or tap/click a piece and then a legal destination.
 - Board rotates for Black while submitted coordinates remain absolute chess squares.
 - The interface shows explicit player colors, turn, check, the checked king,

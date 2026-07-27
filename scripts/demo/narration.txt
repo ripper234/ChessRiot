@@ -1,17 +1,15 @@
-This is ChessRiot: real chess, total play. A bold browser arena for Riot Bot games and private matches.
+Ron and Omri love chess. The problem is finding an hour when both are free. ChessRiot turns spare minutes into a game that keeps moving.
 
-Enter a display name and Solo is ready immediately. No account setup or CAPTCHA stands between you and the board.
+Ron opens the browser, enters his name, and starts. No account. No CAPTCHA. Solo is ready for a warm-up. He chooses one of five Riot Bot levels and moves by drag, tap, click, or keyboard.
 
-Choose five Riot Bot levels, then move by drag, tap, click, or keyboard. Color, turn, latest move, and board position stay clear.
+But their game should feel like theirs. He opens Themes and transforms the board into Blockfield.
 
-Pick from eleven original visual themes, from Blockfield and Toybox to Arcane Cards and Neon Grid. ChessRiot remembers your choice.
+Now the real match. Ron switches to Multiplayer, chooses three days per move, and creates a game. ChessRiot gives him one private invitation for Omri.
 
-Use Back and Forward to inspect earlier positions, then return to Live. More opens settings, replay, and the move log.
+It waits safely until Omri is ready. When Omri claims Black, Ron has White, so he moves first. Every move is saved immediately.
 
-For a real opponent, choose Multiplayer and one, three, or five days per move. Three days is the default.
+Ron closes the browser. Later, each player returns through a private seat link, moves, and leaves. The same saved board and full history are waiting whenever either comes back. Step back, replay the position, then return live.
 
-Create the game and ChessRiot prepares one private invitation. The first person to claim it joins as Black.
+No scheduling. No setup. Just real chess that survives real life.
 
-Every move is saved, so you can close the browser and resume later from your private seat link.
-
-Magic Rules are coming soon. Choose your game, choose your arena, and make your move.
+ChessRiot. Two people. One game, still moving.

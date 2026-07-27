@@ -5,6 +5,7 @@ import {
   decodeDemoVideoDigest,
   DEMO_VIDEO_CAPTIONS,
   DEMO_VIDEO_MAX_BYTES,
+  DEMO_VIDEO_STORY_VERSION,
   demoVideoBucketBinding,
   failDemoVideoJob,
   latestDemoVideoManifest,
@@ -25,8 +26,12 @@ export async function POST(request: Request) {
   const duration = Number(request.headers.get("x-demo-video-duration") ?? "");
   const mimeType = request.headers.get("x-demo-video-mime") ?? "";
   const sha256 = request.headers.get("x-demo-video-sha256") ?? "";
-  const details = `${bytes}\n${duration}\n${mimeType}\n${sha256}`;
-  const authorized = await authorizeDemoVideoRequest(request, "publish", details);
+  const storyVersion = request.headers.get("x-demo-video-story-version") ?? "";
+  const expectedStoryVersion = String(DEMO_VIDEO_STORY_VERSION);
+  const details = `${storyVersion}\n${bytes}\n${duration}\n${mimeType}\n${sha256}`;
+  const authorized = storyVersion === expectedStoryVersion
+    ? await authorizeDemoVideoRequest(request, "publish", details)
+    : null;
   if (!authorized) {
     return Response.json(
       { error: "not_authorized" },
@@ -96,6 +101,7 @@ export async function POST(request: Request) {
         jobId: authorized.jobId,
         durationSeconds: String(duration),
         generatedAt,
+        storyVersion: String(DEMO_VIDEO_STORY_VERSION),
       },
     });
     if (stored.size !== bytes) {
@@ -109,7 +115,7 @@ export async function POST(request: Request) {
       },
     });
     const manifest: DemoVideoManifest = {
-      version: 1,
+      version: DEMO_VIDEO_STORY_VERSION,
       jobId: authorized.jobId,
       mediaKey,
       captionsKey,
@@ -161,6 +167,7 @@ export async function POST(request: Request) {
         status: "ready",
         generatedAt,
         durationSeconds: manifest.durationSeconds,
+        storyVersion: DEMO_VIDEO_STORY_VERSION,
       },
       { headers: responseHeaders },
     );

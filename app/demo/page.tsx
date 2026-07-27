@@ -5,7 +5,7 @@ import { DemoPlayer } from "../ui/DemoPlayer";
 
 export const metadata = {
   title: "90-second demo | ChessRiot",
-  description: "See ChessRiot Solo and private multiplayer play in 90 seconds.",
+  description: "See Ron and Omri keep one private chess match moving across a real day.",
 };
 
 export default function DemoPage() {
@@ -20,12 +20,8 @@ export default function DemoPage() {
       </header>
       <section className="demo-page">
         <div className="demo-heading">
-          <p className="public-eyebrow"><span /> SEE CHESSRIOT IN ACTION</p>
-          <h1>90 SECONDS.<br /><em>YOUR MOVE.</em></h1>
-          <p>
-            Riot Bot, original themes, private asynchronous matches, replay,
-            and a first look at Magic Rules.
-          </p>
+          <h1>ChessRiot in 90 seconds</h1>
+          <p>One family, one private match, and a game that survives real life.</p>
         </div>
         <DemoPlayer />
         <details className="demo-transcript">
@@ -41,7 +37,7 @@ export default function DemoPage() {
             PLAY CHESS <span aria-hidden="true">→</span>
           </Link>
           <p>
-            The narration voice is AI-generated. The walkthrough uses real
+            The narration voice is synthetic. The walkthrough uses real
             ChessRiot interface captures.
           </p>
         </div>

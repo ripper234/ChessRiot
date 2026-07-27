@@ -11,6 +11,42 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.12.1",
+    date: "2026-07-27",
+    title: "Riot theme verified",
+    summary: "The release checks now follow the new flat Riot default.",
+    changes: [
+      "Updated rendered-page regression coverage from the retired Blockfield label to Riot.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.12.1`,
+  },
+  {
+    version: "0.12.0",
+    date: "2026-07-27",
+    title: "Crisp 2D chess",
+    summary: "The board and pieces now use one clean, modern 2D visual system instead of bevels, block shadows, and platform-dependent glyphs.",
+    changes: [
+      "Introduced six original flat vector silhouettes shared by live play, drag, promotion, captures, replay, recent games, and checkmate.",
+      "Rebuilt board squares, frames, coordinates, move targets, captures, selection, and check states with solid color and clean rings.",
+      "Made Riot the fresh teal-and-ivory default while preserving every existing theme as a palette choice.",
+      "Replaced the tilted homepage mock board with a front-on 2D board using the same production pieces.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.12.0`,
+  },
+  {
+    version: "0.11.1",
+    date: "2026-07-26",
+    title: "One game, still moving",
+    summary: "The 90-second demo now follows Ron and Omri through one asynchronous match, with the video filling the page instead of sitting below a large headline.",
+    changes: [
+      "Replaced the feature-list narration with a complete story from warm-up through invitation, reply, return, and replay.",
+      "Made the video occupy roughly 90–94% of the viewport width and reduced the page heading to a compact label.",
+      "Reordered the real interface captures around the story while removing inactive Magic Rules from the narration.",
+      "Versioned the storyboard contract so an outdated Control build cannot publish stale video over the current story.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.11.1`,
+  },
+  {
     version: "0.11.0",
     date: "2026-07-26",
     title: "ChessRiot in 90 seconds",

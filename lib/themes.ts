@@ -17,10 +17,10 @@ export const THEMES = [
   },
   {
     id: "blockfield",
-    name: "Blockfield",
-    description: "Voxel grass and stone",
-    preview: ["#d4c47f", "#5d8c3d", "#3f5052", "#ffd65a"],
-    art: "/themes/blockfield.webp",
+    name: "Riot",
+    description: "Fresh teal and warm ivory",
+    preview: ["#dce7e4", "#527681", "#17262c", "#ffd65a"],
+    art: null,
   },
   {
     id: "toybox",

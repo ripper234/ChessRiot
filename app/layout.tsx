@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "./themes.css";
+import "./board.css";
 import { THEME_BOOTSTRAP_SCRIPT } from "@/lib/themes";
 import { ClientTelemetry } from "./ui/ClientTelemetry";
 import { RouteChrome } from "./ui/RouteChrome";

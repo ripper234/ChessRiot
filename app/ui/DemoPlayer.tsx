@@ -7,6 +7,7 @@ interface DemoStatus {
   durationSeconds: number;
   generatedAt: string | null;
   mimeType: string;
+  storyVersion: number;
 }
 
 export function DemoPlayer() {
@@ -46,7 +47,7 @@ export function DemoPlayer() {
           controls
           playsInline
           preload="metadata"
-          poster="/demo-assets/home.jpg"
+          poster="/demo-assets/poster.jpg"
           ref={videoRef}
           src={mediaSrc}
         >
@@ -54,9 +55,9 @@ export function DemoPlayer() {
         </video>
       </div>
       <div className="demo-player-meta">
-        <span>1:30 EXPLAINER</span>
+        <span>1:30 STORY</span>
         <span>CAPTIONS INCLUDED</span>
-        <span>AI-GENERATED NARRATION</span>
+        <span>SYNTHETIC NARRATION</span>
         {status?.source === "generated" && status.generatedAt ? (
           <span>
             UPDATED {new Date(status.generatedAt).toLocaleDateString()}

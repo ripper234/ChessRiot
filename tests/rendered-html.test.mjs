@@ -116,7 +116,7 @@ test("renders an identity-independent public homepage and guest play route", asy
   assert.match(gameHtml, /<html(?![^>]*data-theme)[^>]*>/i);
   assert.match(gameHtml, /aria-label="Choose visual theme"/);
   assert.match(gameHtml, /Classic/);
-  assert.match(gameHtml, /Blockfield/);
+  assert.match(gameHtml, /Riot/);
 });
 
 test("renders the narrated 90-second demo page", async () => {
@@ -130,13 +130,18 @@ test("renders the narrated 90-second demo page", async () => {
   );
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /90 SECONDS/);
-  assert.match(html, /1:30 EXPLAINER/);
-  assert.match(html, /AI-GENERATED NARRATION/);
+  assert.match(html, /ChessRiot in 90 seconds/);
+  assert.match(html, /1:30 STORY/);
+  assert.match(html, /SYNTHETIC NARRATION/);
   assert.match(html, /src="\/demo-assets\/chessriot-demo\.mp4"/);
+  assert.match(html, /controls/);
+  assert.match(html, /playsInline/);
   assert.match(html, /READ VIDEO TRANSCRIPT/);
-  assert.match(html, /Magic Rules are coming soon/);
-  assert.match(html, /The narration voice is AI-generated/);
+  assert.match(html, /Ron and Omri love chess/);
+  assert.match(html, /One game, still moving/);
+  assert.doesNotMatch(html, /90 SECONDS\.<br/);
+  assert.doesNotMatch(html, /Magic Rules/);
+  assert.match(html, /The narration voice is synthetic/);
   assert.doesNotMatch(html, /INTERPRET RULES|COMPILE RULES/);
 });
 

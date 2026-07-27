@@ -1,20 +1,23 @@
 :root,
 :root[data-theme="blockfield"] {
   --theme-page:
-    linear-gradient(180deg, rgba(9,18,24,.36), rgba(9,17,18,.82)),
-    url("/themes/blockfield.webp");
-  --theme-page-size: cover, cover;
-  --theme-page-position: center, center;
-  --theme-page-attachment: scroll, scroll;
-  --theme-topbar: rgba(24,36,35,.94);
-  --theme-card: linear-gradient(145deg, rgba(76,93,91,.97), rgba(37,50,49,.98));
-  --theme-card-border: var(--stone-dark);
-  --theme-frame: var(--wood);
-  --theme-frame-border: var(--wood-dark);
-  --theme-piece-white: #fff3c7;
-  --theme-piece-white-stroke: #5c4b2d;
-  --theme-piece-black: #202a26;
-  --theme-piece-black-stroke: #101815;
+    radial-gradient(circle at 16% 10%, rgba(99,200,221,.18), transparent 30rem),
+    radial-gradient(circle at 90% 84%, rgba(255,214,90,.11), transparent 34rem),
+    linear-gradient(145deg, #172f38, #0d1a1e 66%, #142923);
+  --theme-page-size: auto;
+  --theme-page-position: 0 0;
+  --theme-page-attachment: scroll;
+  --theme-topbar: rgba(12,25,29,.95);
+  --theme-card: linear-gradient(145deg, rgba(46,70,75,.97), rgba(22,39,43,.98));
+  --theme-card-border: #45656c;
+  --theme-frame: #1b343a;
+  --theme-frame-border: #102126;
+  --theme-piece-white: #f8f3e6;
+  --theme-piece-white-stroke: #24373d;
+  --theme-piece-black: #17262c;
+  --theme-piece-black-stroke: #d9e6e3;
+  --board-light: #dce7e4;
+  --board-dark: #527681;
 }
 
 :root[data-theme="classic"] {
@@ -358,14 +361,10 @@ html[data-theme] .game-shell .board-wrap {
   background: var(--theme-frame);
 }
 html[data-theme] .game-shell .light-square {
-  background:
-    linear-gradient(135deg, rgba(255,255,255,.12) 0 14%, transparent 14% 86%, rgba(0,0,0,.08) 86%),
-    var(--board-light);
+  background: var(--board-light);
 }
 html[data-theme] .game-shell .dark-square {
-  background:
-    linear-gradient(135deg, rgba(255,255,255,.08) 0 14%, transparent 14% 86%, rgba(0,0,0,.12) 86%),
-    var(--board-dark);
+  background: var(--board-dark);
 }
 html[data-theme] .game-shell .piece-w,
 html[data-theme] .game-shell .player-piece.piece-w {

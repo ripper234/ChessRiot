@@ -1,5 +1,5 @@
 import type { GameFinisher } from "@/lib/game-finishers";
-import { CHESS_PIECE_GLYPHS } from "@/lib/game-presentation";
+import { ChessPiece } from "./ChessPiece";
 
 export function CheckmateFinisher({ finisher }: { finisher: GameFinisher }) {
   return (
@@ -8,12 +8,12 @@ export function CheckmateFinisher({ finisher }: { finisher: GameFinisher }) {
       aria-hidden="true"
     >
       <div className="checkmate-duel" aria-hidden="true">
-        <span className={`finisher-piece finisher-attacker piece-${finisher.winner}`}>
-          {CHESS_PIECE_GLYPHS[finisher.winner][finisher.attackingPiece]}
+        <span className="finisher-piece finisher-attacker">
+          <ChessPiece type={finisher.attackingPiece} color={finisher.winner} />
         </span>
         <span className="finisher-impact">✦</span>
-        <span className={`finisher-piece finisher-king piece-${finisher.loser}`}>
-          {CHESS_PIECE_GLYPHS[finisher.loser].k}
+        <span className="finisher-piece finisher-king">
+          <ChessPiece type="k" color={finisher.loser} />
         </span>
       </div>
       <strong>CHECKMATE</strong>

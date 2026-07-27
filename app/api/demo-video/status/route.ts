@@ -1,5 +1,6 @@
 import {
   DEMO_VIDEO_DURATION_SECONDS,
+  DEMO_VIDEO_STORY_VERSION,
   latestDemoVideoManifest,
 } from "@/lib/demo-video";
 
@@ -15,6 +16,7 @@ export async function GET() {
         generatedAt: manifest.generatedAt,
         sizeBytes: manifest.sizeBytes,
         mimeType: manifest.mimeType,
+        storyVersion: manifest.version,
       }
       : {
         source: "bundled",
@@ -22,6 +24,7 @@ export async function GET() {
         generatedAt: null,
         sizeBytes: null,
         mimeType: "video/mp4",
+        storyVersion: DEMO_VIDEO_STORY_VERSION,
       },
     {
       headers: {

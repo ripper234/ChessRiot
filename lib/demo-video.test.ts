@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   authorizeDemoVideoRequest,
   DEMO_VIDEO_CAPTIONS,
   DEMO_VIDEO_DURATION_SECONDS,
   DEMO_VIDEO_MAX_BYTES,
   DEMO_VIDEO_NARRATION,
+  DEMO_VIDEO_STORY_VERSION,
   demoVideoCanonicalRequest,
 } from "./demo-video";
 
@@ -17,7 +19,7 @@ async function signedRequest(timestamp = Date.now()) {
     jobId,
     encodedTimestamp,
     nonce,
-    "",
+    String(DEMO_VIDEO_STORY_VERSION),
   );
   const key = await crypto.subtle.importKey(
     "raw",
@@ -42,6 +44,7 @@ async function signedRequest(timestamp = Date.now()) {
       "x-demo-video-timestamp": encodedTimestamp,
       "x-demo-video-nonce": nonce,
       "x-demo-video-signature": signature,
+      "x-demo-video-story-version": String(DEMO_VIDEO_STORY_VERSION),
     },
   });
 }
@@ -56,15 +59,29 @@ describe("demo video contract", () => {
     expect(DEMO_VIDEO_DURATION_SECONDS).toBe(90);
   });
 
-  it("uses a fixed narration that does not advertise active Magic Rules", () => {
-    expect(DEMO_VIDEO_NARRATION).toContain("Magic Rules are coming soon");
+  it("uses a story-first fixed narration without advertising inactive features", () => {
+    expect(DEMO_VIDEO_STORY_VERSION).toBe(2);
+    expect(DEMO_VIDEO_NARRATION).toContain("Ron and Omri love chess");
+    expect(DEMO_VIDEO_NARRATION).toContain("One game, still moving");
+    expect(DEMO_VIDEO_NARRATION).not.toContain("Magic Rules");
     expect(DEMO_VIDEO_NARRATION).not.toContain("AI coach");
     expect(DEMO_VIDEO_NARRATION).not.toContain("rewards");
   });
 
   it("ships captions through the final frame", () => {
     expect(DEMO_VIDEO_CAPTIONS).toMatch(/^WEBVTT/);
-    expect(DEMO_VIDEO_CAPTIONS).toContain("00:01:29.500");
+    expect(DEMO_VIDEO_CAPTIONS).toContain("00:01:29.900");
+  });
+
+  it("keeps the bundled renderer on the same narration and captions", () => {
+    expect(readFileSync(
+      new URL("../scripts/demo/narration.txt", import.meta.url),
+      "utf8",
+    ).trim()).toBe(DEMO_VIDEO_NARRATION);
+    expect(readFileSync(
+      new URL("../public/demo-assets/captions.vtt", import.meta.url),
+      "utf8",
+    ).trim()).toBe(DEMO_VIDEO_CAPTIONS.trim());
   });
 
   it("keeps browser uploads bounded", () => {
@@ -90,7 +107,7 @@ describe("demo video contract", () => {
     await expect(authorizeDemoVideoRequest(
       await signedRequest(),
       "narration",
-      "",
+      String(DEMO_VIDEO_STORY_VERSION),
     )).resolves.toMatchObject({
       jobId: "11111111-1111-4111-8111-111111111111",
     });
@@ -99,7 +116,7 @@ describe("demo video contract", () => {
     await expect(authorizeDemoVideoRequest(
       await signedRequest(),
       "narration",
-      "",
+      String(DEMO_VIDEO_STORY_VERSION),
     )).resolves.toBeNull();
   });
 
@@ -110,7 +127,7 @@ describe("demo video contract", () => {
     await expect(authorizeDemoVideoRequest(
       await signedRequest(Date.now() - 61_000),
       "narration",
-      "",
+      String(DEMO_VIDEO_STORY_VERSION),
     )).resolves.toBeNull();
   });
 });

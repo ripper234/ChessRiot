@@ -2,6 +2,7 @@ import {
   authorizeDemoVideoRequest,
   beginDemoVideoJob,
   claimDemoVideoNonce,
+  DEMO_VIDEO_STORY_VERSION,
   failDemoVideoJob,
   requestDemoVideoNarration,
   updateDemoVideoJob,
@@ -16,7 +17,11 @@ const responseHeaders = {
 };
 
 export async function POST(request: Request) {
-  const authorized = await authorizeDemoVideoRequest(request, "narration", "");
+  const storyVersion = request.headers.get("x-demo-video-story-version") ?? "";
+  const expectedStoryVersion = String(DEMO_VIDEO_STORY_VERSION);
+  const authorized = storyVersion === expectedStoryVersion
+    ? await authorizeDemoVideoRequest(request, "narration", storyVersion)
+    : null;
   if (!authorized) {
     return Response.json(
       { error: "not_authorized" },
@@ -63,5 +68,6 @@ export async function POST(request: Request) {
   const headers = new Headers(responseHeaders);
   headers.set("content-type", narration.headers.get("content-type") ?? "audio/mpeg");
   headers.set("x-demo-video-job", authorized.jobId);
+  headers.set("x-demo-video-story-version", expectedStoryVersion);
   return new Response(narration.body, { headers });
 }

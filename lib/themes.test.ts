@@ -26,10 +26,14 @@ describe("visual themes", () => {
   it("uses only local optimized artwork for illustrated themes", () => {
     const illustratedThemes = THEMES.filter((theme) => theme.art);
 
-    expect(illustratedThemes).toHaveLength(7);
+    expect(illustratedThemes).toHaveLength(6);
     for (const theme of illustratedThemes) {
       expect(theme.art).toMatch(/^\/themes\/[a-z-]+\.webp$/);
     }
+    expect(THEMES.find((theme) => theme.id === DEFAULT_THEME)).toMatchObject({
+      name: "Riot",
+      art: null,
+    });
   });
 
   it("normalizes unsupported storage values to the default", () => {

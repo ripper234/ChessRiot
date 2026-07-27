@@ -28,6 +28,7 @@ import {
 import { DIFFICULTY_LABELS } from "@/lib/game-presentation";
 import { APP_VERSION } from "@/lib/version";
 import { Brand } from "./Brand";
+import { ChessPiece } from "./ChessPiece";
 
 export function CreateGame() {
   const router = useRouter();
@@ -236,7 +237,9 @@ export function CreateGame() {
           <div className="recent-grid">
             {recent.map((game) => (
               <Link className="recent-card" href={`/g/${game.id}`} key={game.id}>
-                <span className={`mini-piece ${game.color === "w" ? "light" : "dark"}`}>♟</span>
+                <span className={`mini-piece ${game.color === "w" ? "light" : "dark"}`}>
+                  <ChessPiece type="p" color={game.color} />
+                </span>
                 <span><strong>{game.label}</strong><small>Tap to return</small></span>
                 <b>→</b>
               </Link>
