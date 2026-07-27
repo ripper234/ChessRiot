@@ -153,7 +153,16 @@
 - Verify the manifest and install icons support a standalone desktop-style
   install. Confirm the service worker never caches game, join, or API routes.
 - Verify a new release produces a subtle blue dot until opened. Confirm the
-  update dialog does not advertise dormant account-wide move alerts.
+  App panel exposes Turn alerts only for multiplayer games when complete VAPID
+  configuration is present.
+- On Android Chrome, enable Turn alerts for one multiplayer game, fully close
+  ChessRiot, commit an opponent move from another device, and verify exactly one
+  generic notification opens the correct game without exposing names, seat
+  tokens, or private links.
+- Associate the same browser push subscription with two games. Disable one and
+  verify the other remains enabled. Verify a retry of the same committed move
+  sends no second notification, failed delivery never changes the move result,
+  and a 404 or 410 push response removes the stale endpoint associations.
 
 ## Observability
 

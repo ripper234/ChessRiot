@@ -1,4 +1,25 @@
-# ChessRiot v0.12.1 specification
+# ChessRiot v0.13.0 specification
+
+## v0.13.0 release additions
+
+- Each authorized multiplayer seat may opt the current browser into Web Push
+  alerts for one specific game. Permission and subscription creation remain an
+  explicit user action in the App panel.
+- A subscription association is keyed by game, seat color, and a SHA-256
+  endpoint identifier. Turning alerts off for one game does not unsubscribe the
+  browser endpoint or disturb associations for other games.
+- A successful, non-idempotent multiplayer move schedules best-effort delivery
+  to the seat whose turn begins. Delivery failure cannot roll back, delay, or
+  alter the committed move.
+- Each subscription receives at most one `your_turn` delivery for a game
+  version. Expired endpoints are removed, repeated failures are disabled, and
+  delivery records expire after 30 days.
+- Push endpoints are limited to known browser push services. Notification
+  content is generic, contains no player names or private seat capabilities,
+  and navigation is reconstructed only from a validated game UUID.
+- `VAPID_PUBLIC_KEY`, secret `VAPID_PRIVATE_JWK`, and `VAPID_SUBJECT` must all
+  be present for the feature to appear. Solo play and incomplete configuration
+  fail closed.
 
 ## v0.11.0 release additions
 

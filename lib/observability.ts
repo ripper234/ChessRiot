@@ -147,6 +147,12 @@ function routeEvent(method: string, pathname: string): string | null {
   if (method === "POST" && /^\/api\/games\/[^/]+\/reactions$/.test(pathname)) {
     return "reaction.sent";
   }
+  if (method === "PUT" && /^\/api\/games\/[^/]+\/push-subscriptions$/.test(pathname)) {
+    return "push.subscription_enabled";
+  }
+  if (method === "DELETE" && /^\/api\/games\/[^/]+\/push-subscriptions$/.test(pathname)) {
+    return "push.subscription_disabled";
+  }
   if (method === "GET" && /^\/api\/games\/[^/]+\/reactions$/.test(pathname)) {
     return null;
   }
@@ -158,6 +164,8 @@ function routeEvent(method: string, pathname: string): string | null {
   // Omitting them keeps the recent-event feed focused on player and system events.
   if (
     (method === "GET" && pathname === "/api/health")
+    || (method === "GET" && pathname === "/api/push/config")
+    || (method === "GET" && /^\/api\/games\/[^/]+\/push-subscriptions$/.test(pathname))
     || (method === "POST" && pathname === "/api/ops/overview")
   ) return null;
   if (pathname.startsWith("/api/")) return "api.request";

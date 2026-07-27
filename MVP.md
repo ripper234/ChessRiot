@@ -27,6 +27,7 @@
 - An opt-in, browser-local confirmation before every human move
 - A short reduced-motion-safe checkmate finisher
 - Installable online PWA metadata and subtle release updates
+- Opt-in, per-game closed-app turn notifications for multiplayer seats
 - Pointer and touch drag-and-drop with tap, click, and keyboard fallback
 - Optional in-browser game sounds with a persistent mute preference
 - Privacy-safe per-environment logging and owner control-panel observability
@@ -37,7 +38,7 @@
 
 - Social graph, in-app profile editing, and multi-account switching
 - AI coach
-- Closed-app push, email, and real-time transport
+- Email notifications and real-time transport
 - Matchmaking, ratings, points, rewards, and payments
 - Free-form chat
 - Collectible skins or account-bound cosmetics

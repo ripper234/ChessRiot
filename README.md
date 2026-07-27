@@ -3,7 +3,7 @@
 Play the current game at [chessriot.ripper234.chatgpt.site](https://chessriot.ripper234.chatgpt.site).
 [Join for updates on WhatsApp](https://chat.whatsapp.com/FaBgiUgl73vLdeqzcqx0vX).
 
-ChessRiot v0.12.1 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
+ChessRiot v0.13.0 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
 
 Found something confusing or have a cool rule request? Use **Feedback** inside
 the game or [open a GitHub issue](https://github.com/ripper234/ChessRiot/issues).
@@ -47,12 +47,14 @@ progression work, and features that still need explicit rule design.
 - Send one-tap preset cheers during two-player games, plus Good Game or Thanks for 15 minutes after play, without opening unrestricted chat.
 - Install the online game as a desktop-style PWA and see a subtle dot for
   unseen releases.
+- Opt one browser into a generic notification for a specific multiplayer game
+  when an opponent hands you the turn, even after ChessRiot is closed.
 - See the exact release version throughout the game app.
 - Inspect privacy-safe, isolated health and activity data for all three environments in the owner control panel.
 
 ## Current limits
 
-No new Magic Rules, arbitrary executable rule prompts, AI coach, closed-app push or email
+No new Magic Rules, arbitrary executable rule prompts, AI coach, email
 notifications, free-form chat, friend graph, matchmaking, ratings, rewards,
 collectible skins, or payments. Cross-device account history, Google sign-in,
 and Telegram release

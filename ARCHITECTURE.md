@@ -10,6 +10,9 @@
 - `lib/accounts.ts`: durable identity summaries and identity-scoped rate limits.
 - `lib/game-auth.ts`: hybrid account-membership and private-seat authorization.
 - `lib/observability.ts`: central request observation, safe event storage, correlation, and retention.
+- `lib/push-notifications.ts`: per-game subscription storage, Web Push request
+  construction, duplicate suppression, and best-effort delivery.
+- `lib/push-client.ts`: browser subscription serialization and endpoint hashing.
 - `lib/ops-auth.ts`: short-lived signed observability-read grant verification.
 - `lib/demo-video.ts`: fixed narration, signed generation requests, bounded
   job state, and atomic generated-media manifest handling.
@@ -46,6 +49,18 @@ endpoint, or model call. Legacy immutable Magic documents remain supported for
 previously created games so their history does not break. New runtime Magic
 work lives on `feature/runtime-magic-rules` and must return through an isolated
 preview and explicit merge.
+
+Closed-app turn alerts are opt-in and game-specific. The browser holds one
+origin-level PushSubscription, while D1 associates its endpoint hash separately
+with each authorized game and seat. Disabling one association never calls the
+browser-wide `unsubscribe()` operation. After a successful multiplayer move,
+the Worker clones the response and schedules delivery with `waitUntil`; it
+queries only the new turn’s game and color, claims a unique
+subscription/game/version delivery row, and sends a generic encrypted payload.
+Known browser push-service origins, strict key bounds, validated UUID
+navigation, stale-endpoint deletion, and a failure circuit breaker contain the
+external delivery boundary. The move remains authoritative regardless of every
+notification outcome.
 
 Mutation provenance uses the exact URL origin plus browser-controlled
 `Sec-Fetch-Site`. A Sites-sandboxed opaque `Origin: null` is accepted only with

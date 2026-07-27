@@ -9,6 +9,7 @@ import {
   prepareRequestObservation,
   recordEvent,
 } from "@/lib/observability";
+import { deliverCommittedTurnNotification } from "@/lib/push-notifications";
 
 interface Env {
   ASSETS: Fetcher;
@@ -21,6 +22,9 @@ interface Env {
   OPS_READ_SECRET?: string;
   ACCOUNT_ID_SECRET?: string;
   VIDEO_REGEN_SHARED_SECRET?: string;
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_JWK?: string;
+  VAPID_SUBJECT?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -46,6 +50,9 @@ const worker = {
     globalThis.__CHESSRIOT_OPS_READ_SECRET__ = env.OPS_READ_SECRET;
     globalThis.__CHESSRIOT_ACCOUNT_ID_SECRET__ = env.ACCOUNT_ID_SECRET;
     globalThis.__CHESSRIOT_VIDEO_REGEN_SHARED_SECRET__ = env.VIDEO_REGEN_SHARED_SECRET;
+    globalThis.__CHESSRIOT_VAPID_PUBLIC_KEY__ = env.VAPID_PUBLIC_KEY;
+    globalThis.__CHESSRIOT_VAPID_PRIVATE_JWK__ = env.VAPID_PRIVATE_JWK;
+    globalThis.__CHESSRIOT_VAPID_SUBJECT__ = env.VAPID_SUBJECT;
     const url = new URL(request.url);
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
@@ -70,6 +77,9 @@ const worker = {
       : null;
     try {
       const response = await handler.fetch(request, env, ctx);
+      if (response.headers.get("x-chessriot-turn-committed") === "1") {
+        ctx.waitUntil(deliverCommittedTurnNotification(response.clone()));
+      }
       if (observation) {
         ctx.waitUntil(observeHttpRequest(request, response, startedAt, observation));
       }

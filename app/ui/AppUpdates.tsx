@@ -1,13 +1,26 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { apiErrorMessage, requestHeaders } from "@/lib/client-http";
 import {
+  generateUuid,
+  playerKey,
+  readSeatTokenFromHash,
+} from "@/lib/client-storage";
+import {
+  gameIdFromPathname,
   hasUnseenRelease,
   RELEASE_CHECK_INTERVAL_MS,
   RELEASE_SEEN_KEY,
   releaseTarget,
 } from "@/lib/pwa";
+import {
+  applicationServerKeyBytes,
+  browserPushPayload,
+  pushEndpointHash,
+} from "@/lib/push-client";
 import { APP_VERSION } from "@/lib/version";
 import styles from "./AppUpdates.module.css";
 
@@ -19,6 +32,18 @@ interface InstallPromptEvent extends Event {
 interface HealthPayload {
   version?: unknown;
 }
+
+interface PushConfigPayload {
+  enabled?: unknown;
+  publicKey?: unknown;
+}
+
+interface PushStatusPayload {
+  available?: unknown;
+  enabled?: unknown;
+}
+
+const SERVICE_WORKER_READY_TIMEOUT_MS = 10_000;
 
 function storedValue(key: string): string | null {
   try {
@@ -37,13 +62,52 @@ function storeValue(key: string, value: string): void {
 }
 
 export function AppUpdates() {
+  const pathname = usePathname();
+  const activeGameId = gameIdFromPathname(pathname);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const serviceWorkerRef = useRef<ServiceWorkerRegistration | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [availableVersion, setAvailableVersion] = useState<string | null>(null);
   const [releaseDot, setReleaseDot] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
+  const [pushPublicKey, setPushPublicKey] = useState<string | null>(null);
+  const [pushReady, setPushReady] = useState(false);
+  const [turnAlertsAvailable, setTurnAlertsAvailable] = useState(true);
+  const [turnAlertsEnabled, setTurnAlertsEnabled] = useState(false);
+  const [turnAlertsBusy, setTurnAlertsBusy] = useState(false);
+  const [turnAlertsMessage, setTurnAlertsMessage] = useState("");
+
+  const getServiceWorkerRegistration = useCallback(async () => {
+    if (serviceWorkerRef.current) return serviceWorkerRef.current;
+    const registration = await navigator.serviceWorker.register("/sw.js", {
+      scope: "/",
+      updateViaCache: "none",
+    });
+    if (registration.active) {
+      serviceWorkerRef.current = registration;
+      return registration;
+    }
+    const ready = await new Promise<ServiceWorkerRegistration>((resolve, reject) => {
+      const timeout = window.setTimeout(
+        () => reject(new Error("The service worker did not become ready.")),
+        SERVICE_WORKER_READY_TIMEOUT_MS,
+      );
+      void navigator.serviceWorker.ready.then(
+        (activeRegistration) => {
+          window.clearTimeout(timeout);
+          resolve(activeRegistration);
+        },
+        (error) => {
+          window.clearTimeout(timeout);
+          reject(error);
+        },
+      );
+    });
+    serviceWorkerRef.current = ready;
+    return ready;
+  }, []);
 
   const checkRelease = useCallback(async () => {
     try {
@@ -70,10 +134,9 @@ export function AppUpdates() {
     setInstalled(window.matchMedia("(display-mode: standalone)").matches);
 
     if ("serviceWorker" in navigator) {
-      void navigator.serviceWorker.register("/sw.js", {
-        scope: "/",
-        updateViaCache: "none",
-      }).then((registration) => registration.update()).catch(() => {
+      void getServiceWorkerRegistration().then(async (registration) => {
+        await registration.update();
+      }).catch(() => {
         // Installation remains optional when registration is blocked.
       });
     }
@@ -96,7 +159,65 @@ export function AppUpdates() {
       window.removeEventListener("beforeinstallprompt", onInstallPrompt);
       window.removeEventListener("appinstalled", onInstalled);
     };
-  }, [checkRelease]);
+  }, [checkRelease, getServiceWorkerRegistration]);
+
+  useEffect(() => {
+    setTurnAlertsMessage("");
+    setPushReady(false);
+    setPushPublicKey(null);
+    setTurnAlertsAvailable(true);
+    setTurnAlertsEnabled(false);
+    if (!activeGameId) return;
+    if (
+      !("serviceWorker" in navigator)
+      || !("PushManager" in window)
+      || !("Notification" in window)
+    ) {
+      setPushReady(true);
+      setPushPublicKey(null);
+      return;
+    }
+    let cancelled = false;
+    void fetch("/api/push/config", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return await response.json() as PushConfigPayload;
+      })
+      .then(async (config) => {
+        if (cancelled) return;
+        if (config?.enabled !== true || typeof config.publicKey !== "string") {
+          setPushReady(true);
+          return;
+        }
+        setPushPublicKey(config.publicKey);
+        const registration = await getServiceWorkerRegistration();
+        const subscription = await registration.pushManager.getSubscription();
+        const endpointHash = subscription
+          ? await pushEndpointHash(subscription.endpoint)
+          : null;
+        const headers = requestHeaders(activeSeatToken(activeGameId));
+        if (endpointHash) headers["x-push-endpoint-hash"] = endpointHash;
+        const response = await fetch(
+          `/api/games/${encodeURIComponent(activeGameId)}/push-subscriptions`,
+          { cache: "no-store", headers },
+        );
+        if (response.ok) {
+          const status = await response.json() as PushStatusPayload;
+          if (!cancelled) {
+            setTurnAlertsAvailable(status.available !== false);
+            setTurnAlertsEnabled(status.enabled === true);
+          }
+        }
+        if (cancelled) return;
+        setPushReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setPushReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeGameId, getServiceWorkerRegistration]);
 
   function openDialog() {
     const target = releaseTarget(APP_VERSION, availableVersion);
@@ -115,6 +236,107 @@ export function AppUpdates() {
     await installPrompt.prompt();
     await installPrompt.userChoice;
     setInstallPrompt(null);
+  }
+
+  function activeSeatToken(gameId: string): string | null {
+    const linked = readSeatTokenFromHash(window.location.hash);
+    if (linked) return linked;
+    try {
+      return localStorage.getItem(playerKey(gameId));
+    } catch {
+      return null;
+    }
+  }
+
+  async function enableTurnAlerts() {
+    if (!activeGameId || !pushPublicKey || turnAlertsBusy) return;
+    setTurnAlertsBusy(true);
+    setTurnAlertsMessage("");
+    let created: PushSubscription | null = null;
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setTurnAlertsMessage("Notification permission was not granted.");
+        return;
+      }
+      const registration = await getServiceWorkerRegistration();
+      const existing = await registration.pushManager.getSubscription();
+      const subscription = existing ?? await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: applicationServerKeyBytes(pushPublicKey),
+      });
+      if (!existing) created = subscription;
+      const payload = browserPushPayload(subscription);
+      if (!payload) throw new Error("This browser returned an incomplete subscription.");
+      const response = await fetch(
+        `/api/games/${encodeURIComponent(activeGameId)}/push-subscriptions`,
+        {
+          method: "PUT",
+          headers: requestHeaders(activeSeatToken(activeGameId), true),
+          body: JSON.stringify({
+            requestId: generateUuid(),
+            subscription: payload,
+          }),
+        },
+      );
+      const data: unknown = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(apiErrorMessage(data, "Turn alerts could not be enabled."));
+      }
+      setTurnAlertsEnabled(true);
+      setTurnAlertsMessage("This device will alert you when it is your turn in this game.");
+    } catch (error) {
+      if (created) await created.unsubscribe().catch(() => false);
+      setTurnAlertsEnabled(false);
+      setTurnAlertsMessage(
+        error instanceof Error
+          ? error.message
+          : "Turn alerts could not be enabled in this browser.",
+      );
+    } finally {
+      setTurnAlertsBusy(false);
+    }
+  }
+
+  async function disableTurnAlerts() {
+    if (!activeGameId || turnAlertsBusy) return;
+    setTurnAlertsBusy(true);
+    setTurnAlertsMessage("");
+    try {
+      const registration = await getServiceWorkerRegistration();
+      const subscription = await registration.pushManager.getSubscription();
+      if (subscription) {
+        const payload = browserPushPayload(subscription);
+        if (!payload) {
+          throw new Error("This browser returned an incomplete subscription.");
+        }
+        const response = await fetch(
+          `/api/games/${encodeURIComponent(activeGameId)}/push-subscriptions`,
+          {
+            method: "DELETE",
+            headers: requestHeaders(activeSeatToken(activeGameId), true),
+            body: JSON.stringify({
+              requestId: generateUuid(),
+              endpoint: payload.endpoint,
+            }),
+          },
+        );
+        const data: unknown = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(apiErrorMessage(data, "Turn alerts could not be disabled."));
+        }
+      }
+      setTurnAlertsEnabled(false);
+      setTurnAlertsMessage("Turn alerts are off for this game on this device.");
+    } catch (error) {
+      setTurnAlertsMessage(
+        error instanceof Error
+          ? error.message
+          : "Turn alerts could not be disabled.",
+      );
+    } finally {
+      setTurnAlertsBusy(false);
+    }
   }
 
   return (
@@ -183,6 +405,40 @@ export function AppUpdates() {
               </button>
             ) : null}
           </section>
+
+          {activeGameId ? (
+            <section className={styles.section} aria-labelledby="turn-alert-settings-title">
+              <h3 id="turn-alert-settings-title">Turn alerts</h3>
+              <p>
+                Get a notification when an opponent hands you the turn, even
+                after ChessRiot is closed. Alerts are off until you enable them.
+              </p>
+              {pushReady && !turnAlertsAvailable ? (
+                <p className={styles.note}>Turn alerts are available in multiplayer games.</p>
+              ) : pushReady && !pushPublicKey ? (
+                <p className={styles.note}>Closed-app alerts are unavailable in this browser.</p>
+              ) : (
+                <button
+                  className={styles.action}
+                  type="button"
+                  data-enabled={turnAlertsEnabled}
+                  disabled={!pushReady || turnAlertsBusy}
+                  onClick={() => void (
+                    turnAlertsEnabled
+                      ? disableTurnAlerts()
+                      : enableTurnAlerts()
+                  )}
+                >
+                  {turnAlertsBusy
+                    ? "SAVING…"
+                    : turnAlertsEnabled ? "TURN ALERTS ON" : "ENABLE TURN ALERTS"}
+                </button>
+              )}
+              {turnAlertsMessage ? (
+                <p className={styles.note} role="status">{turnAlertsMessage}</p>
+              ) : null}
+            </section>
+          ) : null}
         </div>
       </dialog>
     </>

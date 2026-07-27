@@ -303,5 +303,10 @@ export async function POST(
       },
     });
   }
-  return json({ game: snapshot(game, storedMoves, color) });
+  return json(
+    { game: snapshot(game, storedMoves, color) },
+    game.game_mode === "multiplayer" && game.status === "active"
+      ? { headers: { "x-chessriot-turn-committed": "1" } }
+      : undefined,
+  );
 }

@@ -11,6 +11,19 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.13.0",
+    date: "2026-07-27",
+    title: "Your turn, even when closed",
+    summary: "A multiplayer seat can now opt one browser into a generic turn notification for one game, including after ChessRiot is closed.",
+    changes: [
+      "Added opt-in Web Push turn alerts to each multiplayer game’s App panel.",
+      "Bound every browser subscription to one game and one authorized seat, so disabling one game leaves that device’s other game alerts intact.",
+      "Delivered notifications only after a committed opponent move, with duplicate suppression, stale-endpoint cleanup, and no private seat key or player detail in the payload.",
+      "Restricted push endpoints, validated notification navigation, and kept delivery best-effort so a push-service failure can never affect the chess move.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.13.0`,
+  },
+  {
     version: "0.12.1",
     date: "2026-07-27",
     title: "Riot theme verified",

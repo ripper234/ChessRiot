@@ -2,7 +2,7 @@
 
 ## Backlog chat cards
 
-| ID | Feature | Status in v0.9.3 |
+| ID | Feature | Status in v0.13.0 |
 |---|---|---|
 | CR-001 | Always-visible exact version | Shipped throughout the game app with a changelog link. The fixed public homepage intentionally omits runtime chrome. |
 | CR-002 | In-app feedback and GitHub contribution path | Shipped with isolated per-environment storage. |
@@ -11,9 +11,9 @@
 | CR-005 | Portable user login | Guest private-seat links are live. Provider login remains disabled until it can add portability without blocking play. |
 | CR-006 | All games for the logged-in user | The account-backed history remains in storage but is not exposed in guest mode. The current device shows recent private-seat games. |
 | CR-007 | Step-by-step game replay | Shipped with always-visible live-board Back and Forward controls plus the full Start, Back, Next, End, and keyboard-accessible replay. |
-| CR-008 | Desktop install, move alerts, and time limits | Install support and selectable one, three, or five-day move deadlines are live. Account-wide alerts are dormant in guest mode; closed-app push still needs subscription infrastructure. |
+| CR-008 | Desktop install, move alerts, and time limits | Shipped. Install support, selectable one, three, or five-day move deadlines, and opt-in per-game closed-app turn notifications are live. |
 | CR-009 | A winning piece defeats the king on checkmate | Shipped as a short, theme-aware, reduced-motion-safe finisher. |
-| CR-010 | Subtle release updates and optional louder alerts | The unseen-release blue dot is shipped. Account-wide move alerts are dormant in guest mode. |
+| CR-010 | Subtle release updates and optional louder alerts | The unseen-release blue dot and generic closed-app turn alerts are shipped. Custom sounds or louder notification modes remain unplanned. |
 | CR-011 | Per-game Magic Rules | Shipped with immutable, allowlisted rules for atomic two-step rooks or knights, no promotion, no castling, and no en passant. Unsupported prose is rejected. |
 | CR-012 | Isolated branch preview environments | In progress. Runtime Magic lives on `feature/runtime-magic-rules`; Control exposes active feature previews without promoting them to Development. |
 | CR-013 | Optional confirmation before every move | Shipped as a default-off, browser-local setting covering tap, drag, keyboard, promotion, and complete Magic turns. |
@@ -64,7 +64,7 @@ the default and must not silently inherit variant mechanics.
 - Read-only, keyboard-accessible replay built entirely from immutable move history.
 - Installable online PWA with static-asset-only caching.
 - Opt-in opponent-move alerts while ChessRiot remains open in another tab or
-  window. Closed-app push is still deferred.
+  window. Closed-app push was deferred at that release.
 
 ## Shipped backlog wins in v0.6.0
 
@@ -82,3 +82,12 @@ the default and must not silently inherit variant mechanics.
   and replay.
 - Existing v1 Magic Rules remain valid; knight-enabled games use the v2 stored
   schema without mutating older games.
+
+## Shipped backlog wins in v0.13.0
+
+- An authorized multiplayer seat can opt one browser into a generic notification
+  after an opponent commits a move, even when ChessRiot is closed.
+- Associations are isolated by game, seat, and device endpoint. Disabling one
+  game leaves the browser subscription and other game associations intact.
+- Duplicate game versions cannot send twice, stale endpoints are removed, and
+  push-service failures never affect the authoritative move.
