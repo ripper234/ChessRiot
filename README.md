@@ -3,7 +3,7 @@
 Play the current game at [chessriot.ripper234.chatgpt.site](https://chessriot.ripper234.chatgpt.site).
 [Join for updates on WhatsApp](https://chat.whatsapp.com/FaBgiUgl73vLdeqzcqx0vX).
 
-ChessRiot v0.13.4 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
+ChessRiot v0.14.0-capture.1 is a branch-only preview of physical capture animations in the mobile-first chess game.
 
 Found something confusing or have a cool rule request? Use **Feedback** inside
 the game or [open a GitHub issue](https://github.com/ripper234/ChessRiot/issues).
@@ -36,6 +36,7 @@ progression work, and features that still need explicit rule design.
 - Detect check, checkmate, stalemate, castling, en passant, all four promotions, insufficient material, claimable threefold/50-move draws, and automatic fivefold/75-move draws.
 - Choose from 11 original visual themes during a game, including six original illustrated backgrounds and the flat Riot default, with optional synthesized move, capture, check, and game-ending sounds.
 - Drag and drop crisp original 2D vector pieces with mouse or touch, while tap, click, and keyboard input still work. Your legal move appears immediately while Riot Bot thinks, and short move and capture animations make both plies visible.
+- Preview physical capture actions in real games or replay every piece instantly at `/capture-lab`: pawn sword slash, knight leap, bishop thrust, rook charge, queen sweep, and king chop.
 - See explicit White and Black player cards, captured pieces, a highlighted checked king, and check-specific move guidance.
 - Step backward and forward through committed positions directly on the live
   board, or open the full read-only, keyboard-accessible replay viewer.
