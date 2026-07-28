@@ -37,6 +37,7 @@ assert.equal(
   "function",
   `${pathToFileURL(workerPath)} must export default.fetch`,
 );
+assert.match(source, /feedback:manage/);
 
 const pageResponse = await workerModule.default.fetch(
   new Request("https://control.test/"),
@@ -55,17 +56,39 @@ assert.match(
   page,
   /\.pipeline-node b\{font-size:clamp\(22px,7vw,24px\)\}/,
 );
-assert.match(page, /Environment health/);
-assert.match(page, /Recent events/);
-assert.match(page, /<span class="summary-title">Feedback <span class="drawer-count"/);
-assert.match(page, /Promotions require Sites access/);
 assert.match(
   page,
-  /https:\/\/chessriot\.ripper234\.chatgpt\.site\/releases/,
+  /grid-template-columns:minmax\(140px,1fr\) 116px minmax\(140px,1fr\) 116px minmax\(140px,1fr\)/,
 );
+assert.doesNotMatch(page, /pipeline-node\.latest|pipeline-action\.auto/);
+assert.match(page, /Environment health/);
+assert.match(page, /Feature previews/);
+assert.match(page, /feature\/runtime-magic-rules/);
+assert.match(page, /v0\.11\.0-magic\.4/);
+assert.match(
+  page,
+  /https:\/\/chessriot-magic-preview\.ripper234\.chatgpt\.site/,
+);
+assert.match(page, /https:\/\/github\.com\/ripper234\/ChessRiot\/branches/);
+assert.match(page, /Recent events/);
+assert.match(page, /id="feedback-launcher"/);
+assert.match(page, /aria-controls="feedback-inbox"/);
+assert.match(page, /<dialog class="feedback-inbox-dialog" id="feedback-inbox"/);
+assert.match(page, /id="feedback-completed"/);
+assert.doesNotMatch(page, /id="feedback-count"|<details class="drawer feedback"/);
+assert.match(page, /Direct deployment is not connected/);
+assert.match(page, /active controls prepare a manual ChatGPT Work request/);
+assert.match(
+  page,
+  /https:\/\/chessriot\.ripper234\.chatgpt\.site\/changelog/,
+);
+assert.doesNotMatch(page, /chessriot\.ripper234\.chatgpt\.site\/releases/);
 assert.doesNotMatch(page, /Version history|CONTROL \+ GAME|ADVANCED VERSIONS/);
 assert.doesNotMatch(page, /<details[^>]*\sopen(?:\s|>)/);
-assert.doesNotMatch(page, /<dialog|Copy request|Open ChatGPT/);
+assert.match(page, /<dialog id="release-handoff"/);
+assert.match(page, /COPY WORK REQUEST/);
+assert.match(page, /OPEN CHATGPT/);
+assert.match(page, /temporary manual handoff, not deployment automation/);
 assert.match(page, /script src="\/control\.js"/);
 assert.doesNotMatch(page, /script-src 'unsafe-inline'/);
 
@@ -77,6 +100,13 @@ const scriptResponse = await workerModule.default.fetch(
 const script = await scriptResponse.text();
 assert.match(script, /\/api\/health/);
 assert.match(script, /\/api\/ops\/overview/);
+assert.match(
+  script,
+  /"\/api\/ops\/feedback\/" \+ encodeURIComponent\(feedbackId\) \+ "\/close"/,
+);
+assert.match(script, /fetchFreshStatusEnvironment\(environmentKey\)/);
+assert.match(script, /MARK DONE UNAVAILABLE/);
+assert.match(script, /summary\.complete && summary\.known === 0/);
 assert.match(script, /content-type": "text\/plain"/);
 assert.match(script, /setInterval\(function \(\) \{ void loadStatus\(\); \}, 300000\)/);
 assert.doesNotMatch(script, /REFRESH STATUS/);
@@ -87,8 +117,7 @@ assert.match(
   /const inspectionResults = await Promise\.allSettled\(/,
 );
 assert.doesNotMatch(script, /No successful health response/);
-assert.doesNotMatch(script, /\bUNAVAILABLE\b|\bUNDEPLOYED\b/i);
-assert.doesNotMatch(script, /UNDEPLOYED|UNAVAILABLE/);
+assert.doesNotMatch(script, /\bUNDEPLOYED\b/i);
 assert.match(script, /AbortController/);
 assert.doesNotMatch(script, /sessionStorage|fallbackVersion/);
 assert.match(script, /COULD NOT VERIFY/);
@@ -99,7 +128,11 @@ assert.doesNotMatch(
   script,
   /telemetryFresh[\s\S]{0,180}overview\.version/,
 );
-assert.match(script, /label: "LATEST IN DEV", version: developmentVersion/);
+assert.doesNotMatch(script, /LATEST IN DEV|developmentVersion|AUTO TARGET/);
+assert.match(script, /label: "DEV · AUTO LATEST"/);
+assert.match(script, /label: "STAGING"/);
+assert.match(script, /label: "PROD"/);
+assert.doesNotMatch(script, /stage\.key === "development"/);
 assert.match(script, /window\.addEventListener\("pageshow"/);
 assert.match(script, /if \(event\.persisted\) void loadStatus\(\)/);
 assert.match(
@@ -110,13 +143,32 @@ assert.doesNotMatch(script, /Not recorded|STALE HEALTH|Showing last good/);
 assert.match(script, /lastSuccessfulAt/);
 assert.match(script, /latest successful environment check/);
 assert.match(script, /pipeline-connector/);
-assert.match(script, /AUTO TARGET v/);
-assert.match(script, /PROMOTE v/);
+assert.match(script, /PREPARE PROMOTE v/);
 assert.match(script, /action\.disabled = true/);
-assert.match(script, /deploy access required/);
+assert.match(script, /action\.classList\.add\("promote"\)/);
+assert.match(script, /action\.dataset\.promotion = source\.key \+ "-to-" \+ stage\.key/);
+assert.match(script, /openPromotionHandoff\(source, stage\)/);
+assert.doesNotMatch(script, /PROMOTE[^"\n]*→/);
+assert.equal((script.match(/arrow\.textContent = "→"/g) || []).length, 1);
+assert.match(script, /VERIFY \/ SYNC v/);
+assert.match(script, /verify or synchronize the exact build/);
+assert.doesNotMatch(script, /already v/);
+assert.match(script, /ChatGPT Work handoff/);
+assert.match(script, /Control will not deploy anything/);
 assert.match(script, /pipeline-open/);
+assert.match(script, /SWITCH VERSION…/);
+assert.match(script, /buildWorkRequest/);
+assert.match(script, /Promote ChessRiot v/);
+assert.match(script, /Roll back ChessRiot/);
+assert.match(script, /Upgrade ChessRiot/);
+assert.match(
+  script,
+  /return action \+ "\\nExecute and verify the deployment\."/,
+);
+assert.doesNotMatch(script, /Requirements:|Saved-version IDs are project-scoped/);
+assert.match(script, /navigator\.clipboard/);
 assert.match(script, /OPEN " \+ stage\.label \+ " ↗"/);
-assert.match(script, /if \(!stage\.latest\)/);
+assert.doesNotMatch(script, /stage\.latest|key: "latest"/);
 assert.match(script, /open\.href = stage\.url/);
 assert.match(script, /open\.target = "_blank"/);
 assert.match(script, /open\.rel = "noopener noreferrer"/);
@@ -124,7 +176,6 @@ assert.match(script, /"Open " \+ stage\.label \+ " environment"/);
 assert.match(script, /connecting\.disabled = true/);
 assert.match(script, /connecting\.textContent = "CONNECTING…"/);
 assert.doesNotMatch(script, /PREPARE DEPLOY LATEST/);
-assert.doesNotMatch(script, /openRequest|navigator\.clipboard|chatgpt\.com/);
 assert.match(script, /loading: true/);
 assert.match(script, /health: null/);
 assert.doesNotMatch(script, /cachedSnapshot|registrySnapshot|preserveSnapshot/);
@@ -294,25 +345,29 @@ const status = await statusResponse.json();
 assert.equal(status.controlVersion, packageVersion);
 assert.equal(status.refreshIntervalMs, 300000);
 assert.deepEqual(
-  status.environments.map(({ key, url, grant }) => ({
+  status.environments.map(({ key, url, access, grant }) => ({
     key,
     url,
+    access,
     hasGrant: typeof grant === "string" && grant.includes("."),
   })),
   [
     {
       key: "development",
       url: "https://dev.test",
+      access: "Owner only",
       hasGrant: true,
     },
     {
       key: "staging",
       url: "https://staging.test",
+      access: "Owner only",
       hasGrant: true,
     },
     {
       key: "production",
       url: "https://prod.test",
+      access: "Public",
       hasGrant: true,
     },
   ],
@@ -442,8 +497,8 @@ const promotedEnv = {
     environments: {
       development: {
         version: "0.3.4",
-        deployedAt: "2026-07-25T10:00:00.000Z",
-        verifiedAt: "2026-07-25T10:01:00.000Z",
+        deployedAt: "2099-07-25T10:00:00.000Z",
+        verifiedAt: "2099-07-25T10:01:00.000Z",
       },
     },
   }),

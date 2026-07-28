@@ -10,8 +10,10 @@
   Development; Staging advances only after an explicit Development promotion,
   and Production advances only after an explicit Staging promotion.
 - Do not present prompt copying as deployment automation. Until Control receives
-  scoped Sites deployment authority, promotion and arbitrary version actions
-  must remain visibly unavailable and explain the missing connection.
+  scoped Sites deployment authority, direct promotion and arbitrary version
+  actions must remain visibly unavailable. A temporary ChatGPT Work handoff may
+  be offered only when it is explicitly labeled as a manual copy-paste
+  workaround and never claims that Control performed the deployment.
 - Keep the primary viewport pipeline-first. Health, telemetry, events, and
   feedback remain secondary, collapsed surfaces. Public history belongs on the
   game Releases page.
