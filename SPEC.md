@@ -1,4 +1,34 @@
-# ChessRiot v0.13.4 specification
+# ChessRiot v0.14.0-capture.1 specification
+
+## Capture-combat preview
+
+- Physical attack animation is presentation-only. The server commits and
+  validates the move before the client sequence begins, and animation never
+  changes version, position, authorization, or move history.
+- Each newly observed move is reconstructed from its immutable `fenBefore`.
+  The live board temporarily shows that pre-move position while a
+  pointer-transparent board overlay animates the attacker and, for a capture,
+  keeps the victim visible until impact.
+- Pawn, knight, bishop, rook, queen, and king captures use distinct, short
+  actions. The tone is toy combat with no blood or realistic injury.
+- En passant uses the captured pawn's real square. A capture-promotion attacks
+  as a pawn and reveals the promoted piece afterward. Atomic Magic actions
+  animate both legs in order.
+- Board input remains locked for at most 720 milliseconds while an action is
+  visible. Hiding the page, opening history, or enabling reduced motion clears
+  the queue immediately.
+- Reduced-motion players see the authoritative final board and a brief static
+  capture marker without travel, rotation, particles, or an input delay.
+- `/capture-lab` is branch-only and replays the exact production animation
+  component for all six pieces. It must not be promoted as a stable route
+  without an explicit product decision.
+
+## v0.13.4 release additions
+
+- Multiplayer invitations copy straight to the clipboard instead of opening
+  the operating system share sheet.
+- Successful copies are confirmed in place, and the private link remains
+  selectable if clipboard access is unavailable.
 
 ## v0.13.3 release additions
 
