@@ -8,6 +8,7 @@ import {
   observeHttpRequest,
   prepareRequestObservation,
   recordEvent,
+  sanitizeObservedRoute,
 } from "@/lib/observability";
 import { deliverCommittedTurnNotification } from "@/lib/push-notifications";
 
@@ -88,13 +89,7 @@ const worker = {
       ctx.waitUntil(recordEvent({
         event: "error.unhandled",
         outcome: "failure",
-        route: url.pathname.replace(
-          /^\/api\/games\/[^/]+/,
-          "/api/games/:id",
-        ).replace(
-          /^\/api\/invitations\/[^/]+/,
-          "/api/invitations/:token",
-        ),
+        route: sanitizeObservedRoute(url.pathname),
         method: request.method,
         statusCode: 500,
         errorCode: error instanceof Error ? error.name : "unknown_error",

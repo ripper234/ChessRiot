@@ -1652,7 +1652,8 @@ try {
     }),
   });
   assert.equal(feedbackResponse.status, 201);
-  assert.equal((await body(feedbackResponse)).status, "received");
+  const createdFeedback = await body(feedbackResponse);
+  assert.equal(createdFeedback.status, "received");
   const feedbackRetry = await request(runtime, "/api/feedback", {
     anonymous: true,
     method: "POST",
@@ -1689,6 +1690,12 @@ try {
   assert.equal(overview.feedback[0].title, feedbackTitle);
   assert.equal(overview.feedback[0].comment, feedbackComment);
   assert.equal(overview.feedback[0].page, "/g/game-id");
+  assert.equal(overview.feedbackPool.total, 1);
+  assert.equal(overview.feedbackPool.new, 1);
+  assert.equal(overview.feedbackPool.reviewed, 0);
+  assert.equal(overview.feedbackPool.closed, 0);
+  assert.equal(overview.feedbackPool.unresolved, 1);
+  assert.equal(overview.feedbackPool.items[0].id, createdFeedback.id);
   assert.ok(overview.recentEvents.every((event) => !JSON.stringify(event).includes(feedbackTitle)));
   assert.ok(overview.recentEvents.every((event) => !JSON.stringify(event).includes(feedbackComment)));
   assert.ok(overview.recentEvents.every((event) =>
@@ -1697,7 +1704,136 @@ try {
     !JSON.stringify(event).includes(maliciousHeaderRequestId)));
   assert.ok(overview.recentEvents.every((event) =>
     !JSON.stringify(event).includes(maliciousBodyRequestId)));
+
+  const closePath = `/api/ops/feedback/${createdFeedback.id}/close`;
+  assert.equal((await request(runtime, closePath, {
+    method: "POST",
+    headers: { "content-type": "text/plain", origin: controlOrigin },
+    body: opsGrant(),
+  })).status, 403);
+  assert.equal((await request(runtime, "/api/ops/overview", {
+    method: "POST",
+    headers: { "content-type": "text/plain", origin: controlOrigin },
+    body: opsGrant({ scope: "feedback:manage" }),
+  })).status, 403);
+  const validFeedbackGrant = opsGrant({ scope: "feedback:manage" });
+  const tamperedFeedbackGrant = validFeedbackGrant.slice(0, -1)
+    + (validFeedbackGrant.endsWith("a") ? "b" : "a");
+  assert.equal((await request(runtime, closePath, {
+    method: "POST",
+    headers: { "content-type": "text/plain", origin: controlOrigin },
+    body: tamperedFeedbackGrant,
+  })).status, 403);
+  assert.equal((await request(runtime, closePath, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: controlOrigin },
+    body: validFeedbackGrant,
+  })).status, 403);
+  const successfulFeedbackGrant = opsGrant({ scope: "feedback:manage" });
+  const closeResponse = await request(runtime, closePath, {
+    method: "POST",
+    headers: { "content-type": "text/plain", origin: controlOrigin },
+    body: successfulFeedbackGrant,
+  });
+  assert.equal(closeResponse.status, 200);
+  assert.equal(closeResponse.headers.get("access-control-allow-origin"), controlOrigin);
+  assert.deepEqual(await body(closeResponse), {
+    feedback: { id: createdFeedback.id, status: "closed" },
+    changed: true,
+  });
+  const closeRetry = await request(runtime, closePath, {
+    method: "POST",
+    headers: { "content-type": "text/plain", origin: controlOrigin },
+    body: opsGrant({ scope: "feedback:manage" }),
+  });
+  assert.equal(closeRetry.status, 200);
+  assert.equal((await body(closeRetry)).changed, false);
+  assert.equal((await request(runtime, `/api/ops/feedback/${randomUUID()}/close`, {
+    method: "POST",
+    headers: { "content-type": "text/plain", origin: controlOrigin },
+    body: opsGrant({ scope: "feedback:manage" }),
+  })).status, 404);
+  assert.equal((await request(runtime, "/api/ops/feedback/not-a-uuid/close", {
+    method: "POST",
+    headers: { "content-type": "text/plain", origin: controlOrigin },
+    body: opsGrant({ scope: "feedback:manage" }),
+  })).status, 404);
+  const expiredFeedbackGrantAt = Math.floor(Date.now() / 1000) - 10;
+  assert.equal((await request(runtime, closePath, {
+    method: "POST",
+    headers: { "content-type": "text/plain", origin: controlOrigin },
+    body: opsGrant({
+      scope: "feedback:manage",
+      iat: expiredFeedbackGrantAt - 120,
+      exp: expiredFeedbackGrantAt,
+    }),
+  })).status, 403);
+  const wrongFeedbackOrigin = await runtime.dispatchFetch(`${origin}${closePath}`, {
+    method: "POST",
+    headers: { origin: "https://evil.example", "content-type": "text/plain" },
+    body: opsGrant({ scope: "feedback:manage" }),
+  });
+  assert.equal(wrongFeedbackOrigin.status, 403);
+  assert.equal(wrongFeedbackOrigin.headers.get("access-control-allow-origin"), null);
+
+  const closedOverviewResponse = await request(runtime, "/api/ops/overview", {
+    method: "POST",
+    headers: { "content-type": "text/plain", origin: controlOrigin },
+    body: opsGrant(),
+  });
+  assert.equal(closedOverviewResponse.status, 200);
+  const closedOverview = await body(closedOverviewResponse);
+  assert.equal(closedOverview.feedbackPool.total, 1);
+  assert.equal(closedOverview.feedbackPool.unresolved, 0);
+  assert.equal(closedOverview.feedbackPool.closed, 1);
+  assert.equal(closedOverview.feedbackPool.items[0].status, "closed");
+  const closeEvents = closedOverview.recentEvents.filter((event) =>
+    event.event === "feedback.closed");
+  assert.equal(closeEvents.filter((event) =>
+    event.outcome === "success" && event.statusCode === 200).length, 2);
+  assert.ok(closeEvents.length >= 2);
+  assert.ok(closeEvents.every((event) =>
+    event.route === "/api/ops/feedback/:id/close"));
+  assert.ok(closeEvents.every((event) =>
+    !JSON.stringify(event).includes(feedbackTitle)
+    && !JSON.stringify(event).includes(feedbackComment)
+    && !JSON.stringify(event).includes(createdFeedback.id)
+    && !JSON.stringify(event).includes(successfulFeedbackGrant)));
+
   const observabilityDatabase = await runtime.getD1Database("DB");
+  const cappedFeedbackStatements = [];
+  for (let index = 0; index < 105; index += 1) {
+    cappedFeedbackStatements.push(observabilityDatabase
+      .prepare(`INSERT INTO feedback (
+        id, request_id, title, comment, page, environment, app_version, status, created_at
+      ) VALUES (?, ?, ?, NULL, '/', 'test', '0.13.5', 'closed', ?)`)
+      .bind(
+        randomUUID(),
+        randomUUID(),
+        `Closed feedback ${index}`,
+        new Date(Date.now() + index).toISOString(),
+      ));
+  }
+  cappedFeedbackStatements.push(observabilityDatabase
+    .prepare(`INSERT INTO feedback (
+      id, request_id, title, comment, page, environment, app_version, status, created_at
+    ) VALUES (?, ?, 'Reviewed feedback', NULL, '/', 'test', '0.13.5', 'reviewed', ?)`)
+    .bind(randomUUID(), randomUUID(), new Date(0).toISOString()));
+  await observabilityDatabase.batch(cappedFeedbackStatements);
+  const cappedOverviewResponse = await request(runtime, "/api/ops/overview", {
+    method: "POST",
+    headers: { "content-type": "text/plain", origin: controlOrigin },
+    body: opsGrant(),
+  });
+  assert.equal(cappedOverviewResponse.status, 200);
+  const cappedOverview = await body(cappedOverviewResponse);
+  assert.equal(cappedOverview.feedbackPool.total, 107);
+  assert.equal(cappedOverview.feedbackPool.unresolved, 1);
+  assert.equal(cappedOverview.feedbackPool.reviewed, 1);
+  assert.equal(cappedOverview.feedbackPool.closed, 106);
+  assert.equal(cappedOverview.feedbackPool.items.length, 100);
+  assert.equal(cappedOverview.feedbackPool.items[0].status, "reviewed");
+
   const moveTelemetry = await observabilityDatabase
     .prepare(`SELECT metadata_json FROM observability_events
       WHERE event_name IN ('move.submitted', 'bot.move_committed')`)

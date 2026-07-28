@@ -1,4 +1,4 @@
-# ChessRiot v0.13.4 specification
+# ChessRiot v0.13.5 specification
 
 ## v0.13.3 release additions
 
@@ -394,4 +394,11 @@ This file and `MVP.md` are the source of truth for the current milestone.
 - Never record player names, bearer keys, key hashes, invitation or private links, fragments, IP addresses, user agents, FENs, raw bodies, or arbitrary exception messages.
 - Reaction events record only the selected preset key. Reaction reads are
   excluded from telemetry just like unchanged game polling.
-- The owner-only control panel uses two-minute, environment-specific signed read grants and shows each environment separately. Failed reads remain visibly stale and never become fake zeroes.
+- The owner-only control panel uses two-minute, environment-specific signed
+  grants and shows each environment separately. Read grants cannot mutate
+  feedback; a distinct `feedback:manage` grant can only perform feedback-close
+  actions through the idempotent owner endpoint.
+- The operations overview reports exact feedback totals and unresolved counts
+  independently of its bounded item list. `new` and `reviewed` feedback are
+  unresolved; `closed` feedback is done. Unresolved items are returned first.
+  Failed reads remain visibly stale and never become fake zeroes.
