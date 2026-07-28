@@ -52,6 +52,14 @@ interface FeedbackRow {
   created_at: string;
 }
 
+interface FeedbackCountsRow {
+  total: number;
+  new_count: number;
+  reviewed: number;
+  closed: number;
+  unresolved: number;
+}
+
 function safeMetadata(value: string | null): Record<string, unknown> {
   if (!value) return {};
   try {
@@ -78,7 +86,15 @@ export async function POST(request: Request) {
   await ensureSchema();
   const db = getDatabase();
   const since = new Date(Date.now() - 24 * 60 * 60 * 1_000).toISOString();
-  const [counts, breakdown, recent, gameCounts, latencyRows, feedbackRows] = await Promise.all([
+  const [
+    counts,
+    breakdown,
+    recent,
+    gameCounts,
+    latencyRows,
+    feedbackRows,
+    feedbackCounts,
+  ] = await Promise.all([
     db.prepare(`SELECT
       COUNT(*) AS total,
       SUM(CASE WHEN outcome = 'success' THEN 1 ELSE 0 END) AS successes,
@@ -123,9 +139,17 @@ export async function POST(request: Request) {
       .all<{ latency_ms: number }>(),
     db.prepare(`SELECT id, title, comment, page, app_version, status, created_at
       FROM feedback
-      ORDER BY created_at DESC
+      ORDER BY CASE WHEN status = 'closed' THEN 1 ELSE 0 END, created_at DESC
       LIMIT 100`)
       .all<FeedbackRow>(),
+    db.prepare(`SELECT
+      COUNT(*) AS total,
+      SUM(CASE WHEN status = 'new' THEN 1 ELSE 0 END) AS new_count,
+      SUM(CASE WHEN status = 'reviewed' THEN 1 ELSE 0 END) AS reviewed,
+      SUM(CASE WHEN status = 'closed' THEN 1 ELSE 0 END) AS closed,
+      SUM(CASE WHEN status <> 'closed' THEN 1 ELSE 0 END) AS unresolved
+      FROM feedback`)
+      .first<FeedbackCountsRow>(),
   ]);
 
   const latencyValues = (latencyRows.results ?? []).map((row) => row.latency_ms);
@@ -139,6 +163,23 @@ export async function POST(request: Request) {
     average_latency_ms: null,
     last_event_at: null,
     last_error_at: null,
+  };
+
+  const feedbackItems = (feedbackRows.results ?? []).map((row) => ({
+    id: row.id,
+    title: row.title,
+    comment: row.comment,
+    page: row.page,
+    appVersion: row.app_version,
+    status: row.status,
+    createdAt: row.created_at,
+  }));
+  const normalizedFeedbackCounts = {
+    total: feedbackCounts?.total ?? 0,
+    new: feedbackCounts?.new_count ?? 0,
+    reviewed: feedbackCounts?.reviewed ?? 0,
+    closed: feedbackCounts?.closed ?? 0,
+    unresolved: feedbackCounts?.unresolved ?? 0,
   };
 
   return new Response(JSON.stringify({
@@ -175,14 +216,11 @@ export async function POST(request: Request) {
       latencyMs: row.latency_ms,
       metadata: safeMetadata(row.metadata_json),
     })),
-    feedback: (feedbackRows.results ?? []).map((row) => ({
-      id: row.id,
-      title: row.title,
-      comment: row.comment,
-      page: row.page,
-      appVersion: row.app_version,
-      status: row.status,
-      createdAt: row.created_at,
-    })),
+    feedback: feedbackItems,
+    feedbackCounts: normalizedFeedbackCounts,
+    feedbackPool: {
+      items: feedbackItems,
+      ...normalizedFeedbackCounts,
+    },
   }), { headers });
 }

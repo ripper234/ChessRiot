@@ -3,9 +3,9 @@
 Play the current game at [chessriot.ripper234.chatgpt.site](https://chessriot.ripper234.chatgpt.site).
 [Join for updates on WhatsApp](https://chat.whatsapp.com/FaBgiUgl73vLdeqzcqx0vX).
 
-ChessRiot v0.13.4 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
+ChessRiot v0.13.5 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
 
-`feature/runtime-magic-rules-v2` is an undeployed candidate based on v0.13.4.
+`feature/runtime-magic-rules-v2` is an undeployed candidate based on v0.13.5.
 Its branch-only Magic behavior is documented below so it can be reviewed and
 playtested without implying that Production already includes it.
 
@@ -54,14 +54,17 @@ progression work, and features that still need explicit rule design.
 - Open a newest-first public changelog from the home screen or any active game.
 - Join the ChessRiot WhatsApp community from the public homepage or App panel
   without leaving the current game.
-- Send a titled feedback item without leaving the current flow; each environment stores its own owner-review pool.
+- Send a titled feedback item without leaving the current flow; each environment
+  stores its own owner-review pool with an exact unresolved count and a scoped,
+  idempotent owner action for marking an item done.
 - Send one-tap preset cheers during two-player games, plus Good Game or Thanks for 15 minutes after play, without opening unrestricted chat.
 - Install the online game as a desktop-style PWA and see a subtle dot for
   unseen releases.
 - Opt one browser into a generic notification for a specific multiplayer game
   when an opponent hands you the turn, even after ChessRiot is closed.
 - See the exact release version throughout the game app.
-- Inspect privacy-safe, isolated health and activity data for all three environments in the owner control panel.
+- Inspect privacy-safe, isolated health, activity, and unresolved feedback for
+  all three environments in the owner control panel.
 
 ## Current limits
 
