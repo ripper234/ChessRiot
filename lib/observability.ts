@@ -147,6 +147,12 @@ function routeEvent(method: string, pathname: string): string | null {
   if (method === "POST" && /^\/api\/games\/[^/]+\/reactions$/.test(pathname)) {
     return "reaction.sent";
   }
+  if (method === "PUT" && /^\/api\/games\/[^/]+\/push-subscriptions$/.test(pathname)) {
+    return "push.subscription_enabled";
+  }
+  if (method === "DELETE" && /^\/api\/games\/[^/]+\/push-subscriptions$/.test(pathname)) {
+    return "push.subscription_disabled";
+  }
   if (method === "GET" && /^\/api\/games\/[^/]+\/reactions$/.test(pathname)) {
     return null;
   }
@@ -158,6 +164,8 @@ function routeEvent(method: string, pathname: string): string | null {
   // Omitting them keeps the recent-event feed focused on player and system events.
   if (
     (method === "GET" && pathname === "/api/health")
+    || (method === "GET" && pathname === "/api/push/config")
+    || (method === "GET" && /^\/api\/games\/[^/]+\/push-subscriptions$/.test(pathname))
     || (method === "POST" && pathname === "/api/ops/overview")
   ) return null;
   if (pathname.startsWith("/api/")) return "api.request";
@@ -295,7 +303,7 @@ export async function observeHttpRequest(
   if (baseEvent === "reaction.sent" && response.status === 200) {
     event = "reaction.retry";
   }
-  await recordEvent({
+  const requestEvent = recordEvent({
     event,
     outcome,
     requestId: requestInfo.requestId,
@@ -313,6 +321,30 @@ export async function observeHttpRequest(
     latencyMs: performance.now() - startedAt,
     metadata: { ...requestInfo.metadata, ...responseInfo.metadata },
   });
+  const botCommitted = response.headers.get("x-chessriot-bot-committed") === "1";
+  const botLatency = Number(response.headers.get("x-chessriot-bot-latency-ms"));
+  const botDifficulty = Number(response.headers.get("x-chessriot-bot-difficulty"));
+  await Promise.all([
+    requestEvent,
+    ...(botCommitted
+      ? [recordEvent({
+        event: "bot.move_committed",
+        outcome: "success",
+        requestId: requestInfo.requestId,
+        subjectId: requestInfo.subjectId ?? responseInfo.subjectId,
+        latencyMs: Number.isFinite(botLatency) ? botLatency : null,
+        metadata: {
+          color: response.headers.get("x-chessriot-bot-color") === "w" ? "w" : "b",
+          difficulty: Number.isInteger(botDifficulty) ? botDifficulty : null,
+          gameStatus: typeof responseInfo.metadata.gameStatus === "string"
+            ? responseInfo.metadata.gameStatus
+            : null,
+          magic: response.headers.get("x-chessriot-bot-magic") === "1",
+          inline: true,
+        },
+      })]
+      : []),
+  ]);
 }
 
 export function prepareRequestObservation(request: Request): Promise<RequestDetails> {

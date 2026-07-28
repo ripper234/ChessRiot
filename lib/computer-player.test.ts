@@ -1,6 +1,6 @@
 import { Chess } from "chess.js";
 import { describe, expect, it } from "vitest";
-import { chooseComputerMove } from "./computer-player";
+import { chooseComputerMove, seededComputerRandom } from "./computer-player";
 import { applyCandidate, legalMagicMoves } from "./game-rules";
 import type { AiDifficulty } from "./game-types";
 import type { CompiledMagicRules } from "./magic-rules";
@@ -36,6 +36,52 @@ describe("Riot Bot", () => {
     expect(move).toMatchObject({ from: "d1", to: "d8" });
     chess.move(move!);
     expect(chess.isCheckmate()).toBe(true);
+  });
+
+  it("keeps the strongest search bounded without relying on a runtime clock", () => {
+    const chess = new Chess();
+    chess.move("e4");
+
+    const startedAt = process.hrtime.bigint();
+    const move = chooseComputerMove(chess.fen(), 5, "b", () => 0);
+    const elapsedMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+
+    expect(move).not.toBeNull();
+    expect(() => chess.move(move!)).not.toThrow();
+    expect(elapsedMs).toBeLessThan(2_500);
+  }, 3_000);
+
+  it("repeats randomized choices exactly from the same turn seed", () => {
+    const chess = new Chess();
+    chess.move("e4");
+
+    const first = chooseComputerMove(
+      chess.fen(),
+      2,
+      "b",
+      seededComputerRandom("turn-request"),
+    );
+    const repeated = chooseComputerMove(
+      chess.fen(),
+      2,
+      "b",
+      seededComputerRandom("turn-request"),
+    );
+
+    expect(repeated).toEqual(first);
+  });
+
+  it("produces a stable browser-and-server random sequence", () => {
+    const first = seededComputerRandom("turn-request");
+    const repeated = seededComputerRandom("turn-request");
+    const other = seededComputerRandom("other-request");
+
+    expect([first(), first(), first()]).toEqual([
+      repeated(),
+      repeated(),
+      repeated(),
+    ]);
+    expect(other()).not.toBe(seededComputerRandom("turn-request")());
   });
 
   it("returns null when the position has no legal moves", () => {

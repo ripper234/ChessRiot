@@ -3,9 +3,9 @@
 Play the current game at [chessriot.ripper234.chatgpt.site](https://chessriot.ripper234.chatgpt.site).
 [Join for updates on WhatsApp](https://chat.whatsapp.com/FaBgiUgl73vLdeqzcqx0vX).
 
-ChessRiot v0.12.1 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
+ChessRiot v0.13.4 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
 
-`feature/runtime-magic-rules-v2` is an undeployed candidate based on v0.12.1.
+`feature/runtime-magic-rules-v2` is an undeployed candidate based on v0.13.4.
 Its branch-only Magic behavior is documented below so it can be reviewed and
 playtested without implying that Production already includes it.
 
@@ -25,7 +25,9 @@ progression work, and features that still need explicit rule design.
   story about Ron and Omri keeping one private match alive across a real day.
 - Play Riot Bot at one of five levels, starting at Level 3, Medium, as either
   color. White always moves first; if the bot is White, it opens automatically.
-- Create a multiplayer game with one, three, or five days per move, then share one private invitation link. Missing the deadline loses the game.
+  The same depth and evaluation run behind a deterministic node cap, keeping
+  even Level 5 responsive on the hosted edge.
+- Create a multiplayer game with one, three, or five days per move, then copy one private invitation link. Missing the deadline loses the game.
 - Resume recent games on the same device or use a private seat link on another
   device.
 - Play complete standard chess with server-authoritative legal move validation.
@@ -50,10 +52,14 @@ progression work, and features that still need explicit rule design.
 - End an active game by resignation, cancel a waiting game, or start a separate new game without deleting history.
 - Start from one compact new-game screen at `/app`.
 - Open a newest-first public changelog from the home screen or any active game.
+- Join the ChessRiot WhatsApp community from the public homepage or App panel
+  without leaving the current game.
 - Send a titled feedback item without leaving the current flow; each environment stores its own owner-review pool.
 - Send one-tap preset cheers during two-player games, plus Good Game or Thanks for 15 minutes after play, without opening unrestricted chat.
 - Install the online game as a desktop-style PWA and see a subtle dot for
   unseen releases.
+- Opt one browser into a generic notification for a specific multiplayer game
+  when an opponent hands you the turn, even after ChessRiot is closed.
 - See the exact release version throughout the game app.
 - Inspect privacy-safe, isolated health and activity data for all three environments in the owner control panel.
 
@@ -61,10 +67,10 @@ progression work, and features that still need explicit rule design.
 
 Magic Rules are limited to the explicit deterministic v3 vocabulary; arbitrary
 executable rules are never accepted. There is no standalone compile/preview
-action, and no model call occurs while a move is being played. AI coach,
-closed-app push or email notifications, free-form chat, friend graph,
-matchmaking, ratings, rewards, collectible skins, and payments remain out of
-scope. Cross-device account history, Google sign-in, and Telegram release
+action, and no model call occurs while a move is being played. AI coach, email
+notifications, free-form chat, friend graph, matchmaking, ratings, rewards,
+collectible skins, and payments remain out of scope. Cross-device account
+history, Google sign-in, and Telegram release
 announcements remain disabled until their external credentials are configured
 and the corresponding code is explicitly enabled. Guest-scoped throttles
 protect application resources, while volumetric denial-of-service protection

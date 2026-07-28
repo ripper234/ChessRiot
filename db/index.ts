@@ -83,6 +83,43 @@ export async function ensureSchema(): Promise<void> {
           last_seen_at TEXT NOT NULL,
           last_captcha_at TEXT NOT NULL
         )`),
+        db.prepare(`CREATE TABLE IF NOT EXISTS push_subscriptions (
+          id TEXT PRIMARY KEY NOT NULL,
+          game_id TEXT NOT NULL,
+          color TEXT NOT NULL CHECK (color IN ('w', 'b')),
+          account_id TEXT NOT NULL,
+          endpoint_hash TEXT NOT NULL,
+          endpoint TEXT NOT NULL,
+          p256dh TEXT NOT NULL,
+          auth TEXT NOT NULL,
+          expiration_time INTEGER,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          last_success_at TEXT,
+          failure_count INTEGER NOT NULL DEFAULT 0,
+          disabled_at TEXT,
+          UNIQUE (game_id, color, endpoint_hash),
+          FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE,
+          FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+        )`),
+        db.prepare(`CREATE INDEX IF NOT EXISTS push_subscriptions_game_color_updated_idx
+          ON push_subscriptions (game_id, color, updated_at DESC)`),
+        db.prepare(`CREATE TABLE IF NOT EXISTS push_deliveries (
+          id TEXT PRIMARY KEY NOT NULL,
+          subscription_id TEXT NOT NULL,
+          game_id TEXT NOT NULL,
+          game_version INTEGER NOT NULL,
+          kind TEXT NOT NULL CHECK (kind IN ('your_turn')),
+          status TEXT NOT NULL CHECK (status IN ('pending', 'sent', 'failed', 'stale')),
+          status_code INTEGER,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE (subscription_id, game_id, game_version, kind),
+          FOREIGN KEY (subscription_id) REFERENCES push_subscriptions(id) ON DELETE CASCADE,
+          FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
+        )`),
+        db.prepare(`CREATE INDEX IF NOT EXISTS push_deliveries_created_idx
+          ON push_deliveries (created_at DESC)`),
         db.prepare(`CREATE TABLE IF NOT EXISTS game_memberships (
           game_id TEXT NOT NULL,
           color TEXT NOT NULL CHECK (color IN ('w', 'b')),

@@ -74,6 +74,69 @@ export const accounts = sqliteTable("accounts", {
   lastCaptchaAt: text("last_captcha_at").notNull(),
 });
 
+export const pushSubscriptions = sqliteTable(
+  "push_subscriptions",
+  {
+    id: text("id").primaryKey().notNull(),
+    gameId: text("game_id")
+      .notNull()
+      .references(() => games.id, { onDelete: "cascade" }),
+    color: text("color").notNull(),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    endpointHash: text("endpoint_hash").notNull(),
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    expirationTime: integer("expiration_time"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    lastSuccessAt: text("last_success_at"),
+    failureCount: integer("failure_count").notNull().default(0),
+    disabledAt: text("disabled_at"),
+  },
+  (table) => [
+    uniqueIndex("push_subscriptions_game_color_endpoint_unique")
+      .on(table.gameId, table.color, table.endpointHash),
+    index("push_subscriptions_game_color_updated_idx")
+      .on(table.gameId, table.color, table.updatedAt),
+    check("push_subscriptions_color_check", sql`${table.color} IN ('w', 'b')`),
+  ],
+);
+
+export const pushDeliveries = sqliteTable(
+  "push_deliveries",
+  {
+    id: text("id").primaryKey().notNull(),
+    subscriptionId: text("subscription_id")
+      .notNull()
+      .references(() => pushSubscriptions.id, { onDelete: "cascade" }),
+    gameId: text("game_id")
+      .notNull()
+      .references(() => games.id, { onDelete: "cascade" }),
+    gameVersion: integer("game_version").notNull(),
+    kind: text("kind").notNull(),
+    status: text("status").notNull(),
+    statusCode: integer("status_code"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("push_deliveries_once_unique")
+      .on(table.subscriptionId, table.gameId, table.gameVersion, table.kind),
+    index("push_deliveries_created_idx").on(table.createdAt),
+    check(
+      "push_deliveries_kind_check",
+      sql`${table.kind} IN ('your_turn')`,
+    ),
+    check(
+      "push_deliveries_status_check",
+      sql`${table.status} IN ('pending', 'sent', 'failed', 'stale')`,
+    ),
+  ],
+);
+
 export const gameMemberships = sqliteTable(
   "game_memberships",
   {

@@ -41,6 +41,11 @@ test("renders an identity-independent public homepage and guest play route", asy
   assert.match(signedOutHtml, /TOTAL PLAY/);
   assert.match(signedOutHtml, /href="\/app"/);
   assert.match(signedOutHtml, /href="\/demo"/);
+  assert.match(
+    signedOutHtml,
+    /<a(?=[^>]*href="https:\/\/chat\.whatsapp\.com\/FaBgiUgl73vLdeqzcqx0vX")(?=[^>]*target="_blank")(?=[^>]*rel="noopener noreferrer")[^>]*>/,
+  );
+  assert.match(signedOutHtml, /JOIN THE COMMUNITY ON WHATSAPP/);
   assert.match(signedOutHtml, /<html(?![^>]*data-theme)[^>]*>/i);
   assert.doesNotMatch(signedOutHtml, /SIGN IN|Playing as|SWITCH ACCOUNT/i);
   assert.doesNotMatch(signedOutHtml, /Play chess/);
@@ -121,6 +126,11 @@ test("renders an identity-independent public homepage and guest play route", asy
   assert.match(gameHtml, /aria-label="Choose visual theme"/);
   assert.match(gameHtml, /Classic/);
   assert.match(gameHtml, /Riot/);
+  assert.match(
+    gameHtml,
+    /<a(?=[^>]*href="https:\/\/chat\.whatsapp\.com\/FaBgiUgl73vLdeqzcqx0vX")(?=[^>]*target="_blank")(?=[^>]*rel="noopener noreferrer")[^>]*>/,
+  );
+  assert.match(gameHtml, /JOIN WHATSAPP COMMUNITY/);
 });
 
 test("renders the narrated 90-second demo page", async () => {

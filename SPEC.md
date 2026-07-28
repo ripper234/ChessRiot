@@ -1,8 +1,63 @@
-# ChessRiot v0.12.1 specification
+# ChessRiot v0.13.4 specification
+
+## v0.13.3 release additions
+
+- After a legal Solo move, the browser paints the human action and calculates
+  Riot Bot's reply locally from the same evaluation, depth, node budget, and
+  request-seeded random stream used by the server.
+- The server independently reconstructs and validates both actions, then
+  stores the human and bot plies in one conditional D1 batch. The successful
+  response advances the authoritative game by two versions and requires no
+  follow-up bot request or post-commit game reads.
+- The preview never advances accepted server version or unlocks the next move.
+  A rejection or transport failure reconciles against authoritative state.
+  Authorized reads retain the leased pending-turn recovery path for older or
+  interrupted games.
+- Riot Bot search now uses its deterministic node budget as the sole cutoff so
+  browser and Worker calculation cannot diverge because their clocks behave
+  differently.
+
+## v0.13.2 release additions
+
+- Riot Bot search keeps its existing level-specific depth, move ordering, and
+  evaluation while enforcing a deterministic node cap alongside the local
+  elapsed-time budget.
+- The deterministic cap bounds search even on an edge runtime whose clocks do
+  not advance during CPU work. Default play remains roughly 0.2 seconds of
+  search and Level 5 remains under one second in the frozen-clock regression.
+
+## v0.13.1 release additions
+
+- The public homepage links directly to the ChessRiot WhatsApp community.
+- The App panel exposes the same community link without replacing or
+  interrupting the active game.
+- Both placements use one shared URL constant and open WhatsApp in a separate
+  tab with safe external-link attributes.
+
+## v0.13.0 release additions
+
+- Each authorized multiplayer seat may opt the current browser into Web Push
+  alerts for one specific game. Permission and subscription creation remain an
+  explicit user action in the App panel.
+- A subscription association is keyed by game, seat color, and a SHA-256
+  endpoint identifier. Turning alerts off for one game does not unsubscribe the
+  browser endpoint or disturb associations for other games.
+- A successful, non-idempotent multiplayer move schedules best-effort delivery
+  to the seat whose turn begins. Delivery failure cannot roll back, delay, or
+  alter the committed move.
+- Each subscription receives at most one `your_turn` delivery for a game
+  version. Expired endpoints are removed, repeated failures are disabled, and
+  delivery records expire after 30 days.
+- Push endpoints are limited to known browser push services. Notification
+  content is generic, contains no player names or private seat capabilities,
+  and navigation is reconstructed only from a validated game UUID.
+- `VAPID_PUBLIC_KEY`, secret `VAPID_PRIVATE_JWK`, and `VAPID_SUBJECT` must all
+  be present for the feature to appear. Solo play and incomplete configuration
+  fail closed.
 
 ## Runtime Magic Rules v2 branch candidate
 
-This undeployed feature branch is based on v0.12.1 and does not change the
+This undeployed feature branch is based on v0.13.4 and does not change the
 release number. It replaces the stable Coming Soon new-game boundary on this
 branch only.
 
@@ -249,11 +304,10 @@ branch only.
   conditional Solo bot level, and one primary action.
 - Accepted moves receive a short destination animation; captures also receive a
   brief impact animation. Reduced-motion preferences disable both.
-- In Solo, the client previews a locally legal human move immediately. The
-  server then commits that human ply on its own and returns it before Riot Bot
-  starts searching. A background game read commits the pending bot reply.
-  Rejection or transport failure reconciles the preview against authoritative
-  state.
+- In Solo, the client previews a locally legal human move and the deterministic
+  Riot Bot reply while one request is in flight. The server independently
+  validates and atomically stores both plies. Rejection or transport failure
+  reconciles the preview against authoritative state.
 - `/changelog` lists every release newest first with a short summary and GitHub
   source link, and is linked from the home and game interfaces.
 - A visible Feedback button opens an in-place form with required title,
@@ -316,12 +370,14 @@ This file and `MVP.md` are the source of truth for the current milestone.
   only once. The eligible piece and limit are fixed at turn start; all legs use
   the same physical piece, the player may stop early, and check ends the turn.
   Legacy second-leg columns and v1/v2 rule documents remain readable.
-- In Solo, the human move commits atomically as one ply and returns immediately.
-  The client then requests Riot Bot's pending turn in the background. Riot Bot
-  evaluates from its assigned color, uses bounded server-side search, and
-  commits its own ply through the same chess.js rules adapter. Every
-  authenticated game read also recovers a pending bot turn, so closing or
-  refreshing cannot strand the game.
+- In Solo, the browser and server calculate the same request-seeded Riot Bot
+  action with the shared bounded search, including deterministic Magic
+  continuations. The server reconstructs authoritative history, validates the
+  human action, independently calculates and validates the reply, then
+  conditionally stores both move rows and the final game state in one atomic
+  batch. The version and ply count advance by two. Every authenticated game
+  read also retains the leased recovery path for a legacy pending bot turn, so
+  an older or interrupted game cannot remain stranded.
 - Replaying move history is required before validation so repetition remains correct.
 - Promotion data is accepted only when a pawn reaches its final rank. Under the
   no-promotion rule, a pawn cannot move onto that rank at all.

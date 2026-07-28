@@ -1,36 +1,24 @@
 import type { Square } from "chess.js";
-import { applyCandidate } from "./game-rules";
+import { chooseComputerMove, seededComputerRandom } from "./computer-player";
+import { applyCandidate, type CandidateMove } from "./game-rules";
 import type { GameSnapshot, Promotion } from "./game-types";
 
 export function shouldAcceptGameSnapshot(currentVersion: number, incomingVersion: number): boolean {
   return incomingVersion > currentVersion;
 }
 
-export function optimisticMoveSnapshot(
+function appendOptimisticMove(
   current: GameSnapshot,
-  from: Square,
-  to: Square,
-  promotion?: Promotion,
-  options: {
-    second?: { from: Square; to: Square };
-    continuation?: Array<{
-      from: Square;
-      to: Square;
-      promotion?: Promotion;
-    }>;
-    createdAt?: string;
-  } = {},
+  candidate: CandidateMove,
+  createdAt: string,
 ): GameSnapshot | null {
-  if (current.status !== "active" || current.turn !== current.you.color) return null;
   try {
-    const outcome = applyCandidate(current.initialFen, current.moves, {
-      from,
-      to,
-      ...(promotion ? { promotion } : {}),
-      ...(options.second ? { second: options.second } : {}),
-      ...(options.continuation ? { continuation: options.continuation } : {}),
-    }, current.magicRules ?? null);
-    const createdAt = options.createdAt ?? new Date().toISOString();
+    const outcome = applyCandidate(
+      current.initialFen,
+      current.moves,
+      candidate,
+      current.magicRules ?? null,
+    );
     return {
       ...current,
       // This is display-only. The server remains the sole owner of version state.
@@ -51,7 +39,7 @@ export function optimisticMoveSnapshot(
           color: outcome.move.color,
           from: outcome.move.from,
           to: outcome.move.to,
-          promotion: promotion ?? null,
+          promotion: candidate.promotion ?? null,
           san: outcome.move.san,
           continuation: outcome.continuationMoves.map((move) => ({
             from: move.from,
@@ -76,4 +64,81 @@ export function optimisticMoveSnapshot(
   } catch {
     return null;
   }
+}
+
+export function optimisticMoveSnapshot(
+  current: GameSnapshot,
+  from: Square,
+  to: Square,
+  promotion?: Promotion,
+  options: {
+    second?: { from: Square; to: Square };
+    continuation?: Array<{
+      from: Square;
+      to: Square;
+      promotion?: Promotion;
+    }>;
+    createdAt?: string;
+  } = {},
+): GameSnapshot | null {
+  if (current.status !== "active" || current.turn !== current.you.color) return null;
+  return appendOptimisticMove(
+    current,
+    {
+      from,
+      to,
+      ...(promotion ? { promotion } : {}),
+      ...(options.second ? { second: options.second } : {}),
+      ...(options.continuation ? { continuation: options.continuation } : {}),
+    },
+    options.createdAt ?? new Date().toISOString(),
+  );
+}
+
+export function optimisticSoloTurnSnapshot(
+  current: GameSnapshot,
+  from: Square,
+  to: Square,
+  turnSeed: string,
+  promotion?: Promotion,
+  options: {
+    second?: { from: Square; to: Square };
+    continuation?: Array<{
+      from: Square;
+      to: Square;
+      promotion?: Promotion;
+    }>;
+    createdAt?: string;
+  } = {},
+): GameSnapshot | null {
+  const createdAt = options.createdAt ?? new Date().toISOString();
+  const human = optimisticMoveSnapshot(
+    current,
+    from,
+    to,
+    promotion,
+    {
+      ...(options.second ? { second: options.second } : {}),
+      ...(options.continuation ? { continuation: options.continuation } : {}),
+      createdAt,
+    },
+  );
+  if (
+    !human
+    || human.mode !== "solo"
+    || human.status !== "active"
+    || human.aiDifficulty === null
+    || human.turn === human.you.color
+  ) {
+    return human;
+  }
+  const candidate = chooseComputerMove(
+    human.fen,
+    human.aiDifficulty,
+    human.turn,
+    seededComputerRandom(turnSeed),
+    human.magicRules ?? null,
+  );
+  if (!candidate) return human;
+  return appendOptimisticMove(human, candidate, createdAt);
 }

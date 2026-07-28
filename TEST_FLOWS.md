@@ -21,14 +21,20 @@
 
 1. Enter a name, choose Solo, and verify Bot level starts at Level 3, Medium.
 2. Move the level lower and higher, then restore Medium and create the game.
-3. Verify both color assignments: as White, drag e2 to e4 and verify the pawn appears on e4 immediately while Riot Bot is still thinking; as Black, verify Riot Bot's White opening exists before the board becomes playable.
-4. Verify the human move becomes durable before Riot Bot replies, then verify
-   the bot reply animates, the move log shows two plies, and the turn returns to
-   White.
-5. Close or refresh after the human ply but before the bot ply and verify the
-   next authorized load completes the pending bot turn.
+3. Verify both color assignments: as White, drag e2 to e4 and verify the pawn
+   appears immediately, followed almost at once by Riot Bot's local reply; as
+   Black, verify Riot Bot's White opening exists before the board becomes
+   playable.
+4. Verify the move request returns the same displayed bot reply, atomically
+   stores both plies, advances the authoritative version by two, and returns
+   the turn to the human without a follow-up game request.
+5. Simulate a legacy game stored after only the human ply, then close or
+   refresh and verify the next authorized load completes the pending bot turn.
 6. Reopen the private link and verify the same board, level, history, and turn.
 7. Complete a Solo game and verify Riot Bot does not move after checkmate or another terminal result.
+8. At every level, use the same turn seed in browser and server search and
+   verify the selected move is identical. At Level 5, verify one legal move
+   returns within 2.5 seconds and immediate checkmates remain selected.
 
 ## Two-player happy path
 
@@ -64,7 +70,9 @@
 7. Verify each completed sequence produces one move row, ply, version, deadline
    update, and repetition position. Verify human, Riot Bot, replay, history,
    confirmation, and sound agree, and provider-call counts do not change while
-   moves are made.
+   moves are made. In Solo, submit a human Magic continuation and verify the
+   human action plus Riot Bot's deterministic reply commit in one response,
+   advance the version by two, and retain both continuation payloads.
 8. Reopen stored v1 and v2 Magic games and verify immutable rules, history,
    replay, and legal moves remain readable.
 9. Expire and reclaim an identical pending create intent. Verify the old owner
@@ -176,7 +184,16 @@
 - Verify the manifest and install icons support a standalone desktop-style
   install. Confirm the service worker never caches game, join, or API routes.
 - Verify a new release produces a subtle blue dot until opened. Confirm the
-  update dialog does not advertise dormant account-wide move alerts.
+  App panel exposes Turn alerts only for multiplayer games when complete VAPID
+  configuration is present.
+- On Android Chrome, enable Turn alerts for one multiplayer game, fully close
+  ChessRiot, commit an opponent move from another device, and verify exactly one
+  generic notification opens the correct game without exposing names, seat
+  tokens, or private links.
+- Associate the same browser push subscription with two games. Disable one and
+  verify the other remains enabled. Verify a retry of the same committed move
+  sends no second notification, failed delivery never changes the move result,
+  and a 404 or 410 push response removes the stale endpoint associations.
 
 ## Observability
 

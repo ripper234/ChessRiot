@@ -29,6 +29,7 @@ import {
   unlockGameSounds,
   writeSoundPreference,
 } from "@/lib/game-sounds";
+import { copyInvitationLink } from "@/lib/invitation-copy";
 import {
   actionEndpointSquares,
   actionSanSequence,
@@ -49,7 +50,11 @@ import {
   type ReactionKey,
   reactionPreset,
 } from "@/lib/game-reactions";
-import { optimisticMoveSnapshot, shouldAcceptGameSnapshot } from "@/lib/game-snapshots";
+import {
+  optimisticMoveSnapshot,
+  optimisticSoloTurnSnapshot,
+  shouldAcceptGameSnapshot,
+} from "@/lib/game-snapshots";
 import {
   buildReplayFrames,
   nextHistoryCursor,
@@ -709,7 +714,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
     moveCommitInFlight.current = true;
     closeMoveConfirmation();
     const token = activeToken.current;
-    const preview = currentGame.mode === "solo"
+    const requestId = generateUuid();
+    const humanPreview = currentGame.mode === "solo"
       ? optimisticMoveSnapshot(
         currentGame,
         intent.from,
@@ -719,6 +725,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       )
       : null;
     const authoritativeVersion = intent.expectedVersion;
+    let botPreviewTimer: number | null = null;
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 15_000);
     setBusy(true);
@@ -726,8 +733,33 @@ export function GameRoom({ gameId }: { gameId: string }) {
     setSelected(null);
     setPromotionMove(null);
     setMagicDraft(null);
-    if (preview) {
-      setOptimisticGame(preview);
+    if (humanPreview) {
+      setOptimisticGame(humanPreview);
+      if (humanPreview.status === "active") {
+        botPreviewTimer = window.setTimeout(() => {
+          const fullPreview = optimisticSoloTurnSnapshot(
+            currentGame,
+            intent.from,
+            intent.to,
+            requestId,
+            intent.promotion,
+            {
+              ...(intent.second ? { second: intent.second } : {}),
+              ...(intent.continuation
+                ? { continuation: intent.continuation }
+                : {}),
+              createdAt: humanPreview.updatedAt,
+            },
+          );
+          if (
+            fullPreview
+            && moveCommitInFlight.current
+            && latestVersion.current === authoritativeVersion
+          ) {
+            setOptimisticGame(fullPreview);
+          }
+        }, 100);
+      }
     }
     try {
       const response = await fetch(`/api/games/${gameId}/moves`, {
@@ -740,7 +772,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
           ...(intent.promotion ? { promotion: intent.promotion } : {}),
           ...(intent.continuation ? { continuation: intent.continuation } : {}),
           expectedVersion: intent.expectedVersion,
-          requestId: generateUuid(),
+          requestId,
         }),
       });
       const data = (await response.json()) as {
@@ -775,6 +807,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       if (latestVersion.current <= authoritativeVersion) setOptimisticGame(null);
     } finally {
       window.clearTimeout(timeout);
+      if (botPreviewTimer !== null) window.clearTimeout(botPreviewTimer);
       moveCommitInFlight.current = false;
       setBusy(false);
     }
@@ -1127,31 +1160,17 @@ export function GameRoom({ gameId }: { gameId: string }) {
     showHistory(null);
   }
 
-  async function shareInvite() {
+  async function copyInvite() {
     if (!inviteUrl) return;
-    const markShared = () => {
+    const markCopied = () => {
       setInviteShared(true);
       window.setTimeout(() => setInviteShared(false), 2_000);
     };
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: "ChessRiot challenge",
-          text: "Your move. Join my ChessRiot game!",
-          url: inviteUrl,
-        });
-        markShared();
-        return;
-      }
-    } catch (caught) {
-      if (caught instanceof DOMException && caught.name === "AbortError") return;
+    if (await copyInvitationLink(inviteUrl, navigator.clipboard)) {
+      markCopied();
+      return;
     }
-    try {
-      await navigator.clipboard.writeText(inviteUrl);
-      markShared();
-    } catch {
-      setMessage("Select and copy the invitation link below.");
-    }
+    setMessage("Clipboard access is unavailable. Select and copy the invitation link below.");
   }
 
   async function toggleSound() {
@@ -1523,7 +1542,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
             <section className="side-card invite-card">
               <span className="side-icon">⌁</span><h2>INVITE PLAYER 2</h2>
               <p>Send this private link. The first person to submit it claims Black.</p>
-              {inviteUrl ? <><button className="primary-button" onClick={() => void shareInvite()}>{inviteShared ? "LINK READY ✓" : "SHARE INVITATION"}</button>
+              {inviteUrl ? <><button className="primary-button" onClick={() => void copyInvite()}>{inviteShared ? "COPIED ✓" : "COPY INVITATION LINK"}</button>
                 <input className="invite-field" value={inviteUrl} readOnly onFocus={(event) => event.currentTarget.select()} aria-label="Invitation link" /></> :
                 <p className="form-error">The invitation link is no longer stored on this device.</p>}
             </section>

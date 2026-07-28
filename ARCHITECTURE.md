@@ -8,12 +8,17 @@
   boundary used only during game creation.
 - `lib/magic-rules-compiler.ts`: normalized, compiler-versioned D1 cache with a
   short compilation lease; failures are never cached.
-- `lib/computer-player.ts`: bounded server-side move search for Riot Bot.
-- `lib/computer-turn.ts`: recovery path for a pending Solo computer turn.
+- `lib/computer-player.ts`: deterministic bounded move search shared by the
+  Solo browser preview and authoritative server.
+- `lib/computer-turn.ts`: leased recovery path for a legacy or interrupted
+  pending Solo turn.
 - `lib/account-auth.ts`: trusted hosting identity and stable guest-id derivation.
 - `lib/accounts.ts`: durable identity summaries and identity-scoped rate limits.
 - `lib/game-auth.ts`: hybrid account-membership and private-seat authorization.
 - `lib/observability.ts`: central request observation, safe event storage, correlation, and retention.
+- `lib/push-notifications.ts`: per-game subscription storage, Web Push request
+  construction, duplicate suppression, and best-effort delivery.
+- `lib/push-client.ts`: browser subscription serialization and endpoint hashing.
 - `lib/ops-auth.ts`: short-lived signed observability-read grant verification.
 - `lib/demo-video.ts`: fixed narration, signed generation requests, bounded
   job state, and atomic generated-media manifest handling.
@@ -37,13 +42,15 @@ asset URL, model, or voice.
 
 The server is authoritative. The client submits a move, zero or more
 continuation legs by the same Magic-enabled physical piece, the expected
-version, and an idempotency key. Each mutation
-reconstructs the chess engine from immutable history and validates FEN, turn,
-and ply invariants before the candidate. Every completed human turn atomically
-advances one ply and returns immediately. In Solo, the client then requests the
-pending Riot Bot turn in the background. Every authorized game read runs the
-same pending-turn recovery, so refresh or browser closure cannot strand the
-game. A White bot opening is committed during create.
+version, and an idempotency key. Each mutation reconstructs the chess engine
+from immutable history and validates FEN, turn, and ply invariants before the
+candidate. A Multiplayer request advances one atomic action ply. A Solo request
+also calculates and validates Riot Bot's deterministic reply, including any
+legal Magic continuation, then conditionally stores both move rows and the
+final game state in one D1 batch. A successful Solo response is shaped from
+that committed result without additional game or move reads. Every authorized
+game read retains the leased pending-turn recovery path for legacy or
+interrupted states. A White bot opening is committed during create.
 
 On this feature branch, game creation accepts an optional Magic prompt. The
 server normalizes it and first resolves an already-completed idempotent create.
@@ -68,16 +75,30 @@ check ends the turn immediately. All legs share one atomic ply, version,
 deadline update, and repetition position, including when a pawn promotes.
 Legacy immutable v1 and v2 documents remain readable.
 
+Closed-app turn alerts are opt-in and game-specific. The browser holds one
+origin-level PushSubscription, while D1 associates its endpoint hash separately
+with each authorized game and seat. Disabling one association never calls the
+browser-wide `unsubscribe()` operation. After a successful multiplayer move,
+the Worker clones the response and schedules delivery with `waitUntil`; it
+queries only the new turn’s game and color, claims a unique
+subscription/game/version delivery row, and sends a generic encrypted payload.
+Known browser push-service origins, strict key bounds, validated UUID
+navigation, stale-endpoint deletion, and a failure circuit breaker contain the
+external delivery boundary. The move remains authoritative regardless of every
+notification outcome.
+
 Mutation provenance uses the exact URL origin plus browser-controlled
 `Sec-Fetch-Site`. A Sites-sandboxed opaque `Origin: null` is accepted only with
 `Sec-Fetch-Site: same-origin`; cross-site metadata and unverifiable opaque
 origins fail closed.
 
-While the human request is in flight, the client renders a display-only legal
-move preview without advancing the accepted server version or local
-persistence. The one-ply authoritative response replaces it, then the bot reply
-arrives as the next version. Rejection or transport failure reconciles the
-preview against the server before rolling it back.
+While a Solo request is in flight, the client first renders the legal human
+move, then runs the shared request-seeded Riot Bot search and renders its reply.
+This display-only preview does not advance the accepted server version, write
+local persistence, or unlock another move. The authoritative two-ply response
+must match because the server independently repeats the same deterministic
+search. Rejection or transport failure reconciles the preview against the
+server before rolling it back.
 
 Player authority is identity-scoped and game-specific. New guest games derive
 a stable opaque guest id from a browser-local identity secret that is distinct
@@ -96,15 +117,24 @@ human may be White or Black. The unowned bot seat uses an unreachable stored
 hash and never receives a membership, so only the human player can
 authorize the game.
 
-Mutating routes enforce fixed-window identity limits. Riot Bot work uses a
-short per-game/version D1 lease, then revalidates the authoritative version
-before searching or committing. These controls reduce application-resource
-abuse and duplicate compute; the Sites/Cloudflare edge remains responsible for
-volumetric network protection.
+Mutating routes enforce fixed-window identity limits. Normal Solo replies are
+covered by the human move's authorization, idempotency key, version guard, and
+single conditional batch. Pending-turn recovery uses a short per-game/version
+D1 lease, then revalidates the authoritative version before searching or
+committing. These controls reduce application-resource abuse and duplicate
+compute; the Sites/Cloudflare edge remains responsible for volumetric network
+protection.
 
 Concurrent game reads that encounter an existing bot lease wait for a bounded
 fresh read instead of briefly returning the pre-bot version. They never acquire
 a second lease or duplicate a move.
+
+Riot Bot keeps the same level-specific search depth, ordered alpha-beta search,
+evaluation function, and deterministic node budget. The node budget is the sole
+cutoff because Cloudflare Workers freeze elapsed-time clocks during CPU-only
+work while browsers do not. Request-seeded random choices and a clock-free
+search make the browser preview and server result identical without weakening
+the bot.
 
 Each environment stores its own observability events in its own D1. The Worker
 wraps API requests, normalizes routes, skips unchanged polling, and uses

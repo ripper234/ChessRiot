@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "08f3c920-ea41-40ae-b536-0d7f2db1bf69",
-  "prevId": "5cad85a4-e9b0-419a-9b81-b2f714153156",
+  "id": "07b9c736-8bf6-46c6-a179-028a5e07458b",
+  "prevId": "08f3c920-ea41-40ae-b536-0d7f2db1bf69",
   "tables": {
     "accounts": {
       "name": "accounts",
@@ -395,6 +395,66 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "game_create_intents": {
+      "name": "game_create_intents",
+      "columns": {
+        "request_id": {
+          "name": "request_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lease_token": {
+          "name": "lease_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lease_until": {
+          "name": "lease_until",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "game_create_intents_lease_idx": {
+          "name": "game_create_intents_lease_idx",
+          "columns": [
+            "lease_until"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "game_memberships": {
       "name": "game_memberships",
       "columns": {
@@ -783,6 +843,90 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "magic_rule_compilations": {
+      "name": "magic_rule_compilations",
+      "columns": {
+        "cache_key": {
+          "name": "cache_key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "compiler_version": {
+          "name": "compiler_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "rules_json": {
+          "name": "rules_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "lease_token": {
+          "name": "lease_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "lease_until": {
+          "name": "lease_until",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "magic_rule_compilations_lease_idx": {
+          "name": "magic_rule_compilations_lease_idx",
+          "columns": [
+            "status",
+            "lease_until"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "magic_rule_compilations_status_check": {
+          "name": "magic_rule_compilations_status_check",
+          "value": "\"magic_rule_compilations\".\"status\" IN ('pending', 'ready')"
+        },
+        "magic_rule_compilations_state_check": {
+          "name": "magic_rule_compilations_state_check",
+          "value": "(\n        (\"magic_rule_compilations\".\"status\" = 'pending' AND \"magic_rule_compilations\".\"rules_json\" IS NULL\n          AND \"magic_rule_compilations\".\"lease_token\" IS NOT NULL AND \"magic_rule_compilations\".\"lease_until\" IS NOT NULL)\n        OR\n        (\"magic_rule_compilations\".\"status\" = 'ready' AND \"magic_rule_compilations\".\"rules_json\" IS NOT NULL\n          AND \"magic_rule_compilations\".\"lease_token\" IS NULL AND \"magic_rule_compilations\".\"lease_until\" IS NULL)\n      )"
+        }
+      }
+    },
     "moves": {
       "name": "moves",
       "columns": {
@@ -858,6 +1002,13 @@
         },
         "second_san": {
           "name": "second_san",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "continuation_json": {
+          "name": "continuation_json",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

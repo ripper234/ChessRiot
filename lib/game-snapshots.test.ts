@@ -2,7 +2,11 @@ import { Chess } from "chess.js";
 import { describe, expect, it } from "vitest";
 import { buildReplayFrames } from "./game-replay";
 import type { GameSnapshot } from "./game-types";
-import { optimisticMoveSnapshot, shouldAcceptGameSnapshot } from "./game-snapshots";
+import {
+  optimisticMoveSnapshot,
+  optimisticSoloTurnSnapshot,
+  shouldAcceptGameSnapshot,
+} from "./game-snapshots";
 
 function startingSnapshot(overrides: Partial<GameSnapshot> = {}): GameSnapshot {
   return {
@@ -70,6 +74,85 @@ describe("optimisticMoveSnapshot", () => {
       san: "e4",
     });
     expect(authoritative).toEqual(startingSnapshot());
+  });
+
+  it("shows the deterministic Solo reply before the request returns", () => {
+    const authoritative = startingSnapshot({ aiDifficulty: 1 });
+    const optimistic = optimisticSoloTurnSnapshot(
+      authoritative,
+      "e2",
+      "e4",
+      "turn-request",
+      undefined,
+      { createdAt: "2026-07-24T00:00:01.000Z" },
+    );
+
+    expect(optimistic).not.toBeNull();
+    expect(optimistic).toMatchObject({
+      version: 7,
+      turn: "w",
+      plyCount: 2,
+      updatedAt: "2026-07-24T00:00:01.000Z",
+    });
+    expect(optimistic!.moves.map((move) => move.color)).toEqual(["w", "b"]);
+    expect(new Chess(optimistic!.fen).turn()).toBe("w");
+    expect(authoritative).toEqual(startingSnapshot({ aiDifficulty: 1 }));
+  });
+
+  it("keeps a human Magic continuation in the instant Solo preview", () => {
+    const authoritative = startingSnapshot({
+      aiDifficulty: 1,
+      magicRules: {
+        version: 3,
+        prompt: "Knights move 3 times",
+        labels: ["Knights may move up to 3 times per turn; check ends the turn"],
+        rules: [{
+          kind: "move_sequence",
+          pieces: ["n"],
+          maxMoves: 3,
+        }],
+      },
+    });
+    const optimistic = optimisticSoloTurnSnapshot(
+      authoritative,
+      "b1",
+      "c3",
+      "magic-turn-request",
+      undefined,
+      {
+        continuation: [{ from: "c3", to: "b5" }],
+        createdAt: "2026-07-24T00:00:01.000Z",
+      },
+    );
+
+    expect(optimistic).not.toBeNull();
+    expect(optimistic?.moves[0]).toMatchObject({
+      from: "b1",
+      to: "c3",
+      continuation: [{
+        from: "c3",
+        to: "b5",
+        san: "Nb5",
+      }],
+    });
+    expect(optimistic?.moves).toHaveLength(2);
+  });
+
+  it("returns only the human preview when that move ends the game", () => {
+    const mate = startingSnapshot({
+      aiDifficulty: 5,
+      initialFen: "8/8/8/8/8/6K1/5Q2/7k w - - 0 1",
+      fen: "8/8/8/8/8/6K1/5Q2/7k w - - 0 1",
+    });
+    const optimistic = optimisticSoloTurnSnapshot(
+      mate,
+      "f2",
+      "f1",
+      "turn-request",
+    );
+
+    expect(optimistic?.status).toBe("completed");
+    expect(optimistic?.moves).toHaveLength(1);
   });
 
   it("keeps the position immediately before an optimistic move available to history", () => {

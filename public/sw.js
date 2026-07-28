@@ -1,4 +1,5 @@
 const STATIC_CACHE = "chessriot-static-v1";
+const GAME_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PRECACHE = [
   "/manifest.webmanifest",
   "/icons/chessriot-192.png",
@@ -53,22 +54,49 @@ self.addEventListener("fetch", (event) => {
   );
 });
 
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data?.json() ?? {};
+  } catch {
+    payload = {};
+  }
+  const gameId = typeof payload.gameId === "string" && GAME_ID_PATTERN.test(payload.gameId)
+    ? payload.gameId
+    : null;
+  const path = gameId ? `/g/${gameId}` : "/app";
+  event.waitUntil(
+    self.registration.showNotification("ChessRiot", {
+      body: "It’s your turn.",
+      icon: "/icons/chessriot-192.png",
+      badge: "/icons/chessriot-192.png",
+      tag: gameId ? `turn-${gameId}` : "chessriot-turn",
+      data: { path },
+    }),
+  );
+});
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const path = event.notification.data?.path;
+  const candidate = event.notification.data?.path;
+  const path = (
+    candidate === "/app"
+    || (
+      typeof candidate === "string"
+      && candidate.startsWith("/g/")
+      && GAME_ID_PATTERN.test(candidate.slice(3))
+    )
+  ) ? candidate : "/app";
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (clients) => {
-      const matching = typeof path === "string"
-        ? clients.find((client) => new URL(client.url).pathname === path)
-        : null;
+      const matching = clients.find((client) => new URL(client.url).pathname === path);
       if (matching) return matching.focus();
       const existing = clients[0];
-      if (existing && typeof path === "string") {
+      if (existing) {
         const navigated = await existing.navigate(path);
         return navigated?.focus();
       }
-      if (existing) return existing.focus();
-      return self.clients.openWindow(typeof path === "string" ? path : "/app");
+      return self.clients.openWindow(path);
     }),
   );
 });

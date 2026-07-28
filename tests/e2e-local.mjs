@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { createHmac, randomBytes, randomUUID } from "node:crypto";
+import {
+  createHash,
+  createHmac,
+  generateKeyPairSync,
+  randomBytes,
+  randomUUID,
+} from "node:crypto";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -15,6 +21,22 @@ const requestIdForColor = (color) => {
 };
 const opsSecret = "local-ops-read-secret-for-e2e-tests";
 const accountIdSecret = "local-account-id-secret-for-e2e-tests";
+const vapidKeys = generateKeyPairSync("ec", { namedCurve: "P-256" });
+const vapidPrivateJwk = vapidKeys.privateKey.export({ format: "jwk" });
+const vapidPublicJwk = vapidKeys.publicKey.export({ format: "jwk" });
+const vapidPublicKey = Buffer.concat([
+  Buffer.from([4]),
+  Buffer.from(vapidPublicJwk.x, "base64url"),
+  Buffer.from(vapidPublicJwk.y, "base64url"),
+]).toString("base64url");
+const pushClientKeys = generateKeyPairSync("ec", { namedCurve: "P-256" });
+const pushClientPublicJwk = pushClientKeys.publicKey.export({ format: "jwk" });
+const pushClientPublicKey = Buffer.concat([
+  Buffer.from([4]),
+  Buffer.from(pushClientPublicJwk.x, "base64url"),
+  Buffer.from(pushClientPublicJwk.y, "base64url"),
+]).toString("base64url");
+const outboundPushRequests = [];
 const accountBySeatToken = new Map();
 const guestIdentityByLabel = new Map();
 let magicCompilerCalls = 0;
@@ -177,9 +199,24 @@ function createRuntime() {
       OPS_READ_SECRET: opsSecret,
       ACCOUNT_ID_SECRET: accountIdSecret,
       OPENAI_API_KEY: "e2e-magic-key",
+      VAPID_PUBLIC_KEY: vapidPublicKey,
+      VAPID_PRIVATE_JWK: JSON.stringify(vapidPrivateJwk),
+      VAPID_SUBJECT: "https://chessriot.test",
     },
     outboundService: async (outboundRequest) => {
-      if (new URL(outboundRequest.url).hostname !== "api.openai.com") {
+      const url = new URL(outboundRequest.url);
+      if (url.hostname === "fcm.googleapis.com") {
+        outboundPushRequests.push({
+          url: outboundRequest.url,
+          method: outboundRequest.method,
+          authorization: outboundRequest.headers.get("authorization"),
+          encoding: outboundRequest.headers.get("content-encoding"),
+          ttl: outboundRequest.headers.get("ttl"),
+          body: Buffer.from(await outboundRequest.arrayBuffer()).toString("utf8"),
+        });
+        return new Response(null, { status: 201 });
+      }
+      if (url.hostname !== "api.openai.com") {
         return new Response("Unexpected outbound request", { status: 502 });
       }
       magicCompilerCalls += 1;
@@ -265,6 +302,15 @@ async function request(runtime, path, init = {}) {
 
 async function body(response) {
   return response.status === 204 ? null : response.json();
+}
+
+async function waitFor(predicate, timeoutMs = 1_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() >= deadline) return false;
+    await new Promise((resolveWait) => setTimeout(resolveWait, 10));
+  }
+  return true;
 }
 
 let runtime = createRuntime();
@@ -414,25 +460,221 @@ try {
   );
   assert.equal(guestJoinResponse.status, 200);
 
+  const pushConfig = await body(await request(runtime, "/api/push/config", {
+    anonymous: true,
+  }));
+  assert.deepEqual(pushConfig, { enabled: true, publicKey: vapidPublicKey });
+  const guestPushEndpoint = `https://fcm.googleapis.com/fcm/send/${secret()}`;
+  const guestPushEndpointHash = createHash("sha256")
+    .update(guestPushEndpoint)
+    .digest("hex");
+  const guestPushSubscription = {
+    endpoint: guestPushEndpoint,
+    expirationTime: null,
+    keys: {
+      p256dh: pushClientPublicKey,
+      auth: randomBytes(16).toString("base64url"),
+    },
+  };
+  const enableGuestPush = await request(
+    runtime,
+    `/api/games/${guestGameId}/push-subscriptions`,
+    {
+      anonymous: true,
+      method: "PUT",
+      headers: { authorization: `Bearer ${guestBlackToken}` },
+      body: JSON.stringify({
+        requestId: randomUUID(),
+        subscription: guestPushSubscription,
+      }),
+    },
+  );
+  assert.equal(enableGuestPush.status, 200);
+  assert.deepEqual(await body(enableGuestPush), { enabled: true });
+  assert.deepEqual(await body(await request(
+    runtime,
+    `/api/games/${guestGameId}/push-subscriptions`,
+    {
+      anonymous: true,
+      headers: {
+        authorization: `Bearer ${guestBlackToken}`,
+        "x-push-endpoint-hash": guestPushEndpointHash,
+      },
+    },
+  )), { available: true, enabled: true });
+  assert.deepEqual(await body(await request(
+    runtime,
+    `/api/games/${guestGameId}/push-subscriptions`,
+    {
+      anonymous: true,
+      headers: {
+        authorization: `Bearer ${guestWhiteToken}`,
+        "x-push-endpoint-hash": guestPushEndpointHash,
+      },
+    },
+  )), { available: true, enabled: false });
+  assert.equal((await request(
+    runtime,
+    `/api/games/${guestGameId}/push-subscriptions`,
+    {
+      anonymous: true,
+      method: "PUT",
+      headers: { authorization: `Bearer ${guestBlackToken}` },
+      body: JSON.stringify({
+        requestId: randomUUID(),
+        subscription: {
+          ...guestPushSubscription,
+          endpoint: "https://example.com/forged-push-endpoint",
+        },
+      }),
+    },
+  )).status, 400);
+  const pushDatabase = await runtime.getD1Database("DB");
+  const storedGuestPush = await pushDatabase
+    .prepare(`SELECT game_id, color, endpoint_hash
+      FROM push_subscriptions LIMIT 1`)
+    .first();
+  assert.deepEqual(storedGuestPush, {
+    game_id: guestGameId,
+    color: "b",
+    endpoint_hash: guestPushEndpointHash,
+  });
+  assert.equal(
+    (await pushDatabase
+      .prepare("SELECT COUNT(*) AS count FROM push_subscriptions")
+      .first()).count,
+    1,
+  );
+  const enableSameDeviceForWhite = await request(
+    runtime,
+    `/api/games/${guestGameId}/push-subscriptions`,
+    {
+      anonymous: true,
+      method: "PUT",
+      headers: { authorization: `Bearer ${guestWhiteToken}` },
+      body: JSON.stringify({
+        requestId: randomUUID(),
+        subscription: guestPushSubscription,
+      }),
+    },
+  );
+  assert.equal(enableSameDeviceForWhite.status, 200);
+  assert.equal(
+    (await pushDatabase
+      .prepare("SELECT COUNT(*) AS count FROM push_subscriptions")
+      .first()).count,
+    2,
+  );
+  const disableWhitePush = await request(
+    runtime,
+    `/api/games/${guestGameId}/push-subscriptions`,
+    {
+      anonymous: true,
+      method: "DELETE",
+      headers: { authorization: `Bearer ${guestWhiteToken}` },
+      body: JSON.stringify({
+        requestId: randomUUID(),
+        endpoint: guestPushEndpoint,
+      }),
+    },
+  );
+  assert.equal(disableWhitePush.status, 200);
+  assert.deepEqual(await body(disableWhitePush), { enabled: false });
+  assert.equal(
+    (await pushDatabase
+      .prepare("SELECT COUNT(*) AS count FROM push_subscriptions")
+      .first()).count,
+    1,
+  );
+  assert.deepEqual(await body(await request(
+    runtime,
+    `/api/games/${guestGameId}/push-subscriptions`,
+    {
+      anonymous: true,
+      headers: {
+        authorization: `Bearer ${guestWhiteToken}`,
+        "x-push-endpoint-hash": guestPushEndpointHash,
+      },
+    },
+  )), { available: true, enabled: false });
+  assert.deepEqual(await body(await request(
+    runtime,
+    `/api/games/${guestGameId}/push-subscriptions`,
+    {
+      anonymous: true,
+      headers: {
+        authorization: `Bearer ${guestBlackToken}`,
+        "x-push-endpoint-hash": guestPushEndpointHash,
+      },
+    },
+  )), { available: true, enabled: true });
+
   const guestWhiteGameResponse = await request(runtime, `/api/games/${guestGameId}`, {
     anonymous: true,
     headers: { authorization: `Bearer ${guestWhiteToken}` },
   });
   assert.equal(guestWhiteGameResponse.status, 200);
   const guestWhiteGame = await body(guestWhiteGameResponse);
+  const guestMoveRequestId = randomUUID();
+  const guestMoveBody = JSON.stringify({
+    from: "e2",
+    to: "e4",
+    expectedVersion: guestWhiteGame.game.version,
+    requestId: guestMoveRequestId,
+  });
   const guestMoveResponse = await request(runtime, `/api/games/${guestGameId}/moves`, {
     anonymous: true,
     method: "POST",
     headers: { authorization: `Bearer ${guestWhiteToken}` },
-    body: JSON.stringify({
-      from: "e2",
-      to: "e4",
-      expectedVersion: guestWhiteGame.game.version,
-      requestId: randomUUID(),
-    }),
+    body: guestMoveBody,
   });
   assert.equal(guestMoveResponse.status, 200);
+  assert.equal(guestMoveResponse.headers.get("x-chessriot-turn-committed"), "1");
   assert.equal((await body(guestMoveResponse)).game.plyCount, 1);
+  assert.equal(await waitFor(() => outboundPushRequests.length === 1), true);
+  assert.equal(outboundPushRequests.length, 1);
+  assert.equal(outboundPushRequests[0].url, guestPushEndpoint);
+  assert.equal(outboundPushRequests[0].method, "POST");
+  assert.match(outboundPushRequests[0].authorization, /vapid/i);
+  assert.equal(outboundPushRequests[0].encoding, "aes128gcm");
+  assert.equal(outboundPushRequests[0].ttl, "86400");
+  assert.equal(outboundPushRequests[0].body.includes(guestWhiteToken), false);
+  assert.equal(outboundPushRequests[0].body.includes(guestBlackToken), false);
+  assert.equal(
+    (await pushDatabase
+      .prepare("SELECT status FROM push_deliveries LIMIT 1")
+      .first()).status,
+    "sent",
+  );
+  const guestMoveRetry = await request(runtime, `/api/games/${guestGameId}/moves`, {
+    anonymous: true,
+    method: "POST",
+    headers: { authorization: `Bearer ${guestWhiteToken}` },
+    body: guestMoveBody,
+  });
+  assert.equal(guestMoveRetry.status, 200);
+  assert.equal(guestMoveRetry.headers.get("x-chessriot-turn-committed"), null);
+  assert.equal(outboundPushRequests.length, 1);
+  const disableGuestPush = await request(
+    runtime,
+    `/api/games/${guestGameId}/push-subscriptions`,
+    {
+      anonymous: true,
+      method: "DELETE",
+      headers: { authorization: `Bearer ${guestBlackToken}` },
+      body: JSON.stringify({
+        requestId: randomUUID(),
+        endpoint: guestPushEndpoint,
+      }),
+    },
+  );
+  assert.equal(disableGuestPush.status, 200);
+  assert.equal(
+    (await pushDatabase
+      .prepare("SELECT COUNT(*) AS count FROM push_subscriptions")
+      .first()).count,
+    0,
+  );
 
   const whiteToken = secret();
   const blackToken = secret();
@@ -1411,7 +1653,7 @@ try {
       playerToken: magicSoloToken,
       inviteToken: secret(),
       requestId: requestIdForColor("w"),
-      magicPrompt: "No castling. No en passant.",
+      magicPrompt: "Knights move 3 times. No castling. No en passant.",
     }),
   });
   assert.equal(magicSoloResponse.status, 201);
@@ -1419,9 +1661,52 @@ try {
   assert.equal(magicSolo.game.mode, "solo");
   assert.equal(magicSolo.game.you.color, "w");
   assert.deepEqual(magicSolo.game.magicRules.labels, [
+    "Knights may move up to 3 times per turn; check ends the turn",
     "No castling",
     "No en passant",
   ]);
+  const magicSoloMoveResponse = await request(
+    runtime,
+    `/api/games/${magicSolo.game.id}/moves`,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${magicSoloToken}` },
+      body: JSON.stringify({
+        from: "b1",
+        to: "c3",
+        continuation: [{ from: "c3", to: "b5" }],
+        expectedVersion: 0,
+        requestId: randomUUID(),
+      }),
+    },
+  );
+  assert.equal(magicSoloMoveResponse.status, 200);
+  const magicSoloAfterMove = await body(magicSoloMoveResponse);
+  assert.equal(magicSoloAfterMove.game.version, 2);
+  assert.equal(magicSoloAfterMove.game.plyCount, 2);
+  assert.equal(magicSoloAfterMove.game.moves.length, 2);
+  assert.deepEqual(
+    magicSoloAfterMove.game.moves[0].continuation.map((leg) => ({
+      from: leg.from,
+      to: leg.to,
+    })),
+    [{ from: "c3", to: "b5" }],
+  );
+  const magicSoloDatabase = await runtime.getD1Database("DB");
+  const persistedMagicSoloMoves = await magicSoloDatabase
+    .prepare(`SELECT ply, continuation_json FROM moves
+      WHERE game_id = ? ORDER BY ply`)
+    .bind(magicSolo.game.id)
+    .all();
+  assert.equal(persistedMagicSoloMoves.results.length, 2);
+  assert.match(
+    persistedMagicSoloMoves.results[0].continuation_json,
+    /"to":"b5"/,
+  );
+  assert.notEqual(
+    persistedMagicSoloMoves.results[1].continuation_json,
+    null,
+  );
 
   const soloToken = secret();
   const soloInvite = secret();
@@ -1472,11 +1757,14 @@ try {
   });
   assert.equal(soloMoveResponse.status, 200);
   const soloAfterHumanMove = await body(soloMoveResponse);
-  assert.equal(soloAfterHumanMove.game.version, 1);
-  assert.equal(soloAfterHumanMove.game.plyCount, 1);
-  assert.equal(soloAfterHumanMove.game.turn, "b");
-  assert.equal(soloAfterHumanMove.game.moves.length, 1);
-  assert.equal(soloAfterHumanMove.game.moves[0].color, "w");
+  assert.equal(soloAfterHumanMove.game.version, 2);
+  assert.equal(soloAfterHumanMove.game.plyCount, 2);
+  assert.equal(soloAfterHumanMove.game.turn, "w");
+  assert.equal(soloAfterHumanMove.game.moves.length, 2);
+  assert.deepEqual(
+    soloAfterHumanMove.game.moves.map((move) => move.color),
+    ["w", "b"],
+  );
 
   const soloRetryResponse = await request(runtime, `/api/games/${soloGameId}/moves`, {
     method: "POST",
@@ -1489,10 +1777,33 @@ try {
     }),
   });
   assert.equal(soloRetryResponse.status, 200);
-  assert.equal((await body(soloRetryResponse)).game.moves.length, 1);
+  assert.equal((await body(soloRetryResponse)).game.moves.length, 2);
 
-  // The human ply is durable before the bot starts. Reopening the game on a
-  // fresh runtime recovers and commits the pending bot turn.
+  // A game left between releases with a durable human ply still recovers its
+  // pending bot turn on the next authorized read.
+  const soloDatabase = await runtime.getD1Database("DB");
+  const durableHumanMove = await soloDatabase
+    .prepare(`SELECT fen_after, created_at FROM moves
+      WHERE game_id = ? AND ply = 1`)
+    .bind(soloGameId)
+    .first();
+  await soloDatabase.batch([
+    soloDatabase
+      .prepare("DELETE FROM moves WHERE game_id = ? AND ply = 2")
+      .bind(soloGameId),
+    soloDatabase
+      .prepare(`UPDATE games SET
+        status = 'active', current_fen = ?, turn_color = 'b',
+        version = 1, ply_count = 1, winner_color = NULL, termination = NULL,
+        last_mutation_nonce = ?, updated_at = ?, finished_at = NULL
+        WHERE id = ?`)
+      .bind(
+        durableHumanMove.fen_after,
+        randomUUID(),
+        durableHumanMove.created_at,
+        soloGameId,
+      ),
+  ]);
   await runtime.dispose();
   runtime = createRuntime();
   const soloAfterRestart = await body(await request(runtime, `/api/games/${soloGameId}`, {
@@ -1542,10 +1853,35 @@ try {
   });
   assert.equal(blackReplyResponse.status, 200);
   const blackSoloAfterHumanReply = await body(blackReplyResponse);
-  assert.equal(blackSoloAfterHumanReply.game.version, 2);
-  assert.equal(blackSoloAfterHumanReply.game.plyCount, 2);
+  assert.equal(blackSoloAfterHumanReply.game.version, 3);
+  assert.equal(blackSoloAfterHumanReply.game.plyCount, 3);
   assert.equal(blackSoloAfterHumanReply.game.moves[1].color, "b");
-  assert.equal(blackSoloAfterHumanReply.game.turn, "w");
+  assert.equal(blackSoloAfterHumanReply.game.moves[2].color, "w");
+  assert.equal(blackSoloAfterHumanReply.game.turn, "b");
+
+  const blackSoloDatabase = await runtime.getD1Database("DB");
+  const durableBlackMove = await blackSoloDatabase
+    .prepare(`SELECT fen_after, created_at FROM moves
+      WHERE game_id = ? AND ply = 2`)
+    .bind(blackSoloGameId)
+    .first();
+  await blackSoloDatabase.batch([
+    blackSoloDatabase
+      .prepare("DELETE FROM moves WHERE game_id = ? AND ply = 3")
+      .bind(blackSoloGameId),
+    blackSoloDatabase
+      .prepare(`UPDATE games SET
+        status = 'active', current_fen = ?, turn_color = 'w',
+        version = 2, ply_count = 2, winner_color = NULL, termination = NULL,
+        last_mutation_nonce = ?, updated_at = ?, finished_at = NULL
+        WHERE id = ?`)
+      .bind(
+        durableBlackMove.fen_after,
+        randomUUID(),
+        durableBlackMove.created_at,
+        blackSoloGameId,
+      ),
+  ]);
 
   const concurrentBotReads = await Promise.all([
     request(runtime, `/api/games/${blackSoloGameId}`, {

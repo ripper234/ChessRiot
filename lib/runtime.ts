@@ -7,6 +7,9 @@ declare global {
   var __CHESSRIOT_CONTROL_ORIGIN__: string | undefined;
   var __CHESSRIOT_ACCOUNT_ID_SECRET__: string | undefined;
   var __CHESSRIOT_VIDEO_REGEN_SHARED_SECRET__: string | undefined;
+  var __CHESSRIOT_VAPID_PUBLIC_KEY__: string | undefined;
+  var __CHESSRIOT_VAPID_PRIVATE_JWK__: string | undefined;
+  var __CHESSRIOT_VAPID_SUBJECT__: string | undefined;
 }
 
 export function appEnvironment(): string {
@@ -40,4 +43,16 @@ export function accountIdSecret(): string | null {
 
 export function videoRegenSharedSecret(): string | null {
   return globalThis.__CHESSRIOT_VIDEO_REGEN_SHARED_SECRET__?.trim() || null;
+}
+
+export function vapidPublicKey(): string | null {
+  return globalThis.__CHESSRIOT_VAPID_PUBLIC_KEY__?.trim() || null;
+}
+
+export function vapidPrivateJwk(): string | null {
+  return globalThis.__CHESSRIOT_VAPID_PRIVATE_JWK__?.trim() || null;
+}
+
+export function vapidSubject(): string | null {
+  return globalThis.__CHESSRIOT_VAPID_SUBJECT__?.trim() || null;
 }

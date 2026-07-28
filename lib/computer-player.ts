@@ -29,6 +29,37 @@ const PIECE_VALUE: Record<PieceSymbol, number> = {
 
 const CENTER_SQUARES = new Set(["c3", "d3", "e3", "f3", "c4", "d4", "e4", "f4", "c5", "d5", "e5", "f5", "c6", "d6", "e6", "f6"]);
 
+interface SearchBudget {
+  maxNodes: number;
+  visitedNodes: number;
+}
+
+// A node budget is deterministic across browsers and Workers. Time-based
+// cutoffs produce different moves because Workers freeze elapsed-time clocks
+// during CPU-only work.
+const SEARCH_NODE_BUDGET: Record<Exclude<AiDifficulty, 1>, number> = {
+  2: 64,
+  3: 768,
+  4: 1_100,
+  5: 1_800,
+};
+
+export function seededComputerRandom(seed: string): () => number {
+  let state = 2_166_136_261;
+  for (let index = 0; index < seed.length; index += 1) {
+    state ^= seed.charCodeAt(index);
+    state = Math.imul(state, 16_777_619);
+  }
+  if (state === 0) state = 0x6d2b79f5;
+  return () => {
+    state += 0x6d2b79f5;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296;
+  };
+}
+
 function terminalScore(
   chess: Chess,
   computerColor: Color,
@@ -77,12 +108,16 @@ function search(
   alpha: number,
   beta: number,
   plyFromRoot: number,
-  deadline: number,
+  budget: SearchBudget,
   computerColor: Color,
 ): number {
+  budget.visitedNodes += 1;
   const terminal = terminalScore(chess, computerColor, plyFromRoot);
   if (terminal !== null) return terminal;
-  if (depth === 0 || performance.now() >= deadline) return evaluate(chess, computerColor);
+  if (
+    depth === 0
+    || budget.visitedNodes >= budget.maxNodes
+  ) return evaluate(chess, computerColor);
 
   const maximizing = chess.turn() === computerColor;
   let best = maximizing ? -Infinity : Infinity;
@@ -94,7 +129,7 @@ function search(
       alpha,
       beta,
       plyFromRoot + 1,
-      deadline,
+      budget,
       computerColor,
     );
     chess.undo();
@@ -105,7 +140,10 @@ function search(
       best = Math.min(best, score);
       beta = Math.min(beta, best);
     }
-    if (alpha >= beta || performance.now() >= deadline) break;
+    if (
+      alpha >= beta
+      || budget.visitedNodes >= budget.maxNodes
+    ) break;
   }
   return best;
 }
@@ -191,7 +229,10 @@ export function chooseComputerMove(
   }
 
   const depth = difficulty === 2 ? 1 : difficulty === 3 ? 2 : difficulty === 4 ? 3 : 4;
-  const deadline = performance.now() + (difficulty === 5 ? 550 : difficulty === 4 ? 330 : 180);
+  const budget: SearchBudget = {
+    maxNodes: SEARCH_NODE_BUDGET[difficulty],
+    visitedNodes: 0,
+  };
   const scored = moves.map((move) => {
     chess.move(move);
     const score = search(
@@ -200,7 +241,7 @@ export function chooseComputerMove(
       -Infinity,
       Infinity,
       1,
-      deadline,
+      budget,
       computerColor,
     );
     chess.undo();

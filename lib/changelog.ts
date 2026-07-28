@@ -11,6 +11,67 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.13.4",
+    date: "2026-07-28",
+    title: "Invitations, copied",
+    summary: "Multiplayer invitations now copy straight to the clipboard instead of opening the operating system share sheet.",
+    changes: [
+      "Replaced the native share dialog with one direct Copy invitation link action.",
+      "Confirmed successful copies in place and kept the private link selectable when clipboard access is unavailable.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.13.4`,
+  },
+  {
+    version: "0.13.3",
+    date: "2026-07-28",
+    title: "Riot Bot on the board",
+    summary: "Solo replies now appear locally almost at once and both plies are saved together by one authoritative request.",
+    changes: [
+      "Ran the same deterministic Riot Bot search in the browser and on the server, preserving every level’s evaluation, depth, and node budget.",
+      "Showed the human move first, then its predicted bot reply, while keeping the board locked until the server confirms the turn.",
+      "Revalidated the bot reply server-side and atomically stored the human and bot plies in one database batch.",
+      "Removed the second bot request and successful post-commit database reads while retaining pending-turn recovery for older or interrupted games.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.13.3`,
+  },
+  {
+    version: "0.13.2",
+    date: "2026-07-28",
+    title: "Riot Bot, right away",
+    summary: "Riot Bot now answers promptly even when the hosted edge freezes its runtime clock during search.",
+    changes: [
+      "Added a deterministic node cap alongside the existing elapsed-time search budget.",
+      "Kept every bot level’s depth, move ordering, evaluation, and tactical checkmate behavior unchanged.",
+      "Added a frozen-clock regression that reproduces the hosted runtime and bounds Level 5 search.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.13.2`,
+  },
+  {
+    version: "0.13.1",
+    date: "2026-07-28",
+    title: "Community within reach",
+    summary: "The ChessRiot WhatsApp community is now one tap away from both the public homepage and the in-game App panel.",
+    changes: [
+      "Added a clear WhatsApp community link to the public homepage.",
+      "Added the same link to the App panel without interrupting the current game.",
+      "Centralized the destination and opened both placements safely in a separate tab.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.13.1`,
+  },
+  {
+    version: "0.13.0",
+    date: "2026-07-27",
+    title: "Your turn, even when closed",
+    summary: "A multiplayer seat can now opt one browser into a generic turn notification for one game, including after ChessRiot is closed.",
+    changes: [
+      "Added opt-in Web Push turn alerts to each multiplayer game’s App panel.",
+      "Bound every browser subscription to one game and one authorized seat, so disabling one game leaves that device’s other game alerts intact.",
+      "Delivered notifications only after a committed opponent move, with duplicate suppression, stale-endpoint cleanup, and no private seat key or player detail in the payload.",
+      "Restricted push endpoints, validated notification navigation, and kept delivery best-effort so a push-service failure can never affect the chess move.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.13.0`,
+  },
+  {
     version: "0.12.1",
     date: "2026-07-27",
     title: "Riot theme verified",
