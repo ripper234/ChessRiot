@@ -11,6 +11,17 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.13.4",
+    date: "2026-07-28",
+    title: "Invitations, copied",
+    summary: "Multiplayer invitations now copy straight to the clipboard instead of opening the operating system share sheet.",
+    changes: [
+      "Replaced the native share dialog with one direct Copy invitation link action.",
+      "Confirmed successful copies in place and kept the private link selectable when clipboard access is unavailable.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.13.4`,
+  },
+  {
     version: "0.13.3",
     date: "2026-07-28",
     title: "Riot Bot on the board",
