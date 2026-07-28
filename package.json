@@ -1,6 +1,6 @@
 {
   "name": "chessriot",
-  "version": "0.13.4",
+  "version": "0.14.0-capture.1",
   "private": true,
   "type": "module",
   "engines": {
