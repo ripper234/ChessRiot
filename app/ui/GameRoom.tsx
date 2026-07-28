@@ -29,6 +29,7 @@ import {
   unlockGameSounds,
   writeSoundPreference,
 } from "@/lib/game-sounds";
+import { copyInvitationLink } from "@/lib/invitation-copy";
 import {
   actionEndpointSquares,
   capturedPiecesByVictimColor,
@@ -1050,31 +1051,17 @@ export function GameRoom({ gameId }: { gameId: string }) {
     showHistory(null);
   }
 
-  async function shareInvite() {
+  async function copyInvite() {
     if (!inviteUrl) return;
-    const markShared = () => {
+    const markCopied = () => {
       setInviteShared(true);
       window.setTimeout(() => setInviteShared(false), 2_000);
     };
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: "ChessRiot challenge",
-          text: "Your move. Join my ChessRiot game!",
-          url: inviteUrl,
-        });
-        markShared();
-        return;
-      }
-    } catch (caught) {
-      if (caught instanceof DOMException && caught.name === "AbortError") return;
+    if (await copyInvitationLink(inviteUrl, navigator.clipboard)) {
+      markCopied();
+      return;
     }
-    try {
-      await navigator.clipboard.writeText(inviteUrl);
-      markShared();
-    } catch {
-      setMessage("Select and copy the invitation link below.");
-    }
+    setMessage("Clipboard access is unavailable. Select and copy the invitation link below.");
   }
 
   async function toggleSound() {
@@ -1441,7 +1428,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
             <section className="side-card invite-card">
               <span className="side-icon">⌁</span><h2>INVITE PLAYER 2</h2>
               <p>Send this private link. The first person to submit it claims Black.</p>
-              {inviteUrl ? <><button className="primary-button" onClick={() => void shareInvite()}>{inviteShared ? "LINK READY ✓" : "SHARE INVITATION"}</button>
+              {inviteUrl ? <><button className="primary-button" onClick={() => void copyInvite()}>{inviteShared ? "COPIED ✓" : "COPY INVITATION LINK"}</button>
                 <input className="invite-field" value={inviteUrl} readOnly onFocus={(event) => event.currentTarget.select()} aria-label="Invitation link" /></> :
                 <p className="form-error">The invitation link is no longer stored on this device.</p>}
             </section>
