@@ -11,6 +11,18 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.13.5",
+    date: "2026-07-28",
+    title: "Feedback, accounted for",
+    summary: "The owner control panel can count unresolved feedback exactly and safely mark individual items done.",
+    changes: [
+      "Added exact new, reviewed, closed, and unresolved feedback counts independent of the bounded item list.",
+      "Added a separate short-lived feedback-management grant and an idempotent close action.",
+      "Recorded privacy-safe feedback completion events with normalized routes and no feedback content.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.13.5`,
+  },
+  {
     version: "0.13.4",
     date: "2026-07-28",
     title: "Invitations, copied",

@@ -1,9 +1,11 @@
 import { appEnvironment, controlOrigin, opsReadSecret } from "./runtime";
 
-interface ReadGrant {
+export type OpsScope = "observability:read" | "feedback:manage";
+
+interface OpsGrant {
   v: 1;
   aud: string;
-  scope: "observability:read";
+  scope: OpsScope;
   iat: number;
   exp: number;
   nonce: string;
@@ -59,7 +61,10 @@ export function opsCorsHeaders(origin: string | null): Headers {
   return headers;
 }
 
-export async function authorizeOpsRead(request: Request): Promise<boolean> {
+export async function authorizeOpsGrant(
+  request: Request,
+  scope: OpsScope,
+): Promise<boolean> {
   const origin = request.headers.get("origin");
   const secret = opsReadSecret();
   if (!secret || origin !== controlOrigin()) return false;
@@ -73,11 +78,11 @@ export async function authorizeOpsRead(request: Request): Promise<boolean> {
   try {
     const payload = JSON.parse(
       new TextDecoder().decode(decodeBase64Url(payloadPart)),
-    ) as Partial<ReadGrant>;
+    ) as Partial<OpsGrant>;
     const now = Math.floor(Date.now() / 1_000);
     return payload.v === 1
       && payload.aud === appEnvironment()
-      && payload.scope === "observability:read"
+      && payload.scope === scope
       && typeof payload.iat === "number"
       && typeof payload.exp === "number"
       && payload.iat <= now + 15
@@ -88,4 +93,12 @@ export async function authorizeOpsRead(request: Request): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+export function authorizeOpsRead(request: Request): Promise<boolean> {
+  return authorizeOpsGrant(request, "observability:read");
+}
+
+export function authorizeFeedbackManage(request: Request): Promise<boolean> {
+  return authorizeOpsGrant(request, "feedback:manage");
 }

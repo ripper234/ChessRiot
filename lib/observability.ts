@@ -160,6 +160,10 @@ function routeEvent(method: string, pathname: string): string | null {
   if (method === "GET" && pathname === "/api/me/games") return null;
   if (method === "POST" && pathname === "/api/telemetry/client") return "client.telemetry";
   if (method === "POST" && pathname === "/api/feedback") return "feedback.submitted";
+  if (
+    method === "POST"
+    && /^\/api\/ops\/feedback\/[^/]+\/close$/.test(pathname)
+  ) return "feedback.closed";
   // Health and dashboard polling are operational reads, not product actions.
   // Omitting them keeps the recent-event feed focused on player and system events.
   if (
@@ -174,6 +178,19 @@ function routeEvent(method: string, pathname: string): string | null {
 
 function subjectFromPath(pathname: string): string | null {
   return /^\/api\/games\/([^/]+)/.exec(pathname)?.[1] ?? null;
+}
+
+export function sanitizeObservedRoute(pathname: string): string {
+  return pathname.replace(
+    /^\/api\/games\/[^/]+/,
+    "/api/games/:id",
+  ).replace(
+    /^\/api\/invitations\/[^/]+/,
+    "/api/invitations/:token",
+  ).replace(
+    /^\/api\/ops\/feedback\/[^/]+/,
+    "/api/ops/feedback/:id",
+  );
 }
 
 async function requestDetails(request: Request): Promise<RequestDetails> {
@@ -308,13 +325,7 @@ export async function observeHttpRequest(
     outcome,
     requestId: requestInfo.requestId,
     subjectId: requestInfo.subjectId ?? responseInfo.subjectId,
-    route: url.pathname.replace(
-      /^\/api\/games\/[^/]+/,
-      "/api/games/:id",
-    ).replace(
-      /^\/api\/invitations\/[^/]+/,
-      "/api/invitations/:token",
-    ),
+    route: sanitizeObservedRoute(url.pathname),
     method: request.method,
     statusCode: response.status,
     errorCode: responseInfo.errorCode,

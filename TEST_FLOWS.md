@@ -178,3 +178,11 @@
 - Verify route normalization and HMAC game references never expose ids, tokens, names, links, fragments, FENs, raw bodies, IPs, or user agents.
 - Verify expired/tampered/wrong-environment read grants are rejected.
 - Verify the control panel preserves a visibly stale last-good snapshot and never substitutes fake zeroes.
+- Verify feedback counts remain exact beyond the 100-item overview cap and that
+  `new` plus `reviewed` equals unresolved while `closed` does not.
+- Verify a scoped feedback-management grant closes an item, a repeated close is
+  a successful no-op, and missing items return 404. Read-scope, expired,
+  tampered, wrong-origin, and wrong-content-type attempts must return 403.
+- Verify close events use `feedback.closed` and the normalized
+  `/api/ops/feedback/:id/close` route without recording the feedback id, title,
+  comment, or signed grant.
