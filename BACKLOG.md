@@ -6,7 +6,7 @@
 |---|---|---|
 | CR-001 | Always-visible exact version | Shipped throughout the game app with a changelog link. The fixed public homepage intentionally omits runtime chrome. |
 | CR-002 | In-app feedback and GitHub contribution path | Shipped with isolated per-environment storage. |
-| CR-003 | Short move and capture animation | Shipped with reduced-motion support. |
+| CR-003 | Short move and capture animation | Physical attacker-victim actions are in isolated preview on `feature/capture-combat-animations`; stable still uses the short arrival and impact treatment. |
 | CR-004 | Textless picker for visual themes | Expanded to 11 original themes and limited to active games so public and setup pages remain fixed. |
 | CR-005 | Portable user login | Guest private-seat links are live. Provider login remains disabled until it can add portability without blocking play. |
 | CR-006 | All games for the logged-in user | The account-backed history remains in storage but is not exposed in guest mode. The current device shows recent private-seat games. |
