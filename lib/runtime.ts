@@ -10,6 +10,8 @@ declare global {
   var __CHESSRIOT_VAPID_PUBLIC_KEY__: string | undefined;
   var __CHESSRIOT_VAPID_PRIVATE_JWK__: string | undefined;
   var __CHESSRIOT_VAPID_SUBJECT__: string | undefined;
+  var __CHESSRIOT_PREVIEW_BRANCH__: string | undefined;
+  var __CHESSRIOT_PREVIEW_COMMIT__: string | undefined;
 }
 
 export function appEnvironment(): string {
@@ -55,4 +57,12 @@ export function vapidPrivateJwk(): string | null {
 
 export function vapidSubject(): string | null {
   return globalThis.__CHESSRIOT_VAPID_SUBJECT__?.trim() || null;
+}
+
+export function previewBranch(): string | null {
+  return globalThis.__CHESSRIOT_PREVIEW_BRANCH__?.trim() || null;
+}
+
+export function previewCommit(): string | null {
+  return globalThis.__CHESSRIOT_PREVIEW_COMMIT__?.trim() || null;
 }
