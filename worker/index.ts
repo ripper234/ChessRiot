@@ -25,6 +25,8 @@ interface Env {
   VAPID_PUBLIC_KEY?: string;
   VAPID_PRIVATE_JWK?: string;
   VAPID_SUBJECT?: string;
+  PREVIEW_BRANCH?: string;
+  PREVIEW_COMMIT?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -53,6 +55,8 @@ const worker = {
     globalThis.__CHESSRIOT_VAPID_PUBLIC_KEY__ = env.VAPID_PUBLIC_KEY;
     globalThis.__CHESSRIOT_VAPID_PRIVATE_JWK__ = env.VAPID_PRIVATE_JWK;
     globalThis.__CHESSRIOT_VAPID_SUBJECT__ = env.VAPID_SUBJECT;
+    globalThis.__CHESSRIOT_PREVIEW_BRANCH__ = env.PREVIEW_BRANCH;
+    globalThis.__CHESSRIOT_PREVIEW_COMMIT__ = env.PREVIEW_COMMIT;
     const url = new URL(request.url);
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
