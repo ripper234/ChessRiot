@@ -3,7 +3,7 @@
 Play the current game at [chessriot.ripper234.chatgpt.site](https://chessriot.ripper234.chatgpt.site).
 [Join for updates on WhatsApp](https://chat.whatsapp.com/FaBgiUgl73vLdeqzcqx0vX).
 
-ChessRiot v0.13.3 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
+ChessRiot v0.13.4 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
 
 Found something confusing or have a cool rule request? Use **Feedback** inside
 the game or [open a GitHub issue](https://github.com/ripper234/ChessRiot/issues).
@@ -23,7 +23,7 @@ progression work, and features that still need explicit rule design.
   color. White always moves first; if the bot is White, it opens automatically.
   The same depth and evaluation run behind a deterministic node cap, keeping
   even Level 5 responsive on the hosted edge.
-- Create a multiplayer game with one, three, or five days per move, then share one private invitation link. Missing the deadline loses the game.
+- Create a multiplayer game with one, three, or five days per move, then copy one private invitation link. Missing the deadline loses the game.
 - Resume recent games on the same device or use a private seat link on another
   device.
 - Play complete standard chess with server-authoritative legal move validation.
