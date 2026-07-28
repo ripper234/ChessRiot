@@ -3,7 +3,7 @@
 Play the current game at [chessriot.ripper234.chatgpt.site](https://chessriot.ripper234.chatgpt.site).
 [Join for updates on WhatsApp](https://chat.whatsapp.com/FaBgiUgl73vLdeqzcqx0vX).
 
-ChessRiot v0.13.0 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
+ChessRiot v0.13.1 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
 
 Found something confusing or have a cool rule request? Use **Feedback** inside
 the game or [open a GitHub issue](https://github.com/ripper234/ChessRiot/issues).
@@ -43,6 +43,8 @@ progression work, and features that still need explicit rule design.
 - End an active game by resignation, cancel a waiting game, or start a separate new game without deleting history.
 - Start from one compact new-game screen at `/app`.
 - Open a newest-first public changelog from the home screen or any active game.
+- Join the ChessRiot WhatsApp community from the public homepage or App panel
+  without leaving the current game.
 - Send a titled feedback item without leaving the current flow; each environment stores its own owner-review pool.
 - Send one-tap preset cheers during two-player games, plus Good Game or Thanks for 15 minutes after play, without opening unrestricted chat.
 - Install the online game as a desktop-style PWA and see a subtle dot for

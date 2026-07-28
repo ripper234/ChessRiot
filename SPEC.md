@@ -1,4 +1,12 @@
-# ChessRiot v0.13.0 specification
+# ChessRiot v0.13.1 specification
+
+## v0.13.1 release additions
+
+- The public homepage links directly to the ChessRiot WhatsApp community.
+- The App panel exposes the same community link without replacing or
+  interrupting the active game.
+- Both placements use one shared URL constant and open WhatsApp in a separate
+  tab with safe external-link attributes.
 
 ## v0.13.0 release additions
 

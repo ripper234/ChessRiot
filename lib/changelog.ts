@@ -11,6 +11,18 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.13.1",
+    date: "2026-07-28",
+    title: "Community within reach",
+    summary: "The ChessRiot WhatsApp community is now one tap away from both the public homepage and the in-game App panel.",
+    changes: [
+      "Added a clear WhatsApp community link to the public homepage.",
+      "Added the same link to the App panel without interrupting the current game.",
+      "Centralized the destination and opened both placements safely in a separate tab.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.13.1`,
+  },
+  {
     version: "0.13.0",
     date: "2026-07-27",
     title: "Your turn, even when closed",

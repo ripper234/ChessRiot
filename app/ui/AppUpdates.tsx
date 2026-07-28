@@ -9,6 +9,7 @@ import {
   playerKey,
   readSeatTokenFromHash,
 } from "@/lib/client-storage";
+import { WHATSAPP_COMMUNITY_URL } from "@/lib/external-links";
 import {
   gameIdFromPathname,
   hasUnseenRelease,
@@ -404,6 +405,20 @@ export function AppUpdates() {
                 INSTALL CHESSRIOT
               </button>
             ) : null}
+          </section>
+
+          <section className={styles.section} aria-labelledby="community-settings-title">
+            <h3 id="community-settings-title">Community</h3>
+            <p>Join ChessRiot players for updates, playtests, and Magic Rule ideas.</p>
+            <a
+              className={styles.communityAction}
+              href={WHATSAPP_COMMUNITY_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Join the ChessRiot community on WhatsApp (opens in a new tab)"
+            >
+              JOIN WHATSAPP COMMUNITY
+            </a>
           </section>
 
           {activeGameId ? (

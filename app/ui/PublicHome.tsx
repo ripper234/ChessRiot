@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { PieceSymbol } from "chess.js";
+import { WHATSAPP_COMMUNITY_URL } from "@/lib/external-links";
 import type { Color } from "@/lib/game-types";
 import { Brand } from "./Brand";
 import { ChessPiece } from "./ChessPiece";
@@ -37,6 +38,15 @@ export function PublicHome() {
           <Link className="public-demo-link" href="/demo">
             WATCH THE 90-SECOND DEMO <span aria-hidden="true">▶</span>
           </Link>
+          <a
+            className="public-community-link"
+            href={WHATSAPP_COMMUNITY_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Join the ChessRiot community on WhatsApp (opens in a new tab)"
+          >
+            JOIN THE COMMUNITY ON WHATSAPP <span aria-hidden="true">↗</span>
+          </a>
           <ul aria-label="ChessRiot highlights">
             <li>Solo or multiplayer</li>
             <li>Three-day turns</li>
