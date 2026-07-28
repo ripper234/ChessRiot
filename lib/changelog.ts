@@ -11,6 +11,19 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.13.3",
+    date: "2026-07-28",
+    title: "Riot Bot on the board",
+    summary: "Solo replies now appear locally almost at once and both plies are saved together by one authoritative request.",
+    changes: [
+      "Ran the same deterministic Riot Bot search in the browser and on the server, preserving every level’s evaluation, depth, and node budget.",
+      "Showed the human move first, then its predicted bot reply, while keeping the board locked until the server confirms the turn.",
+      "Revalidated the bot reply server-side and atomically stored the human and bot plies in one database batch.",
+      "Removed the second bot request and successful post-commit database reads while retaining pending-turn recovery for older or interrupted games.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.13.3`,
+  },
+  {
     version: "0.13.2",
     date: "2026-07-28",
     title: "Riot Bot, right away",

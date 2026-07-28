@@ -1,15 +1,11 @@
 import { Chess } from "chess.js";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { chooseComputerMove } from "./computer-player";
+import { describe, expect, it } from "vitest";
+import { chooseComputerMove, seededComputerRandom } from "./computer-player";
 import { applyCandidate, legalMagicMoves } from "./game-rules";
 import type { AiDifficulty } from "./game-types";
 import type { CompiledMagicRules } from "./magic-rules";
 
 describe("Riot Bot", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
   it.each([1, 2, 3, 4, 5] as AiDifficulty[])(
     "returns a legal move at difficulty %i",
     (difficulty) => {
@@ -42,8 +38,7 @@ describe("Riot Bot", () => {
     expect(chess.isCheckmate()).toBe(true);
   });
 
-  it("keeps the strongest search bounded when the edge runtime clock is frozen", () => {
-    vi.spyOn(performance, "now").mockReturnValue(0);
+  it("keeps the strongest search bounded without relying on a runtime clock", () => {
     const chess = new Chess();
     chess.move("e4");
 
@@ -55,6 +50,39 @@ describe("Riot Bot", () => {
     expect(() => chess.move(move!)).not.toThrow();
     expect(elapsedMs).toBeLessThan(2_500);
   }, 3_000);
+
+  it("repeats randomized choices exactly from the same turn seed", () => {
+    const chess = new Chess();
+    chess.move("e4");
+
+    const first = chooseComputerMove(
+      chess.fen(),
+      2,
+      "b",
+      seededComputerRandom("turn-request"),
+    );
+    const repeated = chooseComputerMove(
+      chess.fen(),
+      2,
+      "b",
+      seededComputerRandom("turn-request"),
+    );
+
+    expect(repeated).toEqual(first);
+  });
+
+  it("produces a stable browser-and-server random sequence", () => {
+    const first = seededComputerRandom("turn-request");
+    const repeated = seededComputerRandom("turn-request");
+    const other = seededComputerRandom("other-request");
+
+    expect([first(), first(), first()]).toEqual([
+      repeated(),
+      repeated(),
+      repeated(),
+    ]);
+    expect(other()).not.toBe(seededComputerRandom("turn-request")());
+  });
 
   it("returns null when the position has no legal moves", () => {
     expect(chooseComputerMove("7k/5Q2/7K/8/8/8/8/8 b - - 0 1", 3)).toBeNull();

@@ -1,8 +1,20 @@
 import type { Square } from "chess.js";
 import { getDatabase } from "@/db";
-import { applyCandidate, IllegalMoveError, isPromotion, isSquare } from "@/lib/game-rules";
+import {
+  chooseComputerMove,
+  seededComputerRandom,
+} from "@/lib/computer-player";
+import {
+  applyCandidate,
+  IllegalMoveError,
+  isPromotion,
+  isSquare,
+  type CandidateMove,
+  type MoveOutcome,
+} from "@/lib/game-rules";
 import {
   assertAuthoritativeState,
+  computerColor,
   expireMultiplayerTurn,
   findGameById,
   gameMagicRules,
@@ -13,7 +25,7 @@ import {
 import { authorizeGameRequest } from "@/lib/game-auth";
 import { enforceAccountRateLimit } from "@/lib/accounts";
 import { apiError, json, readJson } from "@/lib/http";
-import type { Promotion } from "@/lib/game-types";
+import type { Promotion, StoredMove } from "@/lib/game-types";
 import { isUuid, requestIsSameOrigin } from "@/lib/validation";
 import { recordEvent } from "@/lib/observability";
 import { hasMagicRule } from "@/lib/magic-rules";
@@ -47,6 +59,34 @@ function sameMoveRequest(
     && (move.second?.from ?? undefined) === second?.from
     && (move.second?.to ?? undefined) === second?.to
   );
+}
+
+function storedMove(
+  ply: number,
+  requestId: string,
+  candidate: CandidateMove,
+  outcome: MoveOutcome,
+  createdAt: string,
+): StoredMove {
+  return {
+    ply,
+    requestId,
+    color: outcome.move.color,
+    from: outcome.move.from,
+    to: outcome.move.to,
+    promotion: candidate.promotion ?? null,
+    san: outcome.move.san,
+    second: outcome.secondMove
+      ? {
+        from: outcome.secondMove.from,
+        to: outcome.secondMove.to,
+        san: outcome.secondMove.san,
+      }
+      : null,
+    fenBefore: outcome.fenBefore,
+    fenAfter: outcome.fenAfter,
+    createdAt,
+  };
 }
 
 export async function POST(
@@ -143,20 +183,26 @@ export async function POST(
     return apiError(422, "promotion_required", "Choose a promotion piece");
   }
 
-  let outcome;
+  const humanCandidate: CandidateMove = {
+    from,
+    to,
+    ...(promotion ? { promotion: promotion as Promotion } : {}),
+    ...(secondMove ? {
+      second: {
+        from: secondMove.from,
+        to: secondMove.to,
+      },
+    } : {}),
+  };
+  let humanOutcome;
   const wasInCheck = replayed.isCheck();
   try {
-    outcome = applyCandidate(game.initial_fen, storedMoves, {
-      from,
-      to,
-      ...(promotion ? { promotion: promotion as Promotion } : {}),
-      ...(secondMove ? {
-        second: {
-          from: secondMove.from,
-          to: secondMove.to,
-        },
-      } : {}),
-    }, magicRules);
+    humanOutcome = applyCandidate(
+      game.initial_fen,
+      storedMoves,
+      humanCandidate,
+      magicRules,
+    );
   } catch (error) {
     if (error instanceof IllegalMoveError) {
       return wasInCheck
@@ -173,9 +219,56 @@ export async function POST(
   const now = new Date().toISOString();
   const attemptNonce = crypto.randomUUID();
   const humanPly = game.ply_count + 1;
-  const nextVersion = game.version + 1;
-  const nextPly = game.ply_count + 1;
-  const status = outcome.completed ? "completed" : "active";
+  const humanMove = storedMove(
+    humanPly,
+    requestId,
+    humanCandidate,
+    humanOutcome,
+    now,
+  );
+  const botColor = computerColor(game);
+  let botMove: StoredMove | null = null;
+  let botOutcome: MoveOutcome | null = null;
+  let botLatencyMs: number | null = null;
+  if (
+    !humanOutcome.completed
+    && game.game_mode === "solo"
+    && game.ai_difficulty !== null
+    && botColor
+    && humanOutcome.turn === botColor
+  ) {
+    const botStartedAt = performance.now();
+    const candidate = chooseComputerMove(
+      humanOutcome.fenAfter,
+      game.ai_difficulty,
+      botColor,
+      seededComputerRandom(requestId),
+      magicRules,
+    );
+    if (!candidate) {
+      return apiError(500, "computer_move_failed", "The computer could not answer this move");
+    }
+    botOutcome = applyCandidate(
+      game.initial_fen,
+      [...storedMoves, humanMove],
+      candidate,
+      magicRules,
+    );
+    botMove = storedMove(
+      humanPly + 1,
+      crypto.randomUUID(),
+      candidate,
+      botOutcome,
+      now,
+    );
+    botLatencyMs = performance.now() - botStartedAt;
+  }
+
+  const finalOutcome = botOutcome ?? humanOutcome;
+  const advancedPlies = botMove ? 2 : 1;
+  const nextVersion = game.version + advancedPlies;
+  const nextPly = game.ply_count + advancedPlies;
+  const status = finalOutcome.completed ? "completed" : "active";
   const db = getDatabase();
   const update = db
     .prepare(`UPDATE games SET
@@ -190,22 +283,22 @@ export async function POST(
         )`)
     .bind(
       status,
-      outcome.fenAfter,
-      outcome.turn,
+      finalOutcome.fenAfter,
+      finalOutcome.turn,
       nextVersion,
       nextPly,
-      outcome.winner,
-      outcome.termination,
+      finalOutcome.winner,
+      finalOutcome.termination,
       attemptNonce,
       now,
-      outcome.completed ? now : null,
+      finalOutcome.completed ? now : null,
       id,
       expectedVersion,
       color,
       authorization.account.id,
       color,
     );
-  const insert = db
+  const humanInsert = db
     .prepare(`INSERT INTO moves (
       game_id, ply, request_id, color, from_square, to_square, promotion,
       san, second_from_square, second_to_square, second_san,
@@ -220,21 +313,52 @@ export async function POST(
       from,
       to,
       promotion ?? null,
-      outcome.move.san,
+      humanOutcome.move.san,
       secondMove?.from ?? null,
       secondMove?.to ?? null,
-      outcome.secondMove?.san ?? null,
-      outcome.fenBefore,
-      outcome.fenAfter,
+      humanOutcome.secondMove?.san ?? null,
+      humanOutcome.fenBefore,
+      humanOutcome.fenAfter,
       now,
       id,
       nextVersion,
       attemptNonce,
     );
+  const writes = [update, humanInsert];
+  if (botMove) {
+    writes.push(
+      db
+        .prepare(`INSERT INTO moves (
+          game_id, ply, request_id, color, from_square, to_square, promotion,
+          san, second_from_square, second_to_square, second_san,
+          fen_before, fen_after, created_at
+        ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          FROM games WHERE id = ? AND version = ? AND last_mutation_nonce = ?`)
+        .bind(
+          id,
+          botMove.ply,
+          botMove.requestId,
+          botMove.color,
+          botMove.from,
+          botMove.to,
+          botMove.promotion,
+          botMove.san,
+          botMove.second?.from ?? null,
+          botMove.second?.to ?? null,
+          botMove.second?.san ?? null,
+          botMove.fenBefore,
+          botMove.fenAfter,
+          now,
+          id,
+          nextVersion,
+          attemptNonce,
+        ),
+    );
+  }
 
   let results: D1Result<unknown>[];
   try {
-    results = await db.batch([update, insert]);
+    results = await db.batch(writes);
   } catch {
     game = await findGameById(id);
     storedMoves = await readMoves(id);
@@ -261,7 +385,7 @@ export async function POST(
     return apiError(404, "not_found", "Game not found");
   }
 
-  if (changes(results[0]) !== 1 || changes(results[1]) !== 1) {
+  if (!results.every((result) => changes(result) === 1)) {
     game = await findGameById(id);
     storedMoves = await readMoves(id);
     const wonRace = storedMoves.find((move) => move.requestId === requestId);
@@ -287,26 +411,50 @@ export async function POST(
     return apiError(404, "not_found", "Game not found");
   }
 
-  game = await findGameById(id);
-  storedMoves = await readMoves(id);
-  if (!game) return apiError(500, "move_failed", "Game disappeared after the move");
-  if (game.status === "completed") {
+  const committedGame: GameRow = {
+    ...game,
+    status,
+    current_fen: finalOutcome.fenAfter,
+    turn_color: finalOutcome.turn,
+    version: nextVersion,
+    ply_count: nextPly,
+    winner_color: finalOutcome.winner,
+    termination: finalOutcome.termination,
+    last_mutation_nonce: attemptNonce,
+    updated_at: now,
+    finished_at: finalOutcome.completed ? now : null,
+  };
+  const committedMoves = [
+    ...storedMoves,
+    humanMove,
+    ...(botMove ? [botMove] : []),
+  ];
+  if (committedGame.status === "completed") {
     await recordEvent({
       event: "game.completed",
       outcome: "success",
       requestId,
       subjectId: id,
       metadata: {
-        mode: game.game_mode,
-        termination: game.termination,
-        winner: game.winner_color,
+        mode: committedGame.game_mode,
+        termination: committedGame.termination,
+        winner: committedGame.winner_color,
       },
     });
   }
+  const responseHeaders: Record<string, string> = {};
+  if (committedGame.game_mode === "multiplayer" && committedGame.status === "active") {
+    responseHeaders["x-chessriot-turn-committed"] = "1";
+  }
+  if (botMove && botColor) {
+    responseHeaders["x-chessriot-bot-committed"] = "1";
+    responseHeaders["x-chessriot-bot-color"] = botColor;
+    responseHeaders["x-chessriot-bot-difficulty"] = String(game.ai_difficulty);
+    responseHeaders["x-chessriot-bot-latency-ms"] = String(Math.max(0, Math.round(botLatencyMs ?? 0)));
+    responseHeaders["x-chessriot-bot-magic"] = magicRules ? "1" : "0";
+  }
   return json(
-    { game: snapshot(game, storedMoves, color) },
-    game.game_mode === "multiplayer" && game.status === "active"
-      ? { headers: { "x-chessriot-turn-committed": "1" } }
-      : undefined,
+    { game: snapshot(committedGame, committedMoves, color) },
+    Object.keys(responseHeaders).length > 0 ? { headers: responseHeaders } : undefined,
   );
 }

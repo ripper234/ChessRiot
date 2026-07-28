@@ -303,7 +303,7 @@ export async function observeHttpRequest(
   if (baseEvent === "reaction.sent" && response.status === 200) {
     event = "reaction.retry";
   }
-  await recordEvent({
+  const requestEvent = recordEvent({
     event,
     outcome,
     requestId: requestInfo.requestId,
@@ -321,6 +321,30 @@ export async function observeHttpRequest(
     latencyMs: performance.now() - startedAt,
     metadata: { ...requestInfo.metadata, ...responseInfo.metadata },
   });
+  const botCommitted = response.headers.get("x-chessriot-bot-committed") === "1";
+  const botLatency = Number(response.headers.get("x-chessriot-bot-latency-ms"));
+  const botDifficulty = Number(response.headers.get("x-chessriot-bot-difficulty"));
+  await Promise.all([
+    requestEvent,
+    ...(botCommitted
+      ? [recordEvent({
+        event: "bot.move_committed",
+        outcome: "success",
+        requestId: requestInfo.requestId,
+        subjectId: requestInfo.subjectId ?? responseInfo.subjectId,
+        latencyMs: Number.isFinite(botLatency) ? botLatency : null,
+        metadata: {
+          color: response.headers.get("x-chessriot-bot-color") === "w" ? "w" : "b",
+          difficulty: Number.isInteger(botDifficulty) ? botDifficulty : null,
+          gameStatus: typeof responseInfo.metadata.gameStatus === "string"
+            ? responseInfo.metadata.gameStatus
+            : null,
+          magic: response.headers.get("x-chessriot-bot-magic") === "1",
+          inline: true,
+        },
+      })]
+      : []),
+  ]);
 }
 
 export function prepareRequestObservation(request: Request): Promise<RequestDetails> {

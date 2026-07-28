@@ -25,19 +25,35 @@ const PIECE_VALUE: Record<PieceSymbol, number> = {
 const CENTER_SQUARES = new Set(["c3", "d3", "e3", "f3", "c4", "d4", "e4", "f4", "c5", "d5", "e5", "f5", "c6", "d6", "e6", "f6"]);
 
 interface SearchBudget {
-  deadline: number;
   maxNodes: number;
   visitedNodes: number;
 }
 
-// Deployed Workers freeze elapsed-time clocks during CPU-only work. The node
-// cap preserves the intended search size when the local timer cannot advance.
+// A node budget is deterministic across browsers and Workers. Time-based
+// cutoffs produce different moves because Workers freeze elapsed-time clocks
+// during CPU-only work.
 const SEARCH_NODE_BUDGET: Record<Exclude<AiDifficulty, 1>, number> = {
   2: 64,
   3: 768,
   4: 1_100,
   5: 1_800,
 };
+
+export function seededComputerRandom(seed: string): () => number {
+  let state = 2_166_136_261;
+  for (let index = 0; index < seed.length; index += 1) {
+    state ^= seed.charCodeAt(index);
+    state = Math.imul(state, 16_777_619);
+  }
+  if (state === 0) state = 0x6d2b79f5;
+  return () => {
+    state += 0x6d2b79f5;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296;
+  };
+}
 
 function terminalScore(
   chess: Chess,
@@ -96,7 +112,6 @@ function search(
   if (
     depth === 0
     || budget.visitedNodes >= budget.maxNodes
-    || performance.now() >= budget.deadline
   ) return evaluate(chess, computerColor);
 
   const maximizing = chess.turn() === computerColor;
@@ -123,7 +138,6 @@ function search(
     if (
       alpha >= beta
       || budget.visitedNodes >= budget.maxNodes
-      || performance.now() >= budget.deadline
     ) break;
   }
   return best;
@@ -184,7 +198,6 @@ export function chooseComputerMove(
 
   const depth = difficulty === 2 ? 1 : difficulty === 3 ? 2 : difficulty === 4 ? 3 : 4;
   const budget: SearchBudget = {
-    deadline: performance.now() + (difficulty === 5 ? 550 : difficulty === 4 ? 330 : 180),
     maxNodes: SEARCH_NODE_BUDGET[difficulty],
     visitedNodes: 0,
   };

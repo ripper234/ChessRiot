@@ -1378,11 +1378,14 @@ try {
   });
   assert.equal(soloMoveResponse.status, 200);
   const soloAfterHumanMove = await body(soloMoveResponse);
-  assert.equal(soloAfterHumanMove.game.version, 1);
-  assert.equal(soloAfterHumanMove.game.plyCount, 1);
-  assert.equal(soloAfterHumanMove.game.turn, "b");
-  assert.equal(soloAfterHumanMove.game.moves.length, 1);
-  assert.equal(soloAfterHumanMove.game.moves[0].color, "w");
+  assert.equal(soloAfterHumanMove.game.version, 2);
+  assert.equal(soloAfterHumanMove.game.plyCount, 2);
+  assert.equal(soloAfterHumanMove.game.turn, "w");
+  assert.equal(soloAfterHumanMove.game.moves.length, 2);
+  assert.deepEqual(
+    soloAfterHumanMove.game.moves.map((move) => move.color),
+    ["w", "b"],
+  );
 
   const soloRetryResponse = await request(runtime, `/api/games/${soloGameId}/moves`, {
     method: "POST",
@@ -1395,10 +1398,33 @@ try {
     }),
   });
   assert.equal(soloRetryResponse.status, 200);
-  assert.equal((await body(soloRetryResponse)).game.moves.length, 1);
+  assert.equal((await body(soloRetryResponse)).game.moves.length, 2);
 
-  // The human ply is durable before the bot starts. Reopening the game on a
-  // fresh runtime recovers and commits the pending bot turn.
+  // A game left between releases with a durable human ply still recovers its
+  // pending bot turn on the next authorized read.
+  const soloDatabase = await runtime.getD1Database("DB");
+  const durableHumanMove = await soloDatabase
+    .prepare(`SELECT fen_after, created_at FROM moves
+      WHERE game_id = ? AND ply = 1`)
+    .bind(soloGameId)
+    .first();
+  await soloDatabase.batch([
+    soloDatabase
+      .prepare("DELETE FROM moves WHERE game_id = ? AND ply = 2")
+      .bind(soloGameId),
+    soloDatabase
+      .prepare(`UPDATE games SET
+        status = 'active', current_fen = ?, turn_color = 'b',
+        version = 1, ply_count = 1, winner_color = NULL, termination = NULL,
+        last_mutation_nonce = ?, updated_at = ?, finished_at = NULL
+        WHERE id = ?`)
+      .bind(
+        durableHumanMove.fen_after,
+        randomUUID(),
+        durableHumanMove.created_at,
+        soloGameId,
+      ),
+  ]);
   await runtime.dispose();
   runtime = createRuntime();
   const soloAfterRestart = await body(await request(runtime, `/api/games/${soloGameId}`, {
@@ -1448,10 +1474,35 @@ try {
   });
   assert.equal(blackReplyResponse.status, 200);
   const blackSoloAfterHumanReply = await body(blackReplyResponse);
-  assert.equal(blackSoloAfterHumanReply.game.version, 2);
-  assert.equal(blackSoloAfterHumanReply.game.plyCount, 2);
+  assert.equal(blackSoloAfterHumanReply.game.version, 3);
+  assert.equal(blackSoloAfterHumanReply.game.plyCount, 3);
   assert.equal(blackSoloAfterHumanReply.game.moves[1].color, "b");
-  assert.equal(blackSoloAfterHumanReply.game.turn, "w");
+  assert.equal(blackSoloAfterHumanReply.game.moves[2].color, "w");
+  assert.equal(blackSoloAfterHumanReply.game.turn, "b");
+
+  const blackSoloDatabase = await runtime.getD1Database("DB");
+  const durableBlackMove = await blackSoloDatabase
+    .prepare(`SELECT fen_after, created_at FROM moves
+      WHERE game_id = ? AND ply = 2`)
+    .bind(blackSoloGameId)
+    .first();
+  await blackSoloDatabase.batch([
+    blackSoloDatabase
+      .prepare("DELETE FROM moves WHERE game_id = ? AND ply = 3")
+      .bind(blackSoloGameId),
+    blackSoloDatabase
+      .prepare(`UPDATE games SET
+        status = 'active', current_fen = ?, turn_color = 'w',
+        version = 2, ply_count = 2, winner_color = NULL, termination = NULL,
+        last_mutation_nonce = ?, updated_at = ?, finished_at = NULL
+        WHERE id = ?`)
+      .bind(
+        durableBlackMove.fen_after,
+        randomUUID(),
+        durableBlackMove.created_at,
+        blackSoloGameId,
+      ),
+  ]);
 
   const concurrentBotReads = await Promise.all([
     request(runtime, `/api/games/${blackSoloGameId}`, {

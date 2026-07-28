@@ -1,4 +1,21 @@
-# ChessRiot v0.13.2 specification
+# ChessRiot v0.13.3 specification
+
+## v0.13.3 release additions
+
+- After a legal Solo move, the browser paints the human action and calculates
+  Riot Bot's reply locally from the same evaluation, depth, node budget, and
+  request-seeded random stream used by the server.
+- The server independently reconstructs and validates both actions, then
+  stores the human and bot plies in one conditional D1 batch. The successful
+  response advances the authoritative game by two versions and requires no
+  follow-up bot request or post-commit game reads.
+- The preview never advances accepted server version or unlocks the next move.
+  A rejection or transport failure reconciles against authoritative state.
+  Authorized reads retain the leased pending-turn recovery path for older or
+  interrupted games.
+- Riot Bot search now uses its deterministic node budget as the sole cutoff so
+  browser and Worker calculation cannot diverge because their clocks behave
+  differently.
 
 ## v0.13.2 release additions
 
@@ -254,11 +271,10 @@
   conditional Solo bot level, and one primary action.
 - Accepted moves receive a short destination animation; captures also receive a
   brief impact animation. Reduced-motion preferences disable both.
-- In Solo, the client previews a locally legal human move immediately. The
-  server then commits that human ply on its own and returns it before Riot Bot
-  starts searching. A background game read commits the pending bot reply.
-  Rejection or transport failure reconciles the preview against authoritative
-  state.
+- In Solo, the client previews a locally legal human move and the deterministic
+  Riot Bot reply while one request is in flight. The server independently
+  validates and atomically stores both plies. Rejection or transport failure
+  reconciles the preview against authoritative state.
 - `/changelog` lists every release newest first with a short summary and GitHub
   source link, and is linked from the home and game interfaces.
 - A visible Feedback button opens an in-place form with required title,
@@ -317,12 +333,13 @@ This file and `MVP.md` are the source of truth for the current milestone.
   advances the turn, version, ply count, deadline, and repetition counter only
   once. The stored schema version determines the supported double-move pieces;
   v1 remains valid for existing rook games and v2 adds knights.
-- In Solo, the human move commits atomically as one ply and returns immediately.
-  The client then requests Riot Bot's pending turn in the background. Riot Bot
-  evaluates from its assigned color, uses bounded server-side search, and
-  commits its own ply through the same chess.js rules adapter. Every
-  authenticated game read also recovers a pending bot turn, so closing or
-  refreshing cannot strand the game.
+- In Solo, the browser and server calculate the same request-seeded Riot Bot
+  choice with the shared bounded search. The server reconstructs authoritative
+  history, validates the human action, independently calculates and validates
+  the reply, then conditionally stores both move rows and the final game state
+  in one atomic batch. The version and ply count advance by two. Every
+  authenticated game read also retains the leased recovery path for a legacy
+  pending bot turn, so an older or interrupted game cannot remain stranded.
 - Replaying move history is required before validation so repetition remains correct.
 - Promotion data is accepted only when a pawn reaches its final rank. Under the
   no-promotion rule, a pawn cannot move onto that rank at all.

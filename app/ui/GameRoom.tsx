@@ -48,7 +48,11 @@ import {
   type ReactionKey,
   reactionPreset,
 } from "@/lib/game-reactions";
-import { optimisticMoveSnapshot, shouldAcceptGameSnapshot } from "@/lib/game-snapshots";
+import {
+  optimisticMoveSnapshot,
+  optimisticSoloTurnSnapshot,
+  shouldAcceptGameSnapshot,
+} from "@/lib/game-snapshots";
 import {
   buildReplayFrames,
   nextHistoryCursor,
@@ -690,7 +694,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
     moveCommitInFlight.current = true;
     closeMoveConfirmation();
     const token = activeToken.current;
-    const preview = currentGame.mode === "solo"
+    const requestId = generateUuid();
+    const humanPreview = currentGame.mode === "solo"
       ? optimisticMoveSnapshot(
         currentGame,
         intent.from,
@@ -700,6 +705,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       )
       : null;
     const authoritativeVersion = intent.expectedVersion;
+    let botPreviewTimer: number | null = null;
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 15_000);
     setBusy(true);
@@ -707,8 +713,30 @@ export function GameRoom({ gameId }: { gameId: string }) {
     setSelected(null);
     setPromotionMove(null);
     setMagicDraft(null);
-    if (preview) {
-      setOptimisticGame(preview);
+    if (humanPreview) {
+      setOptimisticGame(humanPreview);
+      if (humanPreview.status === "active") {
+        botPreviewTimer = window.setTimeout(() => {
+          const fullPreview = optimisticSoloTurnSnapshot(
+            currentGame,
+            intent.from,
+            intent.to,
+            requestId,
+            intent.promotion,
+            {
+              ...(intent.second ? { second: intent.second } : {}),
+              createdAt: humanPreview.updatedAt,
+            },
+          );
+          if (
+            fullPreview
+            && moveCommitInFlight.current
+            && latestVersion.current === authoritativeVersion
+          ) {
+            setOptimisticGame(fullPreview);
+          }
+        }, 100);
+      }
     }
     try {
       const response = await fetch(`/api/games/${gameId}/moves`, {
@@ -721,7 +749,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
           ...(intent.promotion ? { promotion: intent.promotion } : {}),
           ...(intent.second ? { second: intent.second } : {}),
           expectedVersion: intent.expectedVersion,
-          requestId: generateUuid(),
+          requestId,
         }),
       });
       const data = (await response.json()) as {
@@ -756,6 +784,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       if (latestVersion.current <= authoritativeVersion) setOptimisticGame(null);
     } finally {
       window.clearTimeout(timeout);
+      if (botPreviewTimer !== null) window.clearTimeout(botPreviewTimer);
       moveCommitInFlight.current = false;
       setBusy(false);
     }
