@@ -11,6 +11,19 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.14.0-capture.1",
+    date: "2026-07-28",
+    title: "Captures hit back",
+    summary: "This isolated preview turns captures into short, physical attacks while authoritative chess state stays immediate and safe.",
+    changes: [
+      "Kept the victim visible until impact, then revealed the already-authoritative final position.",
+      "Added a sword slash for pawns, leap attack for knights, and distinct bishop, rook, queen, and king actions.",
+      "Sequenced multiple observed moves and both legs of Magic turns without delaying or changing server commits.",
+      "Added an instant six-piece Capture Lab plus reduced-motion behavior for branch review.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/feature/capture-combat-animations`,
+  },
+  {
     version: "0.13.4",
     date: "2026-07-28",
     title: "Invitations, copied",
