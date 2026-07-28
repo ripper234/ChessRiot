@@ -1,11 +1,15 @@
 import { Chess } from "chess.js";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { chooseComputerMove } from "./computer-player";
 import { applyCandidate, legalMagicMoves } from "./game-rules";
 import type { AiDifficulty } from "./game-types";
 import type { CompiledMagicRules } from "./magic-rules";
 
 describe("Riot Bot", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it.each([1, 2, 3, 4, 5] as AiDifficulty[])(
     "returns a legal move at difficulty %i",
     (difficulty) => {
@@ -37,6 +41,20 @@ describe("Riot Bot", () => {
     chess.move(move!);
     expect(chess.isCheckmate()).toBe(true);
   });
+
+  it("keeps the strongest search bounded when the edge runtime clock is frozen", () => {
+    vi.spyOn(performance, "now").mockReturnValue(0);
+    const chess = new Chess();
+    chess.move("e4");
+
+    const startedAt = process.hrtime.bigint();
+    const move = chooseComputerMove(chess.fen(), 5, "b", () => 0);
+    const elapsedMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+
+    expect(move).not.toBeNull();
+    expect(() => chess.move(move!)).not.toThrow();
+    expect(elapsedMs).toBeLessThan(2_500);
+  }, 3_000);
 
   it("returns null when the position has no legal moves", () => {
     expect(chooseComputerMove("7k/5Q2/7K/8/8/8/8/8 b - - 0 1", 3)).toBeNull();

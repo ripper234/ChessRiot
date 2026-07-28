@@ -1,4 +1,13 @@
-# ChessRiot v0.13.1 specification
+# ChessRiot v0.13.2 specification
+
+## v0.13.2 release additions
+
+- Riot Bot search keeps its existing level-specific depth, move ordering, and
+  evaluation while enforcing a deterministic node cap alongside the local
+  elapsed-time budget.
+- The deterministic cap bounds search even on an edge runtime whose clocks do
+  not advance during CPU work. Default play remains roughly 0.2 seconds of
+  search and Level 5 remains under one second in the frozen-clock regression.
 
 ## v0.13.1 release additions
 

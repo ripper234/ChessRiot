@@ -11,6 +11,18 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.13.2",
+    date: "2026-07-28",
+    title: "Riot Bot, right away",
+    summary: "Riot Bot now answers promptly even when the hosted edge freezes its runtime clock during search.",
+    changes: [
+      "Added a deterministic node cap alongside the existing elapsed-time search budget.",
+      "Kept every bot level’s depth, move ordering, evaluation, and tactical checkmate behavior unchanged.",
+      "Added a frozen-clock regression that reproduces the hosted runtime and bounds Level 5 search.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.13.2`,
+  },
+  {
     version: "0.13.1",
     date: "2026-07-28",
     title: "Community within reach",

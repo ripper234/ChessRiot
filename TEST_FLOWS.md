@@ -29,6 +29,9 @@
    next authorized load completes the pending bot turn.
 6. Reopen the private link and verify the same board, level, history, and turn.
 7. Complete a Solo game and verify Riot Bot does not move after checkmate or another terminal result.
+8. At Level 5, freeze the runtime performance clock and verify Riot Bot still
+   returns one legal move within 2.5 seconds. Verify immediate checkmates remain
+   selected at the strongest level.
 
 ## Two-player happy path
 

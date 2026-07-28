@@ -100,6 +100,14 @@ Concurrent game reads that encounter an existing bot lease wait for a bounded
 fresh read instead of briefly returning the pre-bot version. They never acquire
 a second lease or duplicate a move.
 
+Riot Bot keeps the same level-specific search depth, ordered alpha-beta search,
+and evaluation function. Each search is bounded by both an elapsed-time budget
+and a deterministic node budget. Cloudflare Workers intentionally freeze
+`performance.now()` and `Date.now()` during CPU-only work, so the node budget is
+the authoritative production cutoff while the timer remains a useful local
+cutoff. This prevents a nominal 550 ms Level 5 search from expanding the full
+tree at the edge.
+
 Each environment stores its own observability events in its own D1. The Worker
 wraps API requests, normalizes routes, skips unchanged polling, and uses
 `waitUntil` for best-effort non-blocking persistence plus structured Worker
