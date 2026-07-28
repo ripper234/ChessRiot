@@ -11,7 +11,7 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
-    version: "0.14.0-capture.1",
+    version: "0.14.0-capture.2",
     date: "2026-07-28",
     title: "Captures hit back",
     summary: "This isolated preview turns captures into short, physical attacks while authoritative chess state stays immediate and safe.",

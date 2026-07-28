@@ -1,4 +1,4 @@
-# ChessRiot v0.14.0-capture.1 specification
+# ChessRiot v0.14.0-capture.2 specification
 
 ## Capture-combat preview
 

@@ -3,7 +3,8 @@
 Play the current game at [chessriot.ripper234.chatgpt.site](https://chessriot.ripper234.chatgpt.site).
 [Join for updates on WhatsApp](https://chat.whatsapp.com/FaBgiUgl73vLdeqzcqx0vX).
 
-ChessRiot v0.14.0-capture.1 is a branch-only preview of physical capture animations in the mobile-first chess game.
+ChessRiot v0.14.0-capture.2 is a branch-only preview of physical capture animations in the mobile-first chess game.
+[Open the isolated Capture Preview](https://chessriot-capture-preview.ripper234.chatgpt.site).
 
 Found something confusing or have a cool rule request? Use **Feedback** inside
 the game or [open a GitHub issue](https://github.com/ripper234/ChessRiot/issues).
