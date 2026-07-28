@@ -155,6 +155,28 @@ test("renders the narrated 90-second demo page", async () => {
   assert.doesNotMatch(html, /INTERPRET RULES|COMPILE RULES/);
 });
 
+test("renders the branch-only capture animation lab", async () => {
+  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
+  workerUrl.searchParams.set("test", `capture-lab-${process.pid}-${Date.now()}`);
+  const { default: worker } = await import(workerUrl.href);
+  const response = await worker.fetch(
+    new Request("http://localhost/capture-lab", { headers: { accept: "text/html" } }),
+    renderEnv(),
+    { waitUntil() {}, passThroughOnException() {} },
+  );
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /BRANCH-ONLY ANIMATION LAB/);
+  assert.match(html, /CAPTURES/);
+  assert.match(html, /FIGHT BACK/);
+  assert.match(html, /Sword slash/);
+  assert.match(html, /SIMULATE REDUCED MOTION/);
+  assert.match(html, /feature\/capture-combat-animations/);
+  assert.match(html, /0\.14\.0-capture\.1/);
+  assert.match(html, /data-attacker="p"/);
+  assert.match(html, /action-weapon/);
+});
+
 test("retires the old verification and human-check routes", async () => {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
   workerUrl.searchParams.set("test", `verify-${process.pid}-${Date.now()}`);
