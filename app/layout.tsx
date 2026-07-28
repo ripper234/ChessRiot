@@ -4,6 +4,7 @@ import "./themes.css";
 import "./board.css";
 import { THEME_BOOTSTRAP_SCRIPT } from "@/lib/themes";
 import { ClientTelemetry } from "./ui/ClientTelemetry";
+import { PreviewRibbon } from "./ui/PreviewRibbon";
 import { RouteChrome } from "./ui/RouteChrome";
 
 export const metadata: Metadata = {
@@ -29,6 +30,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         <ClientTelemetry />
         {children}
+        <PreviewRibbon />
         <RouteChrome />
       </body>
     </html>
