@@ -1,5 +1,10 @@
 import { getDatabase } from "@/db";
-import { appEnvironment, controlOrigin } from "@/lib/runtime";
+import {
+  appEnvironment,
+  controlOrigin,
+  previewBranch,
+  previewCommit,
+} from "@/lib/runtime";
 import { APP_VERSION } from "@/lib/version";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +33,12 @@ export async function GET(request: Request) {
       status: database === "ok" ? "ok" : "degraded",
       environment: appEnvironment(),
       version: APP_VERSION,
+      preview: previewBranch()
+        ? {
+          branch: previewBranch(),
+          commit: previewCommit(),
+        }
+        : null,
       database,
       checkedAt: new Date().toISOString(),
     },
