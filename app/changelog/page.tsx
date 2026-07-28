@@ -19,7 +19,11 @@ export default function ChangelogPage() {
         </div>
         <ol className="release-list">
           {RELEASES.map((release, index) => (
-            <li className={index === 0 ? "release-card latest" : "release-card"} key={release.version}>
+            <li
+              className={index === 0 ? "release-card latest" : "release-card"}
+              data-release-version={`v${release.version}`}
+              key={release.version}
+            >
               <div className="release-meta">
                 <span>v{release.version}</span>
                 {release.version === APP_VERSION ? <b>CURRENT HERE</b> : null}
