@@ -1,4 +1,8 @@
 import type { GameSnapshot } from "./game-types";
+import {
+  normalizeGameVariantId,
+  type GameVariantId,
+} from "./game-variants";
 import { isSecret } from "./validation";
 
 const RECENT_KEY = "chessriot:recent";
@@ -75,6 +79,7 @@ export interface RecentGame {
   id: string;
   label: string;
   color: "w" | "b";
+  variantId: GameVariantId;
   updatedAt: string;
 }
 
@@ -83,12 +88,15 @@ export function readRecentGames(): RecentGame[] {
     const parsed: unknown = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]");
     return Array.isArray(parsed)
       ? parsed.filter(
-          (item): item is RecentGame =>
+          (item): item is Omit<RecentGame, "variantId"> & { variantId?: GameVariantId } =>
             typeof item === "object" &&
             item !== null &&
             typeof (item as RecentGame).id === "string" &&
             typeof (item as RecentGame).label === "string",
-        )
+        ).map((item) => ({
+          ...item,
+          variantId: normalizeGameVariantId(item.variantId),
+        }))
       : [];
   } catch {
     return [];
@@ -101,6 +109,7 @@ export function rememberGame(game: GameSnapshot): void {
     id: game.id,
     label: opponent ? `vs ${opponent}` : "Waiting for Player 2",
     color: game.you.color,
+    variantId: game.variantId,
     updatedAt: game.updatedAt,
   };
   const games = [next, ...readRecentGames().filter((item) => item.id !== game.id)].slice(0, 8);

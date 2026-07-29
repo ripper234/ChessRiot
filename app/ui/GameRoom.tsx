@@ -73,6 +73,7 @@ import {
   writeMoveConfirmationPreference,
 } from "@/lib/move-confirmation";
 import type { DrawClaim, GameSnapshot, Promotion } from "@/lib/game-types";
+import { gameVariant } from "@/lib/game-variants";
 import { APP_VERSION } from "@/lib/version";
 import { Brand } from "./Brand";
 import { ChessPiece } from "./ChessPiece";
@@ -110,6 +111,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [serverGame, setServerGame] = useState<GameSnapshot | null>(null);
   const [optimisticGame, setOptimisticGame] = useState<GameSnapshot | null>(null);
   const game = optimisticGame ?? serverGame;
+  const variant = gameVariant(game?.variantId);
   const [selected, setSelected] = useState<Square | null>(null);
   const [promotionMove, setPromotionMove] = useState<{ from: Square; to: Square } | null>(null);
   const [magicDraft, setMagicDraft] = useState<MagicDraft | null>(null);
@@ -303,7 +305,13 @@ export function GameRoom({ gameId }: { gameId: string }) {
       if (latestVersion.current < 0) setAccess("error");
       else setMessage(CONNECTION_MESSAGE);
     }
-  }, [acceptGame, beginOpeningIntro, gameId]);
+  }, [
+    acceptGame,
+    beginOpeningIntro,
+    gameId,
+    setPendingMove,
+    setPromotionMove,
+  ]);
 
   const loadReactions = useCallback(async () => {
     const token = activeToken.current;
@@ -552,7 +560,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
         error: true,
       };
     }
-  }, [game?.initialFen, game?.moves, openingIntro]);
+  }, [game, openingIntro]);
   const latestHistoryPly = Math.max(0, history.frames.length - 1);
   const visibleHistoryPly = resolvedHistoryPly(historyPly, latestHistoryPly);
   const viewingHistory = historyPly !== null && !history.error;
@@ -589,8 +597,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
     [game?.moves, serverGame?.moves, viewingHistory, visibleHistoryPly],
   );
   const lostPieces = useMemo(
-    () => capturedPiecesByVictimColor(presentedMoves),
-    [presentedMoves],
+    () => capturedPiecesByVictimColor(presentedMoves, game?.initialFen),
+    [game?.initialFen, presentedMoves],
   );
   const checkedKingSquare = useMemo(
     () => chess ? findCheckedKingSquare(chess) : null,
@@ -1295,6 +1303,15 @@ export function GameRoom({ gameId }: { gameId: string }) {
               onLive={returnToLive}
             />
           </div>
+          {game.variantId !== "standard" ? (
+            <div className="variant-game-banner" role="note">
+              <span aria-hidden="true">{variant.icon}</span>
+              <div>
+                <strong>MINI GAME · {variant.name.toUpperCase()}</strong>
+                <small>{variant.loadout} · Normal chess moves · Checkmate wins</small>
+              </div>
+            </div>
+          ) : null}
           {game.magicRules ? (
             <div className="magic-game-banner" role="note">
               <span aria-hidden="true">✦</span>
@@ -1523,7 +1540,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 )}
               </section>
               <section className="side-card rules-card"><span aria-hidden="true">i</span><div><strong>GAME INFO</strong><small>
-                {game.magicRules ? `Magic chess • ${game.magicRules.labels.join(" • ")} • ` : "Standard chess • "}
+                {game.magicRules
+                  ? `Magic chess • ${game.magicRules.labels.join(" • ")} • `
+                  : `${variant.name} • ${game.variantId === "standard" ? "Standard setup" : "Mini Game"} • `}
                 {game.mode === "solo" && game.aiDifficulty
                   ? `Riot Bot level ${game.aiDifficulty} • ${DIFFICULTY_LABELS[game.aiDifficulty]}`
                   : `${game.turnPaceDays
@@ -1608,7 +1627,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
             <button
               className="primary-button"
               type="button"
-              disabled={!pendingMove || busy || moveCommitInFlight.current}
+              disabled={!pendingMove || busy}
               onClick={() => {
                 if (pendingMove) void commitMove(pendingMove);
               }}

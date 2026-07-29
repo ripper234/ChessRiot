@@ -55,15 +55,25 @@ export const moves = sqliteTable(
   ],
 );
 
-export const gameSettings = sqliteTable("game_settings", {
-  gameId: text("game_id").primaryKey(),
-  gameMode: text("game_mode").notNull().default("multiplayer"),
-  aiDifficulty: integer("ai_difficulty"),
-  humanColor: text("human_color").notNull().default("w"),
-  turnPaceDays: integer("turn_pace_days"),
-  magicPrompt: text("magic_prompt"),
-  magicRulesJson: text("magic_rules_json"),
-});
+export const gameSettings = sqliteTable(
+  "game_settings",
+  {
+    gameId: text("game_id").primaryKey(),
+    gameMode: text("game_mode").notNull().default("multiplayer"),
+    variantId: text("variant_id").notNull().default("standard"),
+    aiDifficulty: integer("ai_difficulty"),
+    humanColor: text("human_color").notNull().default("w"),
+    turnPaceDays: integer("turn_pace_days"),
+    magicPrompt: text("magic_prompt"),
+    magicRulesJson: text("magic_rules_json"),
+  },
+  (table) => [
+    check(
+      "game_settings_variant_id_check",
+      sql`${table.variantId} IN ('standard', 'pawn-riot', 'half-army', 'pawn-duel')`,
+    ),
+  ],
+);
 
 export const accounts = sqliteTable("accounts", {
   id: text("id").primaryKey().notNull(),

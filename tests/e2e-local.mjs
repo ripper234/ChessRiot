@@ -6,7 +6,7 @@ import {
   randomBytes,
   randomUUID,
 } from "node:crypto";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { Miniflare } from "miniflare";
@@ -142,6 +142,77 @@ function createRuntime() {
   });
 }
 
+async function verifyMiniGameMigration() {
+  const migrationRoot = await mkdtemp(join(tmpdir(), "chessriot-migration-"));
+  const migrationRuntime = new Miniflare({
+    script: "export default { fetch() { return new Response('ok'); } };",
+    modules: true,
+    compatibilityDate: "2026-05-22",
+    d1Databases: { DB: "chessriot-migration" },
+    defaultPersistRoot: migrationRoot,
+    d1Persist: true,
+  });
+  try {
+    const database = await migrationRuntime.getD1Database("DB");
+    await database
+      .prepare(`CREATE TABLE game_settings (
+        game_id TEXT PRIMARY KEY NOT NULL,
+        game_mode TEXT NOT NULL DEFAULT 'multiplayer'
+          CHECK (game_mode IN ('solo', 'multiplayer')),
+        ai_difficulty INTEGER
+          CHECK (ai_difficulty IS NULL OR ai_difficulty BETWEEN 1 AND 5),
+        human_color TEXT NOT NULL DEFAULT 'w'
+          CHECK (human_color IN ('w', 'b')),
+        turn_pace_days INTEGER
+          CHECK (turn_pace_days IS NULL OR turn_pace_days IN (1, 3, 5)),
+        magic_prompt TEXT,
+        magic_rules_json TEXT,
+        CHECK (
+          (game_mode = 'solo' AND ai_difficulty IS NOT NULL) OR
+          (game_mode = 'multiplayer' AND ai_difficulty IS NULL)
+        )
+      )`)
+      .run();
+    await database
+      .prepare(`INSERT INTO game_settings (
+        game_id, game_mode, ai_difficulty, human_color, turn_pace_days,
+        magic_prompt, magic_rules_json
+      ) VALUES ('legacy-game', 'multiplayer', NULL, 'w', 3, NULL, NULL)`)
+      .run();
+    const migration = await readFile(
+      resolve("drizzle/0011_wandering_komodo.sql"),
+      "utf8",
+    );
+    for (const statement of migration
+      .split("--> statement-breakpoint")
+      .map((value) => value.trim())
+      .filter(Boolean)) {
+      await database.prepare(statement.replace(/;$/, "")).run();
+    }
+    const legacy = await database
+      .prepare("SELECT variant_id FROM game_settings WHERE game_id = 'legacy-game'")
+      .first();
+    assert.equal(legacy.variant_id, "standard");
+    await assert.rejects(
+      database
+        .prepare(`INSERT INTO game_settings (
+          game_id, game_mode, variant_id, ai_difficulty, human_color
+        ) VALUES ('bad-variant', 'solo', 'unknown', 3, 'w')`)
+        .run(),
+    );
+    await assert.rejects(
+      database
+        .prepare(`INSERT INTO game_settings (
+          game_id, game_mode, variant_id, ai_difficulty, human_color
+        ) VALUES ('bad-mode', 'arcade', 'standard', NULL, 'w')`)
+        .run(),
+    );
+  } finally {
+    await migrationRuntime.dispose();
+    await rm(migrationRoot, { recursive: true, force: true });
+  }
+}
+
 async function request(runtime, path, init = {}) {
   const {
     anonymous = false,
@@ -206,6 +277,7 @@ async function waitFor(predicate, timeoutMs = 1_000) {
   return true;
 }
 
+await verifyMiniGameMigration();
 let runtime = createRuntime();
 try {
   const anonymousCreate = await request(runtime, "/api/games", {
@@ -569,6 +641,119 @@ try {
     0,
   );
 
+  const invalidVariantResponse = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Invalid Variant Player",
+      mode: "multiplayer",
+      variantId: "only-pawns",
+      playerToken: secret(),
+      inviteToken: secret(),
+      requestId: randomUUID(),
+    }),
+  });
+  assert.equal(invalidVariantResponse.status, 400);
+  assert.equal((await body(invalidVariantResponse)).error.code, "invalid_variant");
+
+  const halfArmyFen = "rnb1k3/pppp4/8/8/8/8/PPPP4/RNB1K3 w - - 0 1";
+  const halfArmyWhiteToken = secret();
+  const halfArmyBlackToken = secret();
+  const halfArmyInvite = secret();
+  const halfArmyCreateId = randomUUID();
+  const halfArmyCreatedResponse = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Half Army White",
+      mode: "multiplayer",
+      variantId: "half-army",
+      turnPaceDays: 1,
+      playerToken: halfArmyWhiteToken,
+      inviteToken: halfArmyInvite,
+      requestId: halfArmyCreateId,
+    }),
+  });
+  assert.equal(halfArmyCreatedResponse.status, 201);
+  const halfArmyCreated = await body(halfArmyCreatedResponse);
+  assert.equal(halfArmyCreated.game.variantId, "half-army");
+  assert.equal(halfArmyCreated.game.initialFen, halfArmyFen);
+  assert.equal(halfArmyCreated.game.fen, halfArmyFen);
+  assert.equal(halfArmyCreated.game.turnPaceDays, 1);
+
+  const halfArmyInvitePreview = await body(await request(
+    runtime,
+    `/api/invitations/${halfArmyInvite}`,
+    { anonymous: true },
+  ));
+  assert.equal(halfArmyInvitePreview.state, "waiting");
+  assert.equal(halfArmyInvitePreview.variantId, "half-army");
+
+  const halfArmyVariantConflict = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Half Army White",
+      mode: "multiplayer",
+      variantId: "pawn-riot",
+      turnPaceDays: 1,
+      playerToken: halfArmyWhiteToken,
+      inviteToken: halfArmyInvite,
+      requestId: halfArmyCreateId,
+    }),
+  });
+  assert.equal(halfArmyVariantConflict.status, 409);
+
+  const halfArmyMagicConflict = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Mini Magic Conflict",
+      mode: "multiplayer",
+      variantId: "pawn-duel",
+      magicPrompt: "Rooks move twice.",
+      playerToken: secret(),
+      inviteToken: secret(),
+      requestId: randomUUID(),
+    }),
+  });
+  assert.equal(halfArmyMagicConflict.status, 422);
+  assert.equal((await body(halfArmyMagicConflict)).error.code, "variant_magic_conflict");
+
+  const halfArmyJoinedResponse = await request(
+    runtime,
+    `/api/invitations/${halfArmyInvite}/join`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        displayName: "Half Army Black",
+        playerToken: halfArmyBlackToken,
+      }),
+    },
+  );
+  assert.equal(halfArmyJoinedResponse.status, 200);
+  assert.equal((await body(halfArmyJoinedResponse)).game.variantId, "half-army");
+
+  const halfArmyOpening = new Chess(halfArmyFen)
+    .moves({ verbose: true })
+    .find((move) => move.from === "c2" && move.to === "c4");
+  assert.ok(halfArmyOpening);
+  const halfArmyMoveResponse = await request(
+    runtime,
+    `/api/games/${halfArmyCreated.game.id}/moves`,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${halfArmyWhiteToken}` },
+      body: JSON.stringify({
+        from: halfArmyOpening.from,
+        to: halfArmyOpening.to,
+        expectedVersion: 1,
+        requestId: randomUUID(),
+      }),
+    },
+  );
+  assert.equal(halfArmyMoveResponse.status, 200);
+  const halfArmyAfterMove = await body(halfArmyMoveResponse);
+  assert.equal(halfArmyAfterMove.game.variantId, "half-army");
+  assert.equal(halfArmyAfterMove.game.moves.length, 1);
+  assert.equal(halfArmyAfterMove.game.moves[0].fenBefore, halfArmyFen);
+
   const whiteToken = secret();
   const blackToken = secret();
   const thirdToken = secret();
@@ -590,6 +775,7 @@ try {
   const gameId = created.game.id;
   assert.equal(created.game.status, "waiting");
   assert.equal(created.game.mode, "multiplayer");
+  assert.equal(created.game.variantId, "standard");
   assert.equal(created.game.aiDifficulty, null);
   assert.equal(created.game.turnPaceDays, 3);
   assert.equal(created.game.magicRules, null);
@@ -614,7 +800,9 @@ try {
 
   const waitingInvite = await request(runtime, `/api/invitations/${inviteToken}`);
   assert.equal(waitingInvite.status, 200);
-  assert.equal((await body(waitingInvite)).state, "waiting");
+  const waitingInviteBody = await body(waitingInvite);
+  assert.equal(waitingInviteBody.state, "waiting");
+  assert.equal(waitingInviteBody.variantId, "standard");
 
   const inviteIsNotASeat = await request(runtime, `/api/games/${gameId}`, {
     headers: { authorization: `Bearer ${inviteToken}` },
@@ -1434,6 +1622,90 @@ try {
   assert.equal(soloAfterRestart.game.moves.length, 2);
   assert.equal(soloAfterRestart.game.turn, "w");
 
+  const pawnRiotFen = "4k3/pppppppp/8/8/8/8/PPPPPPPP/4K3 w - - 0 1";
+  const pawnRiotToken = secret();
+  const pawnRiotCreatedResponse = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Pawn Riot White",
+      mode: "solo",
+      variantId: "pawn-riot",
+      difficulty: 2,
+      playerToken: pawnRiotToken,
+      inviteToken: secret(),
+      requestId: requestIdForColor("w"),
+    }),
+  });
+  assert.equal(pawnRiotCreatedResponse.status, 201);
+  const pawnRiotCreated = await body(pawnRiotCreatedResponse);
+  assert.equal(pawnRiotCreated.game.variantId, "pawn-riot");
+  assert.equal(pawnRiotCreated.game.initialFen, pawnRiotFen);
+  assert.equal(pawnRiotCreated.game.version, 0);
+  const pawnRiotMoveResponse = await request(
+    runtime,
+    `/api/games/${pawnRiotCreated.game.id}/moves`,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${pawnRiotToken}` },
+      body: JSON.stringify({
+        from: "e2",
+        to: "e4",
+        expectedVersion: 0,
+        requestId: randomUUID(),
+      }),
+    },
+  );
+  assert.equal(pawnRiotMoveResponse.status, 200);
+  const pawnRiotAfterMove = await body(pawnRiotMoveResponse);
+  assert.equal(pawnRiotAfterMove.game.variantId, "pawn-riot");
+  assert.equal(pawnRiotAfterMove.game.version, 2);
+  assert.deepEqual(
+    pawnRiotAfterMove.game.moves.map((move) => move.color),
+    ["w", "b"],
+  );
+
+  const pawnDuelFen = "4k3/2ppp3/8/8/8/8/2PPP3/4K3 w - - 0 1";
+  const pawnDuelToken = secret();
+  const pawnDuelCreatedResponse = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Pawn Duel Black",
+      mode: "solo",
+      variantId: "pawn-duel",
+      difficulty: 2,
+      playerToken: pawnDuelToken,
+      inviteToken: secret(),
+      requestId: requestIdForColor("b"),
+    }),
+  });
+  assert.equal(pawnDuelCreatedResponse.status, 201);
+  const pawnDuelCreated = await body(pawnDuelCreatedResponse);
+  assert.equal(pawnDuelCreated.game.variantId, "pawn-duel");
+  assert.equal(pawnDuelCreated.game.initialFen, pawnDuelFen);
+  assert.equal(pawnDuelCreated.game.you.color, "b");
+  assert.equal(pawnDuelCreated.game.version, 1);
+  assert.equal(pawnDuelCreated.game.moves[0].fenBefore, pawnDuelFen);
+  const pawnDuelPosition = new Chess(pawnDuelCreated.game.fen);
+  const pawnDuelReply = pawnDuelPosition.moves({ verbose: true })[0];
+  assert.ok(pawnDuelReply);
+  const pawnDuelReplyResponse = await request(
+    runtime,
+    `/api/games/${pawnDuelCreated.game.id}/moves`,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${pawnDuelToken}` },
+      body: JSON.stringify({
+        from: pawnDuelReply.from,
+        to: pawnDuelReply.to,
+        ...(pawnDuelReply.promotion ? { promotion: pawnDuelReply.promotion } : {}),
+        expectedVersion: 1,
+        requestId: randomUUID(),
+      }),
+    },
+  );
+  assert.equal(pawnDuelReplyResponse.status, 200);
+  assert.equal((await body(pawnDuelReplyResponse)).game.version, 3);
+
   const blackSoloToken = secret();
   const blackSoloInvite = secret();
   const blackSoloCreatedResponse = await request(runtime, "/api/games", {
@@ -1845,6 +2117,17 @@ try {
     assert.equal(Object.hasOwn(metadata, "to"), false);
     assert.equal(Object.hasOwn(metadata, "promotion"), false);
   }
+  const createTelemetry = await observabilityDatabase
+    .prepare(`SELECT metadata_json FROM observability_events
+      WHERE event_name = 'game.created'`)
+    .all();
+  const createMetadata = createTelemetry.results
+    .map((event) => JSON.parse(event.metadata_json));
+  assert.ok(createMetadata.some((metadata) => metadata.variantId === "half-army"));
+  assert.ok(createMetadata.some((metadata) => metadata.variantId === "standard"));
+  assert.ok(createMetadata.every((metadata) =>
+    !Object.hasOwn(metadata, "initialFen")
+    && !Object.hasOwn(metadata, "fen")));
 
   const validGrant = opsGrant();
   const tamperedGrant = validGrant.slice(0, -1) + (validGrant.endsWith("a") ? "b" : "a");

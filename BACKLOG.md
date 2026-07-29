@@ -21,6 +21,7 @@
 | CR-016 | White always begins | Verified in v0.9.3. White is always the first mover; Riot Bot commits the opening before a Black-side human can act. |
 | CR-017 | Understand Magic Rules at runtime | Planned. Replace the fixed phrase compiler with a safe runtime interpretation boundary while preserving deterministic stored rules. |
 | CR-018 | Numeric knight move counts | Planned with CR-017. Support equivalent wording such as “2 times” and define exact behavior for counts above two before shipping. |
+| CR-019 | Mini Games menu | Shipped in v0.14.0 with Standard as the default plus Pawn Riot, Half Army, and Pawn Duel in Solo and Multiplayer. Literal kingless pawn chess still needs a separate rules engine. |
 
 This is the durable product backlog recovered from
 [GitHub issue #11](https://github.com/ripper234/ChessRiot/issues/11) and

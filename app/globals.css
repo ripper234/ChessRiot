@@ -2844,3 +2844,269 @@ footer {
   .history-controls .history-live { font-size: 10px; }
   .move-confirm-card > div { grid-template-columns: 1fr; }
 }
+
+/* v0.14.0: Mini Games */
+.variant-trigger {
+  width: 100%;
+  min-height: 72px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  margin: 16px 0 0;
+  padding: 11px 13px;
+  border: 4px solid var(--dirt-dark);
+  color: var(--text);
+  background: #695238;
+  box-shadow: inset 0 4px rgba(255,255,255,.09), 4px 4px 0 #382719;
+  cursor: pointer;
+  text-align: left;
+}
+.variant-trigger:disabled { cursor: wait; opacity: .58; }
+.variant-trigger:focus-visible,
+.variant-dialog button:focus-visible,
+.variant-option:focus-within {
+  outline: 3px solid var(--chess-gold);
+  outline-offset: 3px;
+}
+.variant-trigger-icon,
+.variant-option-icon {
+  display: grid;
+  place-items: center;
+  border: 3px solid #6b4d22;
+  color: #25321d;
+  background: var(--chess-gold);
+  box-shadow: 3px 3px 0 #3f2c17;
+  font: 900 20px/1 var(--display);
+}
+.variant-trigger-icon { width: 40px; height: 40px; }
+.variant-trigger > span:nth-child(2) { min-width: 0; }
+.variant-trigger small,
+.variant-trigger strong,
+.variant-trigger em { display: block; }
+.variant-trigger small {
+  color: #e7d9b8;
+  font: 850 7px/1 var(--mono);
+  letter-spacing: 1.2px;
+}
+.variant-trigger strong {
+  margin-top: 4px;
+  font: 900 15px/1 var(--display);
+  letter-spacing: .4px;
+  text-transform: uppercase;
+}
+.variant-trigger em {
+  margin-top: 4px;
+  overflow: hidden;
+  color: #f0e2c2;
+  font: 650 9px/1.2 var(--ui);
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.variant-trigger > b {
+  color: var(--chess-gold);
+  font: 900 8px/1 var(--mono);
+  letter-spacing: .8px;
+}
+
+.variant-dialog {
+  width: min(760px, calc(100% - 24px));
+  max-height: min(88vh, 780px);
+  padding: 0;
+  border: 5px solid var(--wood-dark);
+  color: var(--text);
+  background: var(--wood);
+  box-shadow: inset 0 5px rgba(255,255,255,.1), 0 30px 90px rgba(0,0,0,.78);
+}
+.variant-dialog::backdrop {
+  background: rgba(3,6,14,.9);
+  backdrop-filter: blur(7px);
+}
+.variant-dialog-card {
+  padding: clamp(20px,4vw,34px);
+}
+.variant-dialog-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+.variant-dialog-card h2 {
+  margin: 8px 0 0;
+  color: var(--chess-gold);
+  font: italic clamp(34px,7vw,52px)/.92 var(--display);
+  text-transform: uppercase;
+}
+.variant-dialog-close {
+  width: 44px;
+  min-height: 44px;
+  border: 3px solid var(--stone-dark);
+  color: var(--text);
+  background: var(--stone);
+  box-shadow: 3px 3px 0 #1d2a2a;
+  cursor: pointer;
+  font: 900 25px/1 var(--display);
+}
+.variant-group {
+  min-width: 0;
+  margin: 24px 0 0;
+  padding: 0;
+  border: 0;
+}
+.variant-group legend {
+  margin-bottom: 10px;
+  color: #fff2c8;
+  font: 900 9px/1 var(--mono);
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+.variant-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.variant-option {
+  position: relative;
+  min-height: 104px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 11px;
+  margin: 0;
+  padding: 13px;
+  border: 4px solid var(--stone-dark);
+  color: var(--text);
+  background: var(--stone);
+  box-shadow: inset 0 4px rgba(255,255,255,.09), 4px 4px 0 #1d2a2a;
+  cursor: pointer;
+  text-transform: none;
+}
+.variant-option.selected {
+  border-color: var(--grass-dark);
+  background: #547548;
+  box-shadow: inset 0 4px rgba(255,255,255,.12), 4px 4px 0 #294126;
+}
+.variant-option input {
+  position: absolute;
+  width: 1px;
+  min-height: 1px;
+  opacity: 0;
+}
+.variant-option-icon { width: 40px; height: 40px; }
+.variant-option strong,
+.variant-option small,
+.variant-option em { display: block; }
+.variant-option strong {
+  font: 900 13px/1 var(--display);
+  letter-spacing: .4px;
+  text-transform: uppercase;
+}
+.variant-option small {
+  margin-top: 5px;
+  color: var(--chess-gold);
+  font: 850 8px/1 var(--mono);
+}
+.variant-option em {
+  margin-top: 6px;
+  color: #e1e8cf;
+  font: 600 9px/1.3 var(--ui);
+  font-style: normal;
+}
+.variant-option > b {
+  color: var(--chess-gold);
+  font: 900 15px/1 var(--display);
+}
+.variant-dialog-note {
+  margin: 20px 0 0;
+  color: #f0e2c2;
+  font: 650 9px/1.45 var(--ui);
+}
+.variant-fixed-rules {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 12px;
+  border: 4px solid var(--grass-dark);
+  color: #f3ffe8;
+  background: #46643d;
+  box-shadow: inset 0 4px rgba(255,255,255,.09), 4px 4px 0 #294126;
+}
+.variant-fixed-rules > span {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  color: #25321d;
+  background: var(--chess-gold);
+  font: 900 17px/1 var(--display);
+}
+.variant-fixed-rules strong,
+.variant-fixed-rules small { display: block; }
+.variant-fixed-rules strong { font: 900 10px/1 var(--display); }
+.variant-fixed-rules small {
+  margin-top: 5px;
+  color: #e1e8cf;
+  font: 650 8px/1.35 var(--ui);
+}
+.variant-invite {
+  display: grid;
+  gap: 5px;
+  margin: -13px 0 22px;
+  padding: 10px 12px;
+  border: 3px solid var(--grass-dark);
+  color: #f3ffe8;
+  background: rgba(70,100,61,.76);
+}
+.variant-invite strong {
+  color: var(--chess-gold);
+  font: 900 9px/1 var(--mono);
+}
+.variant-invite span { font: 900 13px/1.2 var(--display); text-transform: uppercase; }
+.variant-invite small { color: #e1e8cf; font: 650 9px/1.35 var(--ui); }
+.variant-game-banner {
+  width: min(100%,770px);
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: 28px minmax(0,1fr);
+  align-items: center;
+  gap: 8px;
+  margin: 0 auto 7px;
+  padding: 6px 10px;
+  border: 3px solid var(--grass-dark);
+  color: #f3ffe8;
+  background: rgba(70,100,61,.92);
+  box-shadow: 3px 3px 0 rgba(33,48,28,.65);
+}
+.variant-game-banner > span {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  color: #25321d;
+  background: var(--chess-gold);
+  font: 900 15px/1 var(--display);
+}
+.variant-game-banner strong,
+.variant-game-banner small { display: block; }
+.variant-game-banner strong { font: 900 9px/1 var(--mono); }
+.variant-game-banner small {
+  margin-top: 4px;
+  color: #e1e8cf;
+  font: 650 9px/1.25 var(--ui);
+}
+
+@media (max-width: 620px) {
+  .variant-dialog {
+    width: 100%;
+    max-width: none;
+    max-height: 88vh;
+    margin: auto 0 0;
+    border-width: 5px 0 0;
+  }
+  .variant-dialog-card { padding: 22px 16px 26px; }
+  .variant-grid { grid-template-columns: 1fr; }
+  .variant-option { min-height: 88px; }
+}

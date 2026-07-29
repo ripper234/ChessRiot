@@ -72,6 +72,17 @@ describe("capturedPiecesByVictimColor", () => {
     });
   });
 
+  it("reconstructs captures from a Mini Game starting setup", () => {
+    expect(capturedPiecesByVictimColor([
+      move(1, "w", "c2", "c4", "c4"),
+      move(2, "b", "d7", "d5", "d5"),
+      move(3, "w", "c4", "d5", "cxd5"),
+    ], "4k3/pppppppp/8/8/8/8/PPPPPPPP/4K3 w - - 0 1")).toEqual({
+      w: [],
+      b: ["p"],
+    });
+  });
+
   it("identifies the king that is currently in check", () => {
     expect(checkedKingSquare(new Chess("4k3/8/8/8/8/8/4R3/4K3 b - - 0 1")))
       .toBe("e8");
@@ -129,6 +140,7 @@ describe("outcome presentation", () => {
     return {
       id: "game",
       mode: "multiplayer",
+      variantId: "standard",
       aiDifficulty: null,
       status: "completed",
       version: 1,

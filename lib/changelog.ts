@@ -11,6 +11,18 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.14.0",
+    date: "2026-07-29",
+    title: "Three new ways to riot",
+    summary: "A new game menu launches three smaller chess setups in both Solo and Multiplayer.",
+    changes: [
+      "Added Pawn Riot, Half Army, and Pawn Duel while keeping Classic Chess selected by default.",
+      "Made every setup server-owned, immutable, and compatible with Riot Bot, invitations, history, replay, and deadlines.",
+      "Disclosed the selected game before joining and throughout the active match without accepting arbitrary starting positions.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.14.0`,
+  },
+  {
     version: "0.13.5",
     date: "2026-07-28",
     title: "Feedback, accounted for",

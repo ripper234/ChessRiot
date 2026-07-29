@@ -6,6 +6,7 @@ function snapshot(moves: PublicMove[]): GameSnapshot {
   return {
     id: "game",
     mode: "multiplayer",
+    variantId: "standard",
     aiDifficulty: null,
     status: "active",
     version: moves.length,

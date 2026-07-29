@@ -1,4 +1,5 @@
 import type { PublicMagicRules } from "./magic-rules";
+import type { GameVariantId } from "./game-variants";
 
 export type Color = "w" | "b";
 export type GameMode = "solo" | "multiplayer";
@@ -57,6 +58,7 @@ export interface PublicMove {
 export interface GameSnapshot {
   id: string;
   mode: GameMode;
+  variantId: GameVariantId;
   aiDifficulty: AiDifficulty | null;
   turnPaceDays?: TurnPaceDays | null;
   magicRules?: PublicMagicRules | null;

@@ -100,6 +100,15 @@ test("renders an identity-independent public homepage and guest play route", asy
     html,
     /<input(?=[^>]*name="game-mode")(?=[^>]*value="multiplayer")(?=[^>]*checked)[^>]*>/,
   );
+  assert.match(html, /GAME MENU/);
+  assert.match(html, /Choose a game/);
+  assert.match(
+    html,
+    /<input(?=[^>]*name="game-variant")(?=[^>]*value="standard")(?=[^>]*checked)[^>]*>/,
+  );
+  assert.match(html, /Pawn Riot/);
+  assert.match(html, /Half Army/);
+  assert.match(html, /Pawn Duel/);
   assert.match(html, /Riot Bot level/);
   assert.doesNotMatch(html, /Time per move/);
   assert.match(html, /MAGIC RULES/);

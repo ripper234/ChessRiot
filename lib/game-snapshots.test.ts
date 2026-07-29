@@ -12,6 +12,7 @@ function startingSnapshot(overrides: Partial<GameSnapshot> = {}): GameSnapshot {
   return {
     id: "solo-game",
     mode: "solo",
+    variantId: "standard",
     aiDifficulty: 3,
     status: "active",
     version: 7,
