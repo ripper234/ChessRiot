@@ -13,6 +13,7 @@ describe("gameCreatePayload", () => {
       displayName: "Ron",
       guestToken: "guest-token",
       mode: "solo",
+      variantId: "pawn-riot",
       difficulty: 3,
       turnPaceDays: 5,
       pending,
@@ -20,6 +21,7 @@ describe("gameCreatePayload", () => {
       displayName: "Ron",
       guestToken: "guest-token",
       mode: "solo",
+      variantId: "pawn-riot",
       difficulty: 3,
       ...pending,
     });
@@ -30,6 +32,7 @@ describe("gameCreatePayload", () => {
       displayName: "Ron",
       guestToken: "guest-token",
       mode: "multiplayer",
+      variantId: "half-army",
       difficulty: 4,
       turnPaceDays: 5,
       pending,
@@ -37,6 +40,7 @@ describe("gameCreatePayload", () => {
       displayName: "Ron",
       guestToken: "guest-token",
       mode: "multiplayer",
+      variantId: "half-army",
       turnPaceDays: 5,
       ...pending,
     });

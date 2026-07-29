@@ -1,5 +1,5 @@
 import { chooseComputerMove } from "@/lib/computer-player";
-import { applyCandidate, INITIAL_FEN } from "@/lib/game-rules";
+import { applyCandidate } from "@/lib/game-rules";
 import {
   accountPlayerColor,
   findGameByCreateRequest,
@@ -28,6 +28,10 @@ import {
   serializeMagicRules,
   type CompiledMagicRules,
 } from "@/lib/magic-rules";
+import {
+  gameVariant,
+  isGameVariantId,
+} from "@/lib/game-variants";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +65,12 @@ export async function POST(request: Request) {
     return apiError(400, "invalid_request", "Name, secrets, or request id are invalid");
   }
   const mode = body.mode === undefined ? "multiplayer" : body.mode;
+  const variantId = body.variantId === undefined ? "standard" : body.variantId;
+  if (!isGameVariantId(variantId)) {
+    return apiError(400, "invalid_variant", "Choose one of the available games");
+  }
+  const variant = gameVariant(variantId);
+  const initialFen = variant.initialFen;
   const difficulty = mode === "solo"
     ? body.difficulty === undefined ? 3 : body.difficulty
     : null;
@@ -70,6 +80,13 @@ export async function POST(request: Request) {
   let magicPrompt: string | null = null;
   let magicRules: CompiledMagicRules | null = null;
   if (body.magicPrompt !== undefined && body.magicPrompt !== null && body.magicPrompt !== "") {
+    if (variantId !== "standard") {
+      return apiError(
+        422,
+        "variant_magic_conflict",
+        "Mini Games use their own fixed setup and cannot add Magic Rules",
+      );
+    }
     const magic = compileMagicPrompt(body.magicPrompt);
     if (!magic.ok) {
       return apiError(422, "magic_rule_unsupported", magic.message);
@@ -113,6 +130,8 @@ export async function POST(request: Request) {
       existingColor !== existing.human_color ||
       existing.invite_token_hash !== inviteHash ||
       existing.game_mode !== mode ||
+      existing.variant_id !== variantId ||
+      existing.initial_fen !== initialFen ||
       existing.ai_difficulty !== difficulty ||
       !turnPaceMatches(existing.turn_pace_days) ||
       existing.magic_prompt !== magicPrompt ||
@@ -150,7 +169,7 @@ export async function POST(request: Request) {
   const joinedAt = mode === "solo" ? now : null;
   const openingCandidate = mode === "solo" && computerColor === "w" && difficulty
     ? chooseComputerMove(
-      INITIAL_FEN,
+      initialFen,
       difficulty as AiDifficulty,
       computerColor,
       Math.random,
@@ -161,11 +180,11 @@ export async function POST(request: Request) {
     return apiError(500, "computer_move_failed", "The computer could not open the game");
   }
   const opening = openingCandidate
-    ? applyCandidate(INITIAL_FEN, [], openingCandidate, magicRules)
+    ? applyCandidate(initialFen, [], openingCandidate, magicRules)
     : null;
   const initialVersion = opening ? 1 : 0;
   const initialPly = opening ? 1 : 0;
-  const currentFen = opening?.fenAfter ?? INITIAL_FEN;
+  const currentFen = opening?.fenAfter ?? initialFen;
   const turnColor = opening?.turn ?? "w";
   try {
     const db = getDatabase();
@@ -184,7 +203,7 @@ export async function POST(request: Request) {
           whiteHash,
           blackHash,
           inviteHash,
-          INITIAL_FEN,
+          initialFen,
           currentFen,
           turnColor,
           initialVersion,
@@ -194,12 +213,13 @@ export async function POST(request: Request) {
           now,
         ),
       db.prepare(`INSERT INTO game_settings (
-        game_id, game_mode, ai_difficulty, human_color, turn_pace_days,
+        game_id, game_mode, variant_id, ai_difficulty, human_color, turn_pace_days,
         magic_prompt, magic_rules_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
         .bind(
           id,
           mode,
+          variantId,
           difficulty,
           humanColor,
           turnPaceDays,
@@ -245,6 +265,8 @@ export async function POST(request: Request) {
       await accountPlayerColor(raced, account.id, playerHash) !== raced.human_color ||
       raced.invite_token_hash !== inviteHash ||
       raced.game_mode !== mode ||
+      raced.variant_id !== variantId ||
+      raced.initial_fen !== initialFen ||
       raced.ai_difficulty !== difficulty ||
       !turnPaceMatches(raced.turn_pace_days) ||
       raced.magic_prompt !== magicPrompt ||
@@ -273,6 +295,7 @@ export async function POST(request: Request) {
         color: computerColor,
         difficulty: difficulty as number,
         opening: true,
+        variantId,
         magic: Boolean(magicRules),
         ruleCount: magicRules?.rules.length ?? 0,
       },

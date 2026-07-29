@@ -1,4 +1,5 @@
 import { ensureSchema, getDatabase } from "@/db";
+import { isGameVariantId } from "./game-variants";
 import { isUuid } from "./validation";
 import { APP_VERSION } from "./version";
 import { appEnvironment, observabilityHashSecret } from "./runtime";
@@ -213,6 +214,7 @@ async function requestDetails(request: Request): Promise<RequestDetails> {
     const payload = body as Record<string, unknown>;
     if (isUuid(payload.requestId)) details.requestId = payload.requestId;
     if (typeof payload.mode === "string") details.metadata.mode = payload.mode.slice(0, 20);
+    if (isGameVariantId(payload.variantId)) details.metadata.variantId = payload.variantId;
     if (typeof payload.difficulty === "number") details.metadata.difficulty = payload.difficulty;
     if (typeof payload.turnPaceDays === "number") {
       details.metadata.turnPaceDays = payload.turnPaceDays;
@@ -255,6 +257,7 @@ async function responseDetails(
       game?: {
         id?: unknown;
         mode?: unknown;
+        variantId?: unknown;
         status?: unknown;
         you?: { color?: unknown };
         outcome?: { reason?: unknown } | null;
@@ -269,6 +272,9 @@ async function responseDetails(
     };
     const metadata: Record<string, string | number | boolean | null> = {};
     if (typeof payload.game?.mode === "string") metadata.mode = payload.game.mode;
+    if (isGameVariantId(payload.game?.variantId)) {
+      metadata.variantId = payload.game.variantId;
+    }
     if (typeof payload.game?.status === "string") metadata.gameStatus = payload.game.status;
     if (typeof payload.game?.you?.color === "string") metadata.playerColor = payload.game.you.color;
     if (typeof payload.game?.outcome?.reason === "string") {
@@ -347,6 +353,9 @@ export async function observeHttpRequest(
         metadata: {
           color: response.headers.get("x-chessriot-bot-color") === "w" ? "w" : "b",
           difficulty: Number.isInteger(botDifficulty) ? botDifficulty : null,
+          variantId: typeof responseInfo.metadata.variantId === "string"
+            ? responseInfo.metadata.variantId
+            : null,
           gameStatus: typeof responseInfo.metadata.gameStatus === "string"
             ? responseInfo.metadata.gameStatus
             : null,

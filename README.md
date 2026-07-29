@@ -4,7 +4,7 @@ Play the current game at [chessriot.ripper234.chatgpt.site](https://chessriot.ri
 **[View the official ChessRiot release history](https://chessriot.ripper234.chatgpt.site/changelog).**
 [Join for updates on WhatsApp](https://chat.whatsapp.com/FaBgiUgl73vLdeqzcqx0vX).
 
-ChessRiot v0.13.5 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
+ChessRiot v0.14.0 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
 
 Found something confusing or have a cool rule request? Use **Feedback** inside
 the game or [open a GitHub issue](https://github.com/ripper234/ChessRiot/issues).
@@ -28,6 +28,9 @@ progression work, and features that still need explicit rule design.
 - Resume recent games on the same device or use a private seat link on another
   device.
 - Play complete standard chess with server-authoritative legal move validation.
+- Open the game menu and choose Pawn Riot, Half Army, or Pawn Duel for a
+  smaller starting army with the same authoritative chess rules. Every Mini
+  Game works in Solo and Multiplayer.
 - See the Magic Rules concept in new-game setup. New rule entry is paused behind
   a Coming Soon placeholder while the runtime feature develops in an isolated
   preview branch.

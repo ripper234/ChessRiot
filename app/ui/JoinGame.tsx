@@ -12,6 +12,10 @@ import {
   rememberGame,
 } from "@/lib/client-storage";
 import type { GameSnapshot } from "@/lib/game-types";
+import {
+  gameVariant,
+  type GameVariantId,
+} from "@/lib/game-variants";
 import type { PublicMagicRules } from "@/lib/magic-rules";
 import { Brand } from "./Brand";
 
@@ -21,6 +25,7 @@ type InviteState =
     kind: "waiting";
     gameId: string;
     creatorName: string;
+    variantId: GameVariantId;
     magicRules: PublicMagicRules | null;
   }
   | { kind: "claimed"; gameId?: string }
@@ -48,6 +53,7 @@ export function JoinGame({
         state?: string;
         gameId?: string;
         creatorName?: string;
+        variantId?: GameVariantId;
         magicRules?: PublicMagicRules | null;
       };
       if (cancelled()) return;
@@ -61,6 +67,7 @@ export function JoinGame({
           kind: "waiting",
           gameId: data.gameId,
           creatorName: data.creatorName,
+          variantId: data.variantId ?? "standard",
           magicRules: data.magicRules ?? null,
         });
       } else if (response.status === 410) {
@@ -145,6 +152,11 @@ export function JoinGame({
           <form className="voxel-card join-card" onSubmit={join}>
             <p className="eyebrow"><span /> PRIVATE CHALLENGE</p>
             <h1><em>{invite.creatorName}</em><br />wants a match.</h1>
+            <div className="variant-invite">
+              <strong>{invite.variantId === "standard" ? "♜ CHESS" : "⚔ MINI GAME"}</strong>
+              <span>{gameVariant(invite.variantId).name}</span>
+              <small>{gameVariant(invite.variantId).description}</small>
+            </div>
             {invite.magicRules ? (
               <div className="magic-invite">
                 <strong>✦ MAGIC RULES</strong>

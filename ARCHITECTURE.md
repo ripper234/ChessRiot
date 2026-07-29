@@ -2,6 +2,8 @@
 
 - `app/`: Vinext pages, client interactions, and HTTP APIs.
 - `lib/game-rules.ts`: pure chess.js adapter and terminal-state logic.
+- `lib/game-variants.ts`: immutable, allowlisted starting-position presets and
+  their public Mini Game labels.
 - `lib/magic-rules.ts`: legacy deterministic rule documents retained only so
   previously created Magic games remain readable.
 - `lib/computer-player.ts`: deterministic bounded move search shared by the
@@ -51,6 +53,13 @@ endpoint, or model call. Legacy immutable Magic documents remain supported for
 previously created games so their history does not break. New runtime Magic
 work lives on `feature/runtime-magic-rules` and must return through an isolated
 preview and explicit merge.
+
+Mini Games are starting-position presets, not arbitrary rule code. The browser
+sends an allowlisted variant id, the server selects its immutable FEN, and
+`game_settings.variant_id` preserves the semantic label while
+`games.initial_fen` remains the replay authority. Standard is the durable
+legacy default. Mini Games use normal chess terminal rules and cannot combine
+with Magic Rules in v0.14.0.
 
 Closed-app turn alerts are opt-in and game-specific. The browser holds one
 origin-level PushSubscription, while D1 associates its endpoint hash separately

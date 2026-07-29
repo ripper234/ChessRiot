@@ -3,6 +3,7 @@ import { apiError, json } from "@/lib/http";
 import { enforceAccountRateLimit } from "@/lib/accounts";
 import { hashSecret, isSecret } from "@/lib/validation";
 import { publicMagicRules } from "@/lib/magic-rules";
+import { normalizeGameVariantId } from "@/lib/game-variants";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,7 @@ export async function GET(
       state: "waiting",
       gameId: game.id,
       creatorName: game.white_name,
+      variantId: normalizeGameVariantId(game.variant_id),
       magicRules: publicMagicRules(game.magic_prompt, gameMagicRules(game)),
     },
     { headers: { "referrer-policy": "no-referrer" } },

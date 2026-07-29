@@ -7,6 +7,10 @@ import {
   publicMagicRules,
   type CompiledMagicRules,
 } from "./magic-rules";
+import {
+  normalizeGameVariantId,
+  type GameVariantId,
+} from "./game-variants";
 import { recordEvent } from "./observability";
 import type {
   AiDifficulty,
@@ -41,6 +45,7 @@ export interface GameRow {
   updated_at: string;
   finished_at: string | null;
   game_mode: GameMode;
+  variant_id: GameVariantId;
   ai_difficulty: AiDifficulty | null;
   human_color: Color;
   turn_pace_days: TurnPaceDays | null;
@@ -71,6 +76,7 @@ export async function findGameById(id: string): Promise<GameRow | null> {
     (await getDatabase()
       .prepare(`SELECT games.*,
         COALESCE(game_settings.game_mode, 'multiplayer') AS game_mode,
+        COALESCE(game_settings.variant_id, 'standard') AS variant_id,
         game_settings.ai_difficulty AS ai_difficulty,
         COALESCE(game_settings.human_color, 'w') AS human_color,
         game_settings.turn_pace_days AS turn_pace_days,
@@ -90,6 +96,7 @@ export async function findGameByCreateRequest(requestId: string): Promise<GameRo
     (await getDatabase()
       .prepare(`SELECT games.*,
         COALESCE(game_settings.game_mode, 'multiplayer') AS game_mode,
+        COALESCE(game_settings.variant_id, 'standard') AS variant_id,
         game_settings.ai_difficulty AS ai_difficulty,
         COALESCE(game_settings.human_color, 'w') AS human_color,
         game_settings.turn_pace_days AS turn_pace_days,
@@ -109,6 +116,7 @@ export async function findGameByInviteHash(inviteHash: string): Promise<GameRow 
     (await getDatabase()
       .prepare(`SELECT games.*,
         COALESCE(game_settings.game_mode, 'multiplayer') AS game_mode,
+        COALESCE(game_settings.variant_id, 'standard') AS variant_id,
         game_settings.ai_difficulty AS ai_difficulty,
         COALESCE(game_settings.human_color, 'w') AS human_color,
         game_settings.turn_pace_days AS turn_pace_days,
@@ -298,6 +306,7 @@ export function snapshot(game: GameRow, moves: StoredMove[], you: Color): GameSn
   return {
     id: game.id,
     mode: game.game_mode,
+    variantId: normalizeGameVariantId(game.variant_id),
     aiDifficulty: game.ai_difficulty,
     turnPaceDays: game.turn_pace_days,
     magicRules: publicMagicRules(game.magic_prompt, magicRules),

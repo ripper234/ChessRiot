@@ -5,10 +5,15 @@ import {
   verifiedRequestAccount,
   type PlayerAccount,
 } from "./account-auth";
+import {
+  normalizeGameVariantId,
+  type GameVariantId,
+} from "./game-variants";
 
 export interface AccountGameSummary {
   id: string;
   mode: GameMode;
+  variantId: GameVariantId;
   status: "waiting" | "active" | "completed";
   color: Color;
   opponent: string | null;
@@ -158,6 +163,7 @@ export async function listAccountGames(
         games.termination,
         games.updated_at,
         game_settings.game_mode,
+        COALESCE(game_settings.variant_id, 'standard') AS variant_id,
         CASE WHEN game_settings.magic_rules_json IS NULL THEN 0 ELSE 1 END AS is_magic,
         game_memberships.color,
         CASE
@@ -180,6 +186,7 @@ export async function listAccountGames(
       termination: Termination | null;
       updated_at: string;
       game_mode: GameMode;
+      variant_id: string;
       is_magic: number;
       color: Color;
       opponent: string | null;
@@ -189,6 +196,7 @@ export async function listAccountGames(
   const games = pageRows.map((row) => ({
     id: row.id,
     mode: row.game_mode,
+    variantId: normalizeGameVariantId(row.variant_id),
     status: row.status,
     color: row.color,
     opponent: row.opponent,

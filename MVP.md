@@ -10,6 +10,8 @@
 - Two separate devices or browsers
 - Create, invite, and join
 - Standard legal rules and complete endings by default
+- A server-owned Mini Games menu with Pawn Riot, Half Army, and Pawn Duel
+  starting setups in both Solo and Multiplayer
 - A visible Magic Rules Coming Soon placeholder, with no new rule entry or
   compilation in the stable release
 - Durable game state and move history

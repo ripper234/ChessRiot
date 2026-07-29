@@ -46,6 +46,29 @@
 6. Backdate a live player turn beyond its selected pace, load the game, and
    verify the waiting player loses on time before a late move can commit.
 
+## Mini Games
+
+1. Open `/app` and verify Classic Chess is selected without opening the game
+   menu. Open the menu by mouse and keyboard and verify Pawn Riot, Half Army,
+   and Pawn Duel are grouped under Mini Games.
+2. Select every setup and verify the chooser closes, the selected loadout is
+   visible, and changing Solo or Multiplayer does not reset it.
+3. Create each Mini Game in Solo as both White and Black. Verify Riot Bot opens
+   from the selected setup when it is White, every reply is legal, and the
+   immutable initial position survives refresh, history, and replay.
+4. Create each Mini Game in Multiplayer. Verify the invitation names the game
+   before Black joins, both seats receive the same variant id and initial FEN,
+   and play resumes correctly from private links on separate devices.
+5. Verify Standard remains the default for omitted variant ids and legacy
+   rows. Reject unknown ids, raw client FENs, a changed variant on an
+   idempotent retry, and any Mini Game combined with a Magic prompt.
+6. Verify the active Mini Game banner, Game Info, captured-piece lists, recent
+   game cards, deadlines, check guidance, checkmate finisher, and replay all
+   reflect the selected starting army.
+7. At 320x568, 390x844, landscape, keyboard-only navigation, and 200% zoom,
+   verify the game menu remains usable, focus returns to its trigger, and no
+   fixed control overlaps it.
+
 ## Magic Rules
 
 1. Open `/app` and verify Magic Rules remains visible.
@@ -174,6 +197,8 @@
 
 - Verify Development, Staging, and Production write only to their own D1.
 - Verify create, invite, join, accepted/rejected moves, bot moves, draw claims, errors, and health checks appear with environment, release, request id, outcome, and latency.
+- Verify game creation and bot telemetry include only the allowlisted variant
+  id, never an initial or current FEN.
 - Verify unchanged polling creates no event.
 - Verify route normalization and HMAC game references never expose ids, tokens, names, links, fragments, FENs, raw bodies, IPs, or user agents.
 - Verify expired/tampered/wrong-environment read grants are rejected.

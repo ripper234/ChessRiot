@@ -1,4 +1,21 @@
-# ChessRiot v0.13.5 specification
+# ChessRiot v0.14.0 specification
+
+## v0.14.0 release additions
+
+- New-game setup keeps Classic Chess selected by default and adds a compact
+  game menu with three Mini Games: Pawn Riot, Half Army, and Pawn Duel.
+- Each Mini Game is an immutable, server-owned starting-position preset. The
+  client sends only an allowlisted variant id and can never provide a FEN.
+- Every preset works in both Solo and Multiplayer. Normal chess moves,
+  promotion, check, checkmate, draws, history, replay, deadlines, and Riot Bot
+  behavior remain server-authoritative.
+- The selected game is disclosed in the invitation preview, active-game
+  banner, Game Info, and the current device's recent-game cards.
+- Standard remains the default for legacy rows and callers that omit a variant.
+  Mini Games cannot combine with Magic Rules in this first release.
+- Literal kingless pawn chess remains outside this release because it requires
+  a separate legal-move and victory-condition engine. Pawn Riot and Pawn Duel
+  preserve one king per side and use normal checkmate rules.
 
 ## v0.13.3 release additions
 

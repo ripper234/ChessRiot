@@ -6,6 +6,7 @@ function snapshot(overrides: Partial<GameSnapshot> = {}): GameSnapshot {
   return {
     id: "game-1",
     mode: "multiplayer",
+    variantId: "standard",
     aiDifficulty: null,
     status: "active",
     version: 1,

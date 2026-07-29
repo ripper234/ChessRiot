@@ -26,14 +26,20 @@ import {
   type PendingGameCreate,
 } from "@/lib/game-creation";
 import { DIFFICULTY_LABELS } from "@/lib/game-presentation";
+import {
+  gameVariant,
+  type GameVariantId,
+} from "@/lib/game-variants";
 import { APP_VERSION } from "@/lib/version";
 import { Brand } from "./Brand";
 import { ChessPiece } from "./ChessPiece";
+import { GameVariantPicker } from "./GameVariantPicker";
 
 export function CreateGame() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [mode, setMode] = useState<GameMode>("solo");
+  const [variantId, setVariantId] = useState<GameVariantId>("standard");
   const [difficulty, setDifficulty] = useState<AiDifficulty>(3);
   const [turnPaceDays, setTurnPaceDays] = useState<TurnPaceDays>(3);
   const [recent, setRecent] = useState<RecentGame[]>([]);
@@ -73,6 +79,7 @@ export function CreateGame() {
           displayName: cleanName,
           guestToken: guestIdentityToken(),
           mode,
+          variantId,
           difficulty,
           turnPaceDays,
           pending: pending.current,
@@ -128,6 +135,14 @@ export function CreateGame() {
             placeholder="Ron"
             disabled={busy}
           />
+          <GameVariantPicker
+            value={variantId}
+            disabled={busy}
+            onChange={(nextVariantId) => {
+              setVariantId(nextVariantId);
+              pending.current = null;
+            }}
+          />
           <fieldset className="mode-fieldset" disabled={busy}>
             <legend>Game mode</legend>
             <div className="mode-options">
@@ -163,7 +178,7 @@ export function CreateGame() {
               </label>
             </div>
           </fieldset>
-          <div className="magic-box coming-soon">
+          {variantId === "standard" ? <div className="magic-box coming-soon">
             <div className="magic-toggle">
               <span aria-hidden="true">✦</span>
               <div>
@@ -176,7 +191,15 @@ export function CreateGame() {
               <strong>COMING SOON</strong>
               <p>Magic Rules are being developed safely on a separate preview branch.</p>
             </div>
-          </div>
+          </div> : (
+            <div className="variant-fixed-rules">
+              <span aria-hidden="true">{gameVariant(variantId).icon}</span>
+              <div>
+                <strong>{gameVariant(variantId).name.toUpperCase()}</strong>
+                <small>Fixed starting setup · Normal chess moves · Checkmate wins</small>
+              </div>
+            </div>
+          )}
           {mode === "solo" ? (
             <div className="difficulty-control">
               <div className="difficulty-heading">
@@ -240,7 +263,9 @@ export function CreateGame() {
                 <span className={`mini-piece ${game.color === "w" ? "light" : "dark"}`}>
                   <ChessPiece type="p" color={game.color} />
                 </span>
-                <span><strong>{game.label}</strong><small>Tap to return</small></span>
+                <span><strong>{game.label}</strong><small>
+                  {gameVariant(game.variantId).name} · Tap to return
+                </small></span>
                 <b>→</b>
               </Link>
             ))}
