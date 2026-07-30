@@ -1,0 +1,1 @@
+ALTER TABLE `ai_usage_events` ADD `outcome` text;

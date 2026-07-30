@@ -7,8 +7,8 @@
 - Preserve `.openai/hosting.json`, the Control D1 registry, access policy, runtime
   bindings, and environment isolation.
 - Control never deploys game code. Every changed game release is checkpointed to
-  Development; Staging advances only after an explicit Development promotion,
-  and Production advances only after an explicit Staging promotion.
+  Development, and Production advances only after an explicit Development
+  promotion.
 - Do not present prompt copying as deployment automation. Until Control receives
   scoped Sites deployment authority, direct promotion and arbitrary version
   actions must remain visibly unavailable. A temporary ChatGPT Work handoff may
@@ -17,7 +17,7 @@
 - Keep the primary viewport pipeline-first. Health, telemetry, events, and
   feedback remain secondary, collapsed surfaces. Public history belongs on the
   game Releases page.
-- Keep the three top-pipeline environment launch controls visible even while
+- Keep both top-pipeline environment launch controls visible even while
   deployment or health status is loading.
 - Persisted deployment truth may support backend reconciliation, but it must
   never render as a current version. Each check cycle starts with `—`; only a

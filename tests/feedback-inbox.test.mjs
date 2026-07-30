@@ -1,16 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import worker, {
+  concreteUnresolvedFeedbackCount,
   normalizeFeedbackOverview,
   summarizeFeedbackEnvironments,
 } from "../worker/index.js";
 
 const environment = {
   DEV_URL: "https://chessriot-dev.ripper234.chatgpt.site",
-  STAGING_URL: "https://chessriot-staging.ripper234.chatgpt.site",
   PROD_URL: "https://chessriot.ripper234.chatgpt.site",
   DEV_OPS_READ_SECRET: "dev-feedback-test-secret",
-  STAGING_OPS_READ_SECRET: "staging-feedback-test-secret",
   PROD_OPS_READ_SECRET: "prod-feedback-test-secret",
 };
 
@@ -22,26 +21,21 @@ test("summarizes exact, quiet, and partially available feedback counts", () => {
   assert.deepEqual(summarizeFeedbackEnvironments([
     { fresh: true, exact: true, unresolved: 3 },
     { fresh: true, exact: true, unresolved: 2 },
-    { fresh: true, exact: true, unresolved: 0 },
   ]), { known: 5, complete: true, display: "5" });
   assert.deepEqual(summarizeFeedbackEnvironments([
-    { fresh: true, exact: true, unresolved: 0 },
     { fresh: true, exact: true, unresolved: 0 },
     { fresh: true, exact: true, unresolved: 0 },
   ]), { known: 0, complete: true, display: "0" });
   assert.deepEqual(summarizeFeedbackEnvironments([
     { fresh: true, exact: true, unresolved: 2 },
     { fresh: false, exact: false, unresolved: 0 },
-    { fresh: true, exact: true, unresolved: 0 },
   ]), { known: 2, complete: false, display: "2+" });
   assert.deepEqual(summarizeFeedbackEnvironments([
-    { fresh: false, exact: false, unresolved: 0 },
     { fresh: false, exact: false, unresolved: 0 },
     { fresh: false, exact: false, unresolved: 0 },
   ]), { known: 0, complete: false, display: "?" });
   assert.deepEqual(summarizeFeedbackEnvironments([
     { fresh: true, exact: false, unresolved: 1 },
-    { fresh: true, exact: true, unresolved: 0 },
     { fresh: true, exact: true, unresolved: 0 },
   ]), { known: 1, complete: false, display: "1+" });
 });
@@ -76,6 +70,30 @@ test("never trusts an exact count below visible unresolved feedback", () => {
   }).exact, true);
 });
 
+test("red badge count comes only from concrete unresolved records", () => {
+  assert.equal(concreteUnresolvedFeedbackCount([
+    {
+      feedbackPool: {
+        items: [],
+        total: 5,
+        unresolved: 5,
+      },
+    },
+  ]), 0);
+  assert.equal(concreteUnresolvedFeedbackCount([
+    {
+      feedbackPool: {
+        items: [
+          { id: "open", status: "new" },
+          { id: "done", status: "closed" },
+        ],
+        total: 2,
+        unresolved: 1,
+      },
+    },
+  ]), 1);
+});
+
 test("mints separate short-lived read and feedback grants", async () => {
   const response = await worker.fetch(
     new Request("https://control.example/api/status"),
@@ -83,8 +101,8 @@ test("mints separate short-lived read and feedback grants", async () => {
   );
   assert.equal(response.status, 200);
   const status = await response.json();
-  assert.equal(status.controlVersion, "0.5.0");
-  assert.equal(status.environments.length, 3);
+  assert.equal(status.controlVersion, "0.7.0");
+  assert.equal(status.environments.length, 2);
   for (const item of status.environments) {
     const read = grantPayload(item.grant);
     const manage = grantPayload(item.feedbackGrant);
@@ -99,7 +117,7 @@ test("mints separate short-lived read and feedback grants", async () => {
   const serialized = JSON.stringify(status);
   assert.doesNotMatch(
     serialized,
-    /dev-feedback-test-secret|staging-feedback-test-secret|prod-feedback-test-secret/,
+    /dev-feedback-test-secret|prod-feedback-test-secret/,
   );
 });
 
@@ -111,7 +129,7 @@ test("renders a compact top-right launcher and right-side inbox", async () => {
   const html = await response.text();
   assert.match(html, /id="feedback-launcher"/);
   assert.match(html, /aria-controls="feedback-inbox"/);
-  assert.match(html, /id="feedback-badge"/);
+  assert.match(html, /id="feedback-badge" hidden/);
   assert.match(html, /<dialog class="feedback-inbox-dialog" id="feedback-inbox"/);
   assert.match(html, /id="feedback-unresolved"/);
   assert.match(html, /id="feedback-completed"/);
@@ -132,7 +150,9 @@ test("refreshes grants before closing feedback and preserves environment credent
   assert.match(script, /item\.access === "Owner only" \? "include" : "omit"/);
   assert.match(script, /MARK DONE UNAVAILABLE/);
   assert.match(script, /AUTHORIZATION FAILED/);
-  assert.match(script, /summary\.complete && summary\.known === 0/);
+  assert.match(script, /feedbackBadge\.hidden = concreteUnread === 0/);
+  assert.match(script, /feedbackLauncher\.dataset\.state = concreteUnread > 0/);
+  assert.match(script, /concreteUnresolvedFeedbackCount/);
   assert.match(script, /String\(known\) \+ "\+"/);
   assert.match(script, /counts\.unresolved >= listedUnresolved/);
   assert.match(script, /if \(!feedback\.exact\)/);

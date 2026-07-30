@@ -12,18 +12,39 @@ const migrationPath = resolve(
   projectRoot,
   "dist/.openai/drizzle/0000_lazy_thunderbolt_ross.sql",
 );
+const financialMigrationPath = resolve(
+  projectRoot,
+  "dist/.openai/drizzle/0001_many_phil_sheldon.sql",
+);
+const financialOutcomeMigrationPath = resolve(
+  projectRoot,
+  "dist/.openai/drizzle/0002_slow_trish_tilby.sql",
+);
 
-const [source, manifest, packageSource, packageLockSource, migration] =
+const [
+  source,
+  manifest,
+  packageSource,
+  packageLockSource,
+  migration,
+  financialMigration,
+  financialOutcomeMigration,
+] =
   await Promise.all([
   readFile(workerPath, "utf8"),
   readFile(manifestPath, "utf8"),
   readFile(packagePath, "utf8"),
   readFile(packageLockPath, "utf8"),
   readFile(migrationPath, "utf8"),
+  readFile(financialMigrationPath, "utf8"),
+  readFile(financialOutcomeMigrationPath, "utf8"),
   ]);
 const hostingManifest = JSON.parse(manifest);
 assert.equal(hostingManifest.d1, "DB");
 assert.match(migration, /CREATE TABLE `deployment_registry`/);
+assert.match(financialMigration, /CREATE TABLE `ai_usage_events`/);
+assert.match(financialMigration, /ai_usage_events_source_event_unique/);
+assert.match(financialOutcomeMigration, /ADD `outcome` text/);
 const packageVersion = JSON.parse(packageSource).version;
 const packageLock = JSON.parse(packageLockSource);
 assert.equal(packageLock.version, packageVersion);
@@ -58,10 +79,16 @@ assert.match(
 );
 assert.match(
   page,
-  /grid-template-columns:minmax\(140px,1fr\) 116px minmax\(140px,1fr\) 116px minmax\(140px,1fr\)/,
+  /grid-template-columns:minmax\(140px,1fr\) 116px minmax\(140px,1fr\)/,
 );
 assert.doesNotMatch(page, /pipeline-node\.latest|pipeline-action\.auto/);
 assert.match(page, /Environment health/);
+assert.match(page, /id="financial-dashboard"/);
+assert.match(page, /AI cost &amp; waste/);
+assert.match(page, /Development \/ build waste/);
+assert.match(page, /Runtime waste by cause/);
+assert.match(page, /By game version/);
+assert.match(page, /NOT INSTRUMENTED/);
 assert.match(page, /Feature previews/);
 assert.match(page, /feature\/runtime-magic-rules/);
 assert.match(page, /v0\.11\.0-magic\.4/);
@@ -100,6 +127,10 @@ const scriptResponse = await workerModule.default.fetch(
 const script = await scriptResponse.text();
 assert.match(script, /\/api\/health/);
 assert.match(script, /\/api\/ops\/overview/);
+assert.match(script, /\/api\/financials\?window=/);
+assert.match(script, /function renderFinancials/);
+assert.match(script, /Historical build totals cannot be reconstructed/);
+assert.doesNotMatch(script, /inputTokens \+ cachedInputTokens/);
 assert.match(
   script,
   /"\/api\/ops\/feedback\/" \+ encodeURIComponent\(feedbackId\) \+ "\/close"/,
@@ -130,8 +161,8 @@ assert.doesNotMatch(
 );
 assert.doesNotMatch(script, /LATEST IN DEV|developmentVersion|AUTO TARGET/);
 assert.match(script, /label: "DEV · AUTO LATEST"/);
-assert.match(script, /label: "STAGING"/);
 assert.match(script, /label: "PROD"/);
+assert.doesNotMatch(script, /label: "STAGING"|key: "staging"/);
 assert.doesNotMatch(script, /stage\.key === "development"/);
 assert.match(script, /window\.addEventListener\("pageshow"/);
 assert.match(script, /if \(event\.persisted\) void loadStatus\(\)/);
@@ -184,7 +215,7 @@ const forbiddenAutomaticPromotion = await workerModule.default.fetch(
   new Request("https://control.test/api/promote", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ from: "development", to: "staging" }),
+    body: JSON.stringify({ from: "development", to: "production" }),
   }),
   {},
   {},
@@ -311,13 +342,10 @@ const statusResponse = await workerModule.default.fetch(
   new Request("https://control.test/api/status"),
   {
     PROD_URL: "https://prod.test",
-    STAGING_URL: "https://staging.test",
     DEV_URL: "https://dev.test",
     PROD_OPS_READ_SECRET: "prod-secret-with-at-least-32-characters",
-    STAGING_OPS_READ_SECRET: "staging-secret-with-at-least-32-characters",
     DEV_OPS_READ_SECRET: "dev-secret-with-at-least-32-characters",
     PROD_DEPLOYED_VERSION: "0.2.2",
-    STAGING_DEPLOYED_VERSION: "0.3.0",
     DEV_DEPLOYED_VERSION: "0.3.2",
     DEPLOYMENT_STATE_JSON: JSON.stringify({
       environments: {
@@ -325,11 +353,6 @@ const statusResponse = await workerModule.default.fetch(
           version: "0.3.2",
           deployedAt: "2026-07-24T14:00:00.000Z",
           verifiedAt: "2026-07-24T14:01:00.000Z",
-        },
-        staging: {
-          version: "0.3.0",
-          deployedAt: "2026-07-24T13:00:00.000Z",
-          verifiedAt: "2026-07-24T13:01:00.000Z",
         },
         production: {
           version: "0.2.2",
@@ -359,12 +382,6 @@ assert.deepEqual(
       hasGrant: true,
     },
     {
-      key: "staging",
-      url: "https://staging.test",
-      access: "Owner only",
-      hasGrant: true,
-    },
-    {
       key: "production",
       url: "https://prod.test",
       access: "Public",
@@ -390,7 +407,6 @@ assert.deepEqual(
   fallbackStatus.environments.map(({ key }) => key),
   [
     "development",
-    "staging",
     "production",
   ],
 );
@@ -399,7 +415,6 @@ const database = new FakeD1();
 const persistentEnv = {
   DB: database,
   PROD_DEPLOYED_VERSION: "0.3.2",
-  STAGING_DEPLOYED_VERSION: "0.3.2",
   DEV_DEPLOYED_VERSION: "0.3.2",
   DEPLOYMENT_STATE_JSON: JSON.stringify({
     environments: {
@@ -407,11 +422,6 @@ const persistentEnv = {
         version: "0.3.2",
         deployedAt: "2026-07-24T14:20:00.000Z",
         verifiedAt: "2026-07-24T14:20:00.000Z",
-      },
-      staging: {
-        version: "0.3.2",
-        deployedAt: "2026-07-24T14:21:00.000Z",
-        verifiedAt: "2026-07-24T14:21:00.000Z",
       },
       production: {
         version: "0.3.2",
@@ -518,11 +528,10 @@ const reconciliationDb = new FakeD1();
 const oldRegistryEnv = {
   DB: reconciliationDb,
   PROD_DEPLOYED_VERSION: "0.3.2",
-  STAGING_DEPLOYED_VERSION: "0.3.2",
   DEV_DEPLOYED_VERSION: "0.3.2",
   DEPLOYMENT_STATE_JSON: JSON.stringify({
     environments: Object.fromEntries(
-      ["development", "staging", "production"].map((environment) => [
+      ["development", "production"].map((environment) => [
         environment,
         {
           version: "0.3.2",
@@ -541,11 +550,10 @@ await workerModule.default.fetch(
 const reconciledEnv = {
   ...oldRegistryEnv,
   PROD_DEPLOYED_VERSION: "0.3.3",
-  STAGING_DEPLOYED_VERSION: "0.3.3",
   DEV_DEPLOYED_VERSION: "0.3.3",
   DEPLOYMENT_STATE_JSON: JSON.stringify({
     environments: Object.fromEntries(
-      ["development", "staging", "production"].map((environment) => [
+      ["development", "production"].map((environment) => [
         environment,
         {
           version: "0.3.3",
@@ -564,7 +572,7 @@ const reconciledResponse = await workerModule.default.fetch(
 await reconciledResponse.json();
 assert.deepEqual(
   [...reconciliationDb.rows.values()].map(({ deployed_version }) => deployed_version),
-  ["0.3.3", "0.3.3", "0.3.3"],
+  ["0.3.3", "0.3.3"],
 );
 
 console.log("Artifact is valid ESM and exports default.fetch");
