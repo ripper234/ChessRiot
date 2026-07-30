@@ -14,7 +14,7 @@ export default function ChangelogPage() {
         <div className="changelog-heading">
           <p className="eyebrow"><span /> VERSION HISTORY</p>
           <h1>WHAT&apos;S NEW</h1>
-          <p>Latest first. Production, Staging, and Development use the same release notes.</p>
+          <p>Latest first. Production and Development use the same release notes.</p>
           <a href={SOURCE_URL} target="_blank" rel="noopener noreferrer">VIEW ALL SOURCE ON GITHUB ↗</a>
         </div>
         <ol className="release-list">

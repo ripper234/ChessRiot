@@ -1,4 +1,24 @@
-# ChessRiot v0.14.0 specification
+# ChessRiot v0.15.0 specification
+
+## v0.15.0 release additions
+
+- Multiplayer and Solo both paint a locally legal human move immediately while
+  the authoritative request is in flight. Input stays guarded until the server
+  accepts or rejects the move, and a rejection reconciles to server state.
+- The transient `LOCKING MOVE` label is removed. Network latency must not delay
+  the piece's visible movement.
+- Active games show one version link in the game header. The global route
+  version is suppressed there so no duplicate label can overlap the board, and
+  the game-header version remains available on mobile.
+- The game menu adds a Solo-only Mating Set. The learner is always White
+  against Riot Bot's lone king in King + Pawn, King + Rook, and King + Two
+  Bishops setups.
+- Mating Set positions are immutable server presets. Normal legal moves,
+  promotion, checkmate, draw detection, history, replay, and Riot Bot behavior
+  remain server-authoritative. A Multiplayer request for one is rejected.
+- ChessRiot now has two active hosted environments, Development and
+  Production. Production advances only by an explicit manual promotion of the
+  exact tested Development release.
 
 ## v0.14.0 release additions
 

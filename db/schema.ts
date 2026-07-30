@@ -58,7 +58,9 @@ export const moves = sqliteTable(
 export const gameSettings = sqliteTable(
   "game_settings",
   {
-    gameId: text("game_id").primaryKey(),
+    gameId: text("game_id")
+      .primaryKey()
+      .references(() => games.id, { onDelete: "cascade" }),
     gameMode: text("game_mode").notNull().default("multiplayer"),
     variantId: text("variant_id").notNull().default("standard"),
     aiDifficulty: integer("ai_difficulty"),
@@ -69,8 +71,39 @@ export const gameSettings = sqliteTable(
   },
   (table) => [
     check(
+      "game_settings_game_mode_check",
+      sql`${table.gameMode} IN ('solo', 'multiplayer')`,
+    ),
+    check(
       "game_settings_variant_id_check",
-      sql`${table.variantId} IN ('standard', 'pawn-riot', 'half-army', 'pawn-duel')`,
+      sql`${table.variantId} IN (
+        'standard',
+        'pawn-riot',
+        'half-army',
+        'pawn-duel',
+        'mate-pawn',
+        'mate-rook',
+        'mate-two-bishops'
+      )`,
+    ),
+    check(
+      "game_settings_ai_difficulty_check",
+      sql`${table.aiDifficulty} IS NULL OR ${table.aiDifficulty} BETWEEN 1 AND 5`,
+    ),
+    check(
+      "game_settings_human_color_check",
+      sql`${table.humanColor} IN ('w', 'b')`,
+    ),
+    check(
+      "game_settings_turn_pace_days_check",
+      sql`${table.turnPaceDays} IS NULL OR ${table.turnPaceDays} IN (1, 3, 5)`,
+    ),
+    check(
+      "game_settings_mode_difficulty_check",
+      sql`(
+        (${table.gameMode} = 'solo' AND ${table.aiDifficulty} IS NOT NULL) OR
+        (${table.gameMode} = 'multiplayer' AND ${table.aiDifficulty} IS NULL)
+      )`,
     ),
   ],
 );

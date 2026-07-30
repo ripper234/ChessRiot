@@ -28,7 +28,14 @@ describe("game variants", () => {
       expect(chess.isCheck(), variant.id).toBe(false);
       expect(whiteMaterial.filter((piece) => piece === "k"), variant.id).toHaveLength(1);
       expect(blackMaterial.filter((piece) => piece === "k"), variant.id).toHaveLength(1);
-      expect(whiteMaterial, variant.id).toEqual(blackMaterial);
+      if (variant.group !== "mating-set") {
+        expect(whiteMaterial, variant.id).toEqual(blackMaterial);
+      } else {
+        expect(blackMaterial, variant.id).toEqual(["k"]);
+        expect(whiteMaterial.length, variant.id).toBeGreaterThan(1);
+        expect(variant.soloOnly, variant.id).toBe(true);
+        expect(variant.humanColor, variant.id).toBe("w");
+      }
       expect(variant.initialFen.split(" ")[2], variant.id)
         .toBe(variant.id === "standard" ? "KQkq" : "-");
     }
@@ -51,13 +58,21 @@ describe("game variants", () => {
     }
   });
 
-  it("ships one classic setup and three mini games", () => {
-    expect(GAME_VARIANTS.filter((variant) => !variant.miniGame)).toHaveLength(1);
-    expect(GAME_VARIANTS.filter((variant) => variant.miniGame)).toHaveLength(3);
+  it("ships one classic setup, three mini games, and three mating challenges", () => {
+    expect(GAME_VARIANTS.filter((variant) => variant.group === "classic")).toHaveLength(1);
+    expect(GAME_VARIANTS.filter((variant) => variant.group === "mini-game")).toHaveLength(3);
+    expect(GAME_VARIANTS.filter((variant) => variant.group === "mating-set")).toHaveLength(3);
+    expect(gameVariant("mate-pawn").initialFen)
+      .toBe("4k3/8/4K3/4P3/8/8/8/8 w - - 0 1");
+    expect(gameVariant("mate-rook").initialFen)
+      .toBe("4k3/8/8/8/8/8/8/R3K3 w - - 0 1");
+    expect(gameVariant("mate-two-bishops").initialFen)
+      .toBe("4k3/8/8/8/8/8/8/2B1KB2 w - - 0 1");
   });
 
   it("never trusts unknown variant ids", () => {
     expect(isGameVariantId("half-army")).toBe(true);
+    expect(isGameVariantId("mate-two-bishops")).toBe(true);
     expect(isGameVariantId("only-pawns")).toBe(false);
     expect(normalizeGameVariantId("only-pawns")).toBe("standard");
     expect(gameVariant("only-pawns").id).toBe("standard");

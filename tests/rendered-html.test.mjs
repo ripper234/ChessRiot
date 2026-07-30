@@ -109,6 +109,10 @@ test("renders an identity-independent public homepage and guest play route", asy
   assert.match(html, /Pawn Riot/);
   assert.match(html, /Half Army/);
   assert.match(html, /Pawn Duel/);
+  assert.match(html, /Mating Set/);
+  assert.match(html, /Pawn Promotion/);
+  assert.match(html, /Rook Mate/);
+  assert.match(html, /Two-Bishop Mate/);
   assert.match(html, /Riot Bot level/);
   assert.doesNotMatch(html, /Time per move/);
   assert.match(html, /MAGIC RULES/);
@@ -131,11 +135,36 @@ test("renders an identity-independent public homepage and guest play route", asy
   assert.match(gameHtml, /aria-label="Choose visual theme"/);
   assert.match(gameHtml, /Classic/);
   assert.match(gameHtml, /Riot/);
+  assert.doesNotMatch(gameHtml, /class="global-version"/);
+  assert.doesNotMatch(gameHtml, /LOCKING MOVE/);
   assert.match(
     gameHtml,
     /<a(?=[^>]*href="https:\/\/chat\.whatsapp\.com\/FaBgiUgl73vLdeqzcqx0vX")(?=[^>]*target="_blank")(?=[^>]*rel="noopener noreferrer")[^>]*>/,
   );
   assert.match(gameHtml, /JOIN WHATSAPP COMMUNITY/);
+});
+
+test("keeps one mobile-visible game version and no locking label", () => {
+  const gameRoomSource = readFileSync(
+    new URL("../app/ui/GameRoom.tsx", import.meta.url),
+    "utf8",
+  );
+  const routeChromeSource = readFileSync(
+    new URL("../app/ui/RouteChrome.tsx", import.meta.url),
+    "utf8",
+  );
+  const globalStyles = readFileSync(
+    new URL("../app/globals.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(gameRoomSource, /className="home-link game-version"/);
+  assert.doesNotMatch(gameRoomSource, /LOCKING MOVE/);
+  assert.match(routeChromeSource, /!activeGame \? <Link className="global-version"/);
+  assert.match(
+    globalStyles,
+    /\.game-topbar \.home-link:not\(\.game-version\) \{ display: none; \}/,
+  );
 });
 
 test("renders the narrated 90-second demo page", async () => {

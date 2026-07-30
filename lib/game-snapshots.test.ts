@@ -77,6 +77,38 @@ describe("optimisticMoveSnapshot", () => {
     expect(authoritative).toEqual(startingSnapshot());
   });
 
+  it("shows a Multiplayer move immediately while preserving the authoritative version", () => {
+    const authoritative = startingSnapshot({
+      id: "multiplayer-game",
+      mode: "multiplayer",
+      aiDifficulty: null,
+      players: {
+        white: { name: "Player" },
+        black: { name: "Friend" },
+      },
+    });
+    const optimistic = optimisticMoveSnapshot(
+      authoritative,
+      "e2",
+      "e4",
+      undefined,
+      { createdAt: "2026-07-30T18:00:00.000Z" },
+    );
+
+    expect(optimistic).toMatchObject({
+      mode: "multiplayer",
+      version: authoritative.version,
+      turn: "b",
+      plyCount: 1,
+    });
+    expect(new Chess(optimistic!.fen).get("e4")).toMatchObject({
+      color: "w",
+      type: "p",
+    });
+    expect(authoritative.fen).toBe(startingSnapshot().fen);
+    expect(authoritative.moves).toHaveLength(0);
+  });
+
   it("shows the deterministic Solo reply before the request returns", () => {
     const authoritative = startingSnapshot({ aiDifficulty: 1 });
     const optimistic = optimisticSoloTurnSnapshot(

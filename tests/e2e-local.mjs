@@ -142,7 +142,7 @@ function createRuntime() {
   });
 }
 
-async function verifyMiniGameMigration() {
+async function verifyVariantMigration() {
   const migrationRoot = await mkdtemp(join(tmpdir(), "chessriot-migration-"));
   const migrationRuntime = new Miniflare({
     script: "export default { fetch() { return new Response('ok'); } };",
@@ -154,6 +154,12 @@ async function verifyMiniGameMigration() {
   });
   try {
     const database = await migrationRuntime.getD1Database("DB");
+    await database
+      .prepare("CREATE TABLE games (id TEXT PRIMARY KEY NOT NULL)")
+      .run();
+    await database
+      .prepare("INSERT INTO games (id) VALUES ('legacy-game')")
+      .run();
     await database
       .prepare(`CREATE TABLE game_settings (
         game_id TEXT PRIMARY KEY NOT NULL,
@@ -179,20 +185,33 @@ async function verifyMiniGameMigration() {
         magic_prompt, magic_rules_json
       ) VALUES ('legacy-game', 'multiplayer', NULL, 'w', 3, NULL, NULL)`)
       .run();
-    const migration = await readFile(
-      resolve("drizzle/0011_wandering_komodo.sql"),
-      "utf8",
-    );
-    for (const statement of migration
-      .split("--> statement-breakpoint")
-      .map((value) => value.trim())
-      .filter(Boolean)) {
-      await database.prepare(statement.replace(/;$/, "")).run();
+    for (const migrationPath of [
+      "drizzle/0011_wandering_komodo.sql",
+      "drizzle/0012_massive_domino.sql",
+    ]) {
+      const migration = await readFile(resolve(migrationPath), "utf8");
+      for (const statement of migration
+        .split("--> statement-breakpoint")
+        .map((value) => value.trim())
+        .filter(Boolean)) {
+        await database.prepare(statement.replace(/;$/, "")).run();
+      }
     }
     const legacy = await database
       .prepare("SELECT variant_id FROM game_settings WHERE game_id = 'legacy-game'")
       .first();
     assert.equal(legacy.variant_id, "standard");
+    for (const variantId of [
+      "mate-pawn",
+      "mate-rook",
+      "mate-two-bishops",
+      "standard",
+    ]) {
+      await database
+        .prepare("UPDATE game_settings SET variant_id = ? WHERE game_id = 'legacy-game'")
+        .bind(variantId)
+        .run();
+    }
     await assert.rejects(
       database
         .prepare(`INSERT INTO game_settings (
@@ -277,7 +296,7 @@ async function waitFor(predicate, timeoutMs = 1_000) {
   return true;
 }
 
-await verifyMiniGameMigration();
+await verifyVariantMigration();
 let runtime = createRuntime();
 try {
   const anonymousCreate = await request(runtime, "/api/games", {
@@ -654,6 +673,65 @@ try {
   });
   assert.equal(invalidVariantResponse.status, 400);
   assert.equal((await body(invalidVariantResponse)).error.code, "invalid_variant");
+
+  const multiplayerMatingSet = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Multiplayer Mating Set",
+      mode: "multiplayer",
+      variantId: "mate-rook",
+      playerToken: secret(),
+      inviteToken: secret(),
+      requestId: randomUUID(),
+    }),
+  });
+  assert.equal(multiplayerMatingSet.status, 422);
+  assert.equal((await body(multiplayerMatingSet)).error.code, "variant_mode_conflict");
+
+  const matingSetToken = secret();
+  const matingSetCreatedResponse = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Mating Set Learner",
+      mode: "solo",
+      variantId: "mate-pawn",
+      difficulty: 2,
+      playerToken: matingSetToken,
+      inviteToken: secret(),
+      requestId: requestIdForColor("b"),
+    }),
+  });
+  assert.equal(matingSetCreatedResponse.status, 201);
+  const matingSetCreated = await body(matingSetCreatedResponse);
+  assert.equal(matingSetCreated.inviteUrl, undefined);
+  assert.equal(matingSetCreated.game.variantId, "mate-pawn");
+  assert.equal(matingSetCreated.game.mode, "solo");
+  assert.equal(matingSetCreated.game.initialFen, "4k3/8/4K3/4P3/8/8/8/8 w - - 0 1");
+  assert.equal(matingSetCreated.game.you.color, "w");
+  assert.equal(matingSetCreated.game.players.black.name, "Riot Bot");
+  assert.equal(matingSetCreated.game.version, 0);
+  const matingSetMoveResponse = await request(
+    runtime,
+    `/api/games/${matingSetCreated.game.id}/moves`,
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${matingSetToken}` },
+      body: JSON.stringify({
+        from: "e6",
+        to: "d6",
+        expectedVersion: 0,
+        requestId: randomUUID(),
+      }),
+    },
+  );
+  assert.equal(matingSetMoveResponse.status, 200);
+  const matingSetAfterMove = await body(matingSetMoveResponse);
+  assert.equal(matingSetAfterMove.game.variantId, "mate-pawn");
+  assert.equal(matingSetAfterMove.game.version, 2);
+  assert.deepEqual(
+    matingSetAfterMove.game.moves.map((move) => move.color),
+    ["w", "b"],
+  );
 
   const halfArmyFen = "rnb1k3/pppp4/8/8/8/8/PPPP4/RNB1K3 w - - 0 1";
   const halfArmyWhiteToken = secret();

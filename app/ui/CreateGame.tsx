@@ -46,6 +46,7 @@ export function CreateGame() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const pending = useRef<PendingGameCreate | null>(null);
+  const selectedVariant = gameVariant(variantId);
 
   useEffect(() => {
     try {
@@ -140,6 +141,7 @@ export function CreateGame() {
             disabled={busy}
             onChange={(nextVariantId) => {
               setVariantId(nextVariantId);
+              if (gameVariant(nextVariantId).soloOnly) setMode("solo");
               pending.current = null;
             }}
           />
@@ -161,12 +163,16 @@ export function CreateGame() {
                 <strong>SOLO</strong>
                 <small>You vs Riot Bot</small>
               </label>
-              <label className={mode === "multiplayer" ? "selected" : ""}>
+              <label
+                className={`${mode === "multiplayer" ? "selected" : ""}${selectedVariant.soloOnly ? " disabled" : ""}`}
+                aria-disabled={selectedVariant.soloOnly}
+              >
                 <input
                   type="radio"
                   name="game-mode"
                   value="multiplayer"
                   checked={mode === "multiplayer"}
+                  disabled={selectedVariant.soloOnly}
                   onChange={() => {
                     setMode("multiplayer");
                     pending.current = null;
@@ -174,7 +180,7 @@ export function CreateGame() {
                 />
                 <span aria-hidden="true">⚔</span>
                 <strong>MULTIPLAYER</strong>
-                <small>Challenge a friend</small>
+                <small>{selectedVariant.soloOnly ? "Not available for training" : "Challenge a friend"}</small>
               </label>
             </div>
           </fieldset>
@@ -193,10 +199,12 @@ export function CreateGame() {
             </div>
           </div> : (
             <div className="variant-fixed-rules">
-              <span aria-hidden="true">{gameVariant(variantId).icon}</span>
+              <span aria-hidden="true">{selectedVariant.icon}</span>
               <div>
-                <strong>{gameVariant(variantId).name.toUpperCase()}</strong>
-                <small>Fixed starting setup · Normal chess moves · Checkmate wins</small>
+                <strong>{selectedVariant.name.toUpperCase()}</strong>
+                <small>{selectedVariant.group === "mating-set"
+                  ? "Solo practice · You command White · Checkmate wins"
+                  : "Fixed starting setup · Normal chess moves · Checkmate wins"}</small>
               </div>
             </div>
           )}
