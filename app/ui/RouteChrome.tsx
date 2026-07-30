@@ -39,7 +39,7 @@ export function RouteChrome() {
     <>
       <AppUpdates />
       {activeGame ? <ThemePicker /> : null}
-      <Link className="global-version" href="/changelog">v{APP_VERSION}</Link>
+      {!activeGame ? <Link className="global-version" href="/changelog">v{APP_VERSION}</Link> : null}
       <FeedbackButton />
     </>
   );

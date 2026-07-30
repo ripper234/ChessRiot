@@ -18,8 +18,9 @@ export function GameVariantPicker({
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const selected = gameVariant(value);
-  const classic = GAME_VARIANTS.filter((variant) => !variant.miniGame);
-  const miniGames = GAME_VARIANTS.filter((variant) => variant.miniGame);
+  const classic = GAME_VARIANTS.filter((variant) => variant.group === "classic");
+  const miniGames = GAME_VARIANTS.filter((variant) => variant.group === "mini-game");
+  const matingSet = GAME_VARIANTS.filter((variant) => variant.group === "mating-set");
 
   function choose(variantId: GameVariantId) {
     onChange(variantId);
@@ -92,8 +93,22 @@ export function GameVariantPicker({
               ))}
             </div>
           </fieldset>
+          <fieldset className="variant-group">
+            <legend>Mating Set</legend>
+            <div className="variant-grid">
+              {matingSet.map((variant) => (
+                <VariantOption
+                  key={variant.id}
+                  selected={value === variant.id}
+                  variant={variant}
+                  onChoose={choose}
+                />
+              ))}
+            </div>
+          </fieldset>
           <p className="variant-dialog-note">
-            Every Mini Game uses normal chess moves. The setup changes; checkmate still wins.
+            Every setup uses normal chess moves. Mating Set challenges are Solo practice:
+            you command White and checkmate Riot Bot.
           </p>
         </div>
       </dialog>

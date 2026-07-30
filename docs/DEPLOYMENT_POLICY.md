@@ -7,11 +7,10 @@ state to Development.
 
 Every promotion beyond Development is initiated manually by Ron:
 
-1. Development → Staging requires an explicit Control-panel click.
-2. Staging → Production requires a second explicit Control-panel click.
+1. Development → Production requires an explicit Control-panel click.
 
 No push, merge, passing test, successful build, agent action, scheduled job,
-health check, or completed deployment may trigger either promotion.
+health check, or completed deployment may trigger that promotion.
 
 The legacy Vercel Git integration is disabled in `vercel.json`. ChessRiot's
 active environments are ChatGPT Sites projects, so Vercel must not create a
@@ -21,7 +20,7 @@ parallel automatic Production deployment from repository pushes.
 
 - Build and test one immutable source state.
 - Deploy that state automatically to Development.
-- Keep Staging and Production unchanged until the corresponding manual click.
+- Keep Production unchanged until the manual promotion click.
 - Promote the exact same source state, without environment-specific source
   edits or rebuilds.
 - Preserve each environment’s isolated data and runtime configuration.
@@ -34,14 +33,14 @@ parallel automatic Production deployment from repository pushes.
 - Complicated or high-risk work stays on `feature/*` and receives an isolated,
   opt-in Preview. A feature branch alone does not deploy anything.
 - A Preview can be reviewed and updated, but never promoted directly to
-  Staging or Production.
+  Production.
 - Merging the reviewed branch creates a normal stable release on `main`, which
   is then verified independently in Development.
 
 ## Preview environment invariants
 
 - Each Preview has isolated runtime configuration and data. It receives no
-  Staging or Production secrets and sends no release announcements.
+  Production secrets and sends no release announcements.
 - Preview builds display a visible `PREVIEW` label, branch, prerelease version,
   and exact commit.
 - Control keeps previews collapsed under `Feature Previews (N)` and shows only
@@ -55,8 +54,7 @@ parallel automatic Production deployment from repository pushes.
 
 - Development displays automatic deployment status and has no primary deploy
   button.
-- Staging’s primary button manually promotes the exact Development version.
-- Production’s primary button manually promotes the exact Staging version.
+- Production’s primary button manually promotes the exact Development version.
 - Specific-version changes always require a separate manual action.
 
 ## Demo-video media releases
@@ -66,4 +64,4 @@ parallel automatic Production deployment from repository pushes.
 - Regenerating the fixed 90-second video publishes only validated R2 media and
   its manifest. It does not deploy source or promote any environment.
 - The previous video remains active unless the replacement upload completes.
-- Development video regeneration never changes Staging or Production media.
+- Development video regeneration never changes Production media.

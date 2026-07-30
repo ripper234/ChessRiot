@@ -62,7 +62,15 @@ export async function ensureSchema(): Promise<void> {
           game_mode TEXT NOT NULL DEFAULT 'multiplayer'
             CHECK (game_mode IN ('solo', 'multiplayer')),
           variant_id TEXT NOT NULL DEFAULT 'standard'
-            CHECK (variant_id IN ('standard', 'pawn-riot', 'half-army', 'pawn-duel')),
+            CHECK (variant_id IN (
+              'standard',
+              'pawn-riot',
+              'half-army',
+              'pawn-duel',
+              'mate-pawn',
+              'mate-rook',
+              'mate-two-bishops'
+            )),
           ai_difficulty INTEGER
             CHECK (ai_difficulty IS NULL OR ai_difficulty BETWEEN 1 AND 5),
           human_color TEXT NOT NULL DEFAULT 'w'
@@ -292,7 +300,15 @@ export async function ensureSchema(): Promise<void> {
           name: "variant_id",
           sql: `ALTER TABLE game_settings
             ADD COLUMN variant_id TEXT NOT NULL DEFAULT 'standard'
-            CHECK (variant_id IN ('standard', 'pawn-riot', 'half-army', 'pawn-duel'))`,
+            CHECK (variant_id IN (
+              'standard',
+              'pawn-riot',
+              'half-army',
+              'pawn-duel',
+              'mate-pawn',
+              'mate-rook',
+              'mate-two-bishops'
+            ))`,
         },
         { name: "magic_prompt", sql: "ALTER TABLE game_settings ADD COLUMN magic_prompt TEXT" },
         { name: "magic_rules_json", sql: "ALTER TABLE game_settings ADD COLUMN magic_rules_json TEXT" },

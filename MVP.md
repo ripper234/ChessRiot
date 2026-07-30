@@ -12,6 +12,8 @@
 - Standard legal rules and complete endings by default
 - A server-owned Mini Games menu with Pawn Riot, Half Army, and Pawn Duel
   starting setups in both Solo and Multiplayer
+- A Solo-only Mating Set with King + Pawn, King + Rook, and King + Two Bishops
+  against a lone Riot Bot king, with the learner fixed as White
 - A visible Magic Rules Coming Soon placeholder, with no new rule entry or
   compilation in the stable release
 - Durable game state and move history
@@ -32,7 +34,8 @@
 - Opt-in, per-game closed-app turn notifications for multiplayer seats
 - Pointer and touch drag-and-drop with tap, click, and keyboard fallback
 - Optional in-browser game sounds with a persistent mute preference
-- Privacy-safe per-environment logging and owner control-panel observability
+- Privacy-safe Development and Production logging and owner control-panel
+  observability
 - Readable player colors, captured pieces, explicit check guidance, resignation,
   waiting-game cancellation, and separate new games
 

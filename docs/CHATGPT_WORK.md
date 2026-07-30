@@ -16,14 +16,13 @@ isolated hosted environments.
   inspect security, or review tests, but they must not write the same checkout.
 - Require an immutable Git commit, increasing SemVer, lint, typecheck, unit
   tests, integration tests, and browser verification before promotion.
-- Promote one tested source state from Development to Staging to Production.
+- Promote one tested source state from Development to Production.
   Keep data and secrets isolated in Sites runtime configuration.
 - Treat a successful Development deployment as part of finishing every changed
-  release, not as a separate optional follow-up. Staging and Production advance
-  only by promoting the exact healthy upstream release.
+  release, not as a separate optional follow-up. Production advances only by
+  promoting the exact healthy Development release.
 - Save and verify a Sites version before deployment. Treat every Sites URL as a
-  production deployment surface, even when its product role is Development or
-  Staging.
+  production deployment surface, even when its product role is Development.
 - Keep app-level structured telemetry because Sites analytics covers traffic,
   not ChessRiot's domain actions and rule failures.
 

@@ -195,7 +195,7 @@
 
 ## Observability
 
-- Verify Development, Staging, and Production write only to their own D1.
+- Verify Development and Production write only to their own D1.
 - Verify create, invite, join, accepted/rejected moves, bot moves, draw claims, errors, and health checks appear with environment, release, request id, outcome, and latency.
 - Verify game creation and bot telemetry include only the allowlisted variant
   id, never an initial or current FEN.

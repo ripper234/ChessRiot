@@ -65,11 +65,21 @@ export async function POST(request: Request) {
     return apiError(400, "invalid_request", "Name, secrets, or request id are invalid");
   }
   const mode = body.mode === undefined ? "multiplayer" : body.mode;
+  if (!isGameMode(mode)) {
+    return apiError(400, "invalid_request", "Game mode, bot level, or turn pace is invalid");
+  }
   const variantId = body.variantId === undefined ? "standard" : body.variantId;
   if (!isGameVariantId(variantId)) {
     return apiError(400, "invalid_variant", "Choose one of the available games");
   }
   const variant = gameVariant(variantId);
+  if (variant.soloOnly && mode !== "solo") {
+    return apiError(
+      422,
+      "variant_mode_conflict",
+      "Mating Set challenges are Solo practice",
+    );
+  }
   const initialFen = variant.initialFen;
   const difficulty = mode === "solo"
     ? body.difficulty === undefined ? 3 : body.difficulty
@@ -99,8 +109,7 @@ export async function POST(request: Request) {
     value === turnPaceDays
     || (mode === "multiplayer" && body.turnPaceDays === undefined && value === null);
   if (
-    !isGameMode(mode)
-    || (mode === "solo" && !isAiDifficulty(difficulty))
+    (mode === "solo" && !isAiDifficulty(difficulty))
     || (mode === "multiplayer" && !isTurnPaceDays(turnPaceDays))
   ) {
     return apiError(400, "invalid_request", "Game mode, bot level, or turn pace is invalid");
@@ -151,7 +160,9 @@ export async function POST(request: Request) {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   const status = mode === "solo" ? "active" : "waiting";
-  const humanColor: Color = mode === "solo" ? assignedSoloColor(requestId) : "w";
+  const humanColor: Color = mode === "solo"
+    ? variant.humanColor ?? assignedSoloColor(requestId)
+    : "w";
   const computerColor: Color | null = mode === "solo"
     ? humanColor === "w" ? "b" : "w"
     : null;

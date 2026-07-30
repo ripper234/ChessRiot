@@ -704,15 +704,13 @@ export function GameRoom({ gameId }: { gameId: string }) {
     closeMoveConfirmation();
     const token = activeToken.current;
     const requestId = generateUuid();
-    const humanPreview = currentGame.mode === "solo"
-      ? optimisticMoveSnapshot(
-        currentGame,
-        intent.from,
-        intent.to,
-        intent.promotion,
-        { second: intent.second },
-      )
-      : null;
+    const humanPreview = optimisticMoveSnapshot(
+      currentGame,
+      intent.from,
+      intent.to,
+      intent.promotion,
+      { second: intent.second },
+    );
     const authoritativeVersion = intent.expectedVersion;
     let botPreviewTimer: number | null = null;
     const controller = new AbortController();
@@ -724,7 +722,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     setMagicDraft(null);
     if (humanPreview) {
       setOptimisticGame(humanPreview);
-      if (humanPreview.status === "active") {
+      if (humanPreview.mode === "solo" && humanPreview.status === "active") {
         botPreviewTimer = window.setTimeout(() => {
           const fullPreview = optimisticSoloTurnSnapshot(
             currentGame,
@@ -1221,7 +1219,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
             <b>{soundOn ? "SOUND ON" : "MUTED"}</b>
           </button>
           <Link href="/app" className="home-link">NEW GAME</Link>
-          <Link href="/changelog" className="home-link">v{APP_VERSION}</Link>
+          <Link href="/changelog" className="home-link game-version">v{APP_VERSION}</Link>
         </div>
       </header>
       <section className="game-layout">
@@ -1291,7 +1289,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
               <small>{viewingHistory ? "MOVE HISTORY" : magicDraft ? "MAGIC MOVE" : displayCheck && game.status !== "completed" ? "CHECK" : "MATCH STATUS"}</small>
               <strong>{statusText}</strong>
             </div>
-            {!viewingHistory && (busy || botThinking) ? <b>{ending ? "ENDING GAME…" : openingIntro ? "WHITE OPENING…" : botThinking ? "RIOT BOT THINKING…" : "LOCKING MOVE…"}</b> : null}
+            {!viewingHistory && (ending || openingIntro || botThinking) ? <b>{ending ? "ENDING GAME…" : openingIntro ? "WHITE OPENING…" : "RIOT BOT THINKING…"}</b> : null}
             <HistoryControls
               currentPly={visibleHistoryPly}
               latestPly={latestHistoryPly}
@@ -1307,8 +1305,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
             <div className="variant-game-banner" role="note">
               <span aria-hidden="true">{variant.icon}</span>
               <div>
-                <strong>MINI GAME · {variant.name.toUpperCase()}</strong>
-                <small>{variant.loadout} · Normal chess moves · Checkmate wins</small>
+                <strong>{variant.group === "mating-set" ? "MATING SET" : "MINI GAME"} · {variant.name.toUpperCase()}</strong>
+                <small>{variant.group === "mating-set"
+                  ? `${variant.loadout} · You command White · Checkmate wins`
+                  : `${variant.loadout} · Normal chess moves · Checkmate wins`}</small>
               </div>
             </div>
           ) : null}

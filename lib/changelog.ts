@@ -11,6 +11,19 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.15.0",
+    date: "2026-07-30",
+    title: "Instant moves and classic finishes",
+    summary: "Moves now feel immediate in every game, and a new Mating Set teaches three essential endings.",
+    changes: [
+      "Painted locally legal Multiplayer moves immediately while preserving server-authoritative validation, rollback, and stale-write protection.",
+      "Added Solo practice for King + Pawn, King + Rook, and King + Two Bishops against Riot Bot's lone king.",
+      "Kept one version link in the active-game header so the duplicate global label cannot overlap the board.",
+      "Retired Staging from the active deployment and owner-feedback model, leaving Development and Production.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.15.0`,
+  },
+  {
     version: "0.14.0",
     date: "2026-07-29",
     title: "Three new ways to riot",

@@ -126,5 +126,4 @@ Each environment stores its own observability events in its own D1. The Worker
 wraps API requests, normalizes routes, skips unchanged polling, and uses
 `waitUntil` for best-effort non-blocking persistence plus structured Worker
 logs. The control Site mints two-minute HMAC grants; the owner's browser reads
-each environment directly, so production, staging, and development data never
-mix.
+each environment directly, so Production and Development data never mix.

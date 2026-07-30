@@ -4,7 +4,7 @@ Play the current game at [chessriot.ripper234.chatgpt.site](https://chessriot.ri
 **[View the official ChessRiot release history](https://chessriot.ripper234.chatgpt.site/changelog).**
 [Join for updates on WhatsApp](https://chat.whatsapp.com/FaBgiUgl73vLdeqzcqx0vX).
 
-ChessRiot v0.14.0 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
+ChessRiot v0.15.0 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
 
 Found something confusing or have a cool rule request? Use **Feedback** inside
 the game or [open a GitHub issue](https://github.com/ripper234/ChessRiot/issues).
@@ -31,6 +31,9 @@ progression work, and features that still need explicit rule design.
 - Open the game menu and choose Pawn Riot, Half Army, or Pawn Duel for a
   smaller starting army with the same authoritative chess rules. Every Mini
   Game works in Solo and Multiplayer.
+- Open the Mating Set for Solo practice as White with King + Pawn, King + Rook,
+  or King + Two Bishops against Riot Bot's lone king. Normal checkmate and draw
+  rules remain authoritative.
 - See the Magic Rules concept in new-game setup. New rule entry is paused behind
   a Coming Soon placeholder while the runtime feature develops in an isolated
   preview branch.
@@ -39,7 +42,10 @@ progression work, and features that still need explicit rule design.
   existing account memberships and older private links.
 - Detect check, checkmate, stalemate, castling, en passant, all four promotions, insufficient material, claimable threefold/50-move draws, and automatic fivefold/75-move draws.
 - Choose from 11 original visual themes during a game, including six original illustrated backgrounds and the flat Riot default, with optional synthesized move, capture, check, and game-ending sounds.
-- Drag and drop crisp original 2D vector pieces with mouse or touch, while tap, click, and keyboard input still work. Your legal move appears immediately while Riot Bot thinks, and short move and capture animations make both plies visible.
+- Drag and drop crisp original 2D vector pieces with mouse or touch, while tap,
+  click, and keyboard input still work. Your legal move appears immediately in
+  Solo and Multiplayer while the server validates it, and short move and
+  capture animations make both plies visible.
 - See explicit White and Black player cards, captured pieces, a highlighted checked king, and check-specific move guidance.
 - Step backward and forward through committed positions directly on the live
   board, or open the full read-only, keyboard-accessible replay viewer.
@@ -59,9 +65,10 @@ progression work, and features that still need explicit rule design.
   unseen releases.
 - Opt one browser into a generic notification for a specific multiplayer game
   when an opponent hands you the turn, even after ChessRiot is closed.
-- See the exact release version throughout the game app.
+- See one exact release version throughout the game app without covering the
+  board.
 - Inspect privacy-safe, isolated health, activity, and unresolved feedback for
-  all three environments in the owner control panel.
+  Development and Production in the owner control panel.
 
 ## Current limits
 
@@ -78,15 +85,16 @@ remains the hosting edge’s responsibility.
 
 ChessRiot uses SemVer. Every changed deployment gets a new, higher version and the build rejects an unchanged or inconsistent release number. Patch releases are the default; `0.y.0` marks a coherent new user capability. Version `1.0.0` means two people can create, join, securely resume, receive turn notifications, and finish asynchronous games without developer help.
 
-Prepare releases with `npm run release:patch`, `npm run release:minor`, or `npm run release:major`. The version is updated in one place and displayed in the app footer.
+Prepare releases with `npm run release:patch`, `npm run release:minor`, or
+`npm run release:major`. The version is updated in one place and displayed in
+the app interface.
 
 ## Deployment policy
 
 - Every changed release goes to Development automatically.
-- Development → Staging requires the owner’s explicit Control-panel click.
-- Staging → Production requires the owner’s explicit Control-panel click.
+- Development → Production requires the owner’s explicit Control-panel click.
 - Pushes, merges, tests, successful builds, agents, and schedules never promote
-  Staging or Production.
+  Production.
 - A promotion reuses the exact tested source state. It never rebuilds different
   source for the target environment.
 
