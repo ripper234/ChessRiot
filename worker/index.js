@@ -9,15 +9,6 @@ const ENVIRONMENTS = [
     accent: "purple",
   },
   {
-    key: "staging",
-    name: "Staging",
-    deployedVersionKey: "STAGING_DEPLOYED_VERSION",
-    urlKey: "STAGING_URL",
-    secretKey: "STAGING_OPS_READ_SECRET",
-    access: "Owner only",
-    accent: "cyan",
-  },
-  {
     key: "production",
     name: "Prod",
     deployedVersionKey: "PROD_DEPLOYED_VERSION",
@@ -28,7 +19,7 @@ const ENVIRONMENTS = [
   },
 ];
 
-const CONTROL_VERSION = "0.5.0";
+const CONTROL_VERSION = "0.7.0";
 const STATUS_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const DEMO_VIDEO_MAX_BYTES = 45 * 1024 * 1024;
 const DEMO_VIDEO_STORY_VERSION = 2;
@@ -71,6 +62,48 @@ const REGISTRY_SCHEMA_SQL = `
     updated_at TEXT NOT NULL
   )
 `;
+const AI_USAGE_SCHEMA_SQL = `
+  CREATE TABLE IF NOT EXISTS ai_usage_events (
+    id TEXT PRIMARY KEY NOT NULL,
+    occurred_at TEXT NOT NULL,
+    scope TEXT NOT NULL,
+    version TEXT,
+    environment TEXT,
+    model TEXT,
+    purpose TEXT NOT NULL,
+    outcome TEXT,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    cached_input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    reasoning_tokens INTEGER NOT NULL DEFAULT 0,
+    avoidable_tokens INTEGER,
+    cost_usd_micros INTEGER,
+    avoidable_cost_usd_micros INTEGER,
+    waste_rule TEXT,
+    source TEXT NOT NULL,
+    source_event_id TEXT NOT NULL,
+    request_count INTEGER NOT NULL DEFAULT 1,
+    schema_version INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL
+  )
+`;
+const AI_USAGE_INDEX_SQL = [
+  `CREATE UNIQUE INDEX IF NOT EXISTS ai_usage_events_source_event_unique
+    ON ai_usage_events (source, source_event_id)`,
+  `CREATE INDEX IF NOT EXISTS ai_usage_events_occurred_at_idx
+    ON ai_usage_events (occurred_at)`,
+  `CREATE INDEX IF NOT EXISTS ai_usage_events_version_idx
+    ON ai_usage_events (version)`,
+];
+const AI_USAGE_SCOPES = new Set(["development", "runtime"]);
+const AI_USAGE_WINDOWS = new Map([
+  ["7", 7],
+  ["30", 30],
+  ["90", 90],
+  ["all", null],
+]);
+const AI_USAGE_QUERY_LIMIT = 10_000;
+const AI_USAGE_SLUG = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 function base64Url(bytes) {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
@@ -108,7 +141,7 @@ async function mintGrant(secret, audience, scope) {
 
 export function summarizeFeedbackEnvironments(states) {
   let known = 0;
-  let complete = Array.isArray(states) && states.length === 3;
+  let complete = Array.isArray(states) && states.length === ENVIRONMENTS.length;
   for (const state of states || []) {
     if (!state || !state.fresh || !state.exact) {
       complete = false;
@@ -152,6 +185,18 @@ export function normalizeFeedbackOverview(overview) {
     unresolved: exactUnresolved ? counts.unresolved : listedUnresolved,
     exact: Boolean(exactUnresolved),
   };
+}
+
+export function concreteUnresolvedFeedbackCount(overviews) {
+  let count = 0;
+  for (const overview of overviews || []) {
+    const feedback = normalizeFeedbackOverview(overview);
+    if (!feedback) continue;
+    count += feedback.items.filter(function (entry) {
+      return !entry || entry.status !== "closed";
+    }).length;
+  }
+  return count;
 }
 
 function bootstrapRegistry(env) {
@@ -321,6 +366,287 @@ function registryJson(payload, status = 200) {
   });
 }
 
+function safeInteger(value, { nullable = false, maximum = Number.MAX_SAFE_INTEGER } = {}) {
+  if (nullable && (value === null || value === undefined)) return null;
+  return Number.isSafeInteger(value) && value >= 0 && value <= maximum
+    ? value
+    : undefined;
+}
+
+function boundedUsageText(value, maximum, pattern = null) {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim();
+  if (!normalized || normalized.length > maximum) return undefined;
+  if (pattern && !pattern.test(normalized)) return undefined;
+  return normalized;
+}
+
+export function normalizeAiUsageEvent(value, now = new Date().toISOString()) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { ok: false, error: "invalid_event" };
+  }
+  const scope = boundedUsageText(value.scope, 32, AI_USAGE_SLUG);
+  const source = boundedUsageText(value.source, 64, AI_USAGE_SLUG);
+  const sourceEventId = boundedUsageText(value.sourceEventId, 120);
+  const purpose = boundedUsageText(value.purpose, 64, AI_USAGE_SLUG);
+  const outcome = boundedUsageText(value.outcome, 32, AI_USAGE_SLUG);
+  if (!AI_USAGE_SCOPES.has(scope) || !source || !sourceEventId || !purpose) {
+    return { ok: false, error: "invalid_identity" };
+  }
+  if (value.outcome !== null && value.outcome !== undefined && outcome === undefined) {
+    return { ok: false, error: "invalid_outcome" };
+  }
+
+  const occurred = new Date(value.occurredAt);
+  if (
+    typeof value.occurredAt !== "string"
+    || Number.isNaN(occurred.getTime())
+    || occurred.getTime() > Date.now() + 5 * 60 * 1000
+  ) {
+    return { ok: false, error: "invalid_occurred_at" };
+  }
+
+  const inputTokens = safeInteger(value.inputTokens);
+  const cachedInputTokens = safeInteger(value.cachedInputTokens ?? 0);
+  const outputTokens = safeInteger(value.outputTokens);
+  const reasoningTokens = safeInteger(value.reasoningTokens ?? 0);
+  const avoidableTokens = safeInteger(value.avoidableTokens, { nullable: true });
+  const costUsdMicros = safeInteger(value.costUsdMicros, { nullable: true });
+  const avoidableCostUsdMicros = safeInteger(value.avoidableCostUsdMicros, {
+    nullable: true,
+  });
+  const requestCount = safeInteger(value.requestCount ?? 1, { maximum: 1_000_000 });
+  if (
+    inputTokens === undefined
+    || cachedInputTokens === undefined
+    || outputTokens === undefined
+    || reasoningTokens === undefined
+    || avoidableTokens === undefined
+    || costUsdMicros === undefined
+    || avoidableCostUsdMicros === undefined
+    || requestCount === undefined
+    || requestCount < 1
+  ) {
+    return { ok: false, error: "invalid_counts" };
+  }
+  const trackedTokens = inputTokens + outputTokens;
+  if (
+    !Number.isSafeInteger(trackedTokens)
+    || cachedInputTokens > inputTokens
+    || reasoningTokens > outputTokens
+    || (avoidableTokens !== null && avoidableTokens > trackedTokens)
+    || (
+      avoidableCostUsdMicros !== null
+      && (costUsdMicros === null || avoidableCostUsdMicros > costUsdMicros)
+    )
+    || (
+      avoidableCostUsdMicros !== null
+      && (avoidableTokens === null || (avoidableTokens === 0 && avoidableCostUsdMicros > 0))
+    )
+  ) {
+    return { ok: false, error: "inconsistent_counts" };
+  }
+
+  const wasteRule = boundedUsageText(value.wasteRule, 64, AI_USAGE_SLUG);
+  if (
+    (value.wasteRule !== null && value.wasteRule !== undefined && wasteRule === undefined)
+    || ((avoidableTokens ?? 0) > 0 && !wasteRule)
+    || (wasteRule && (avoidableTokens ?? 0) === 0)
+  ) {
+    return { ok: false, error: "invalid_waste_classification" };
+  }
+
+  const version = boundedUsageText(value.version, 64);
+  const environment = boundedUsageText(value.environment, 32, AI_USAGE_SLUG);
+  const model = boundedUsageText(value.model, 80);
+  if (
+    (value.version !== null && value.version !== undefined && version === undefined)
+    || (
+      value.environment !== null
+      && value.environment !== undefined
+      && environment === undefined
+    )
+    || (value.model !== null && value.model !== undefined && model === undefined)
+  ) {
+    return { ok: false, error: "invalid_dimensions" };
+  }
+
+  return {
+    ok: true,
+    event: {
+      id: crypto.randomUUID(),
+      occurredAt: occurred.toISOString(),
+      scope,
+      version,
+      environment,
+      model,
+      purpose,
+      outcome,
+      inputTokens,
+      cachedInputTokens,
+      outputTokens,
+      reasoningTokens,
+      avoidableTokens,
+      costUsdMicros,
+      avoidableCostUsdMicros,
+      wasteRule,
+      source,
+      sourceEventId,
+      requestCount,
+      schemaVersion: 1,
+      createdAt: now,
+    },
+  };
+}
+
+function usageAccumulator() {
+  return {
+    records: 0,
+    requests: 0,
+    trackedTokens: 0,
+    avoidableTokens: 0,
+    unclassifiedTokens: 0,
+    classifiedRequests: 0,
+    pricedRequests: 0,
+    costUsdMicros: 0,
+    avoidableCostUsdMicros: 0,
+    latestAt: null,
+  };
+}
+
+function addUsage(accumulator, row) {
+  const inputTokens = Math.max(0, Number(row.input_tokens) || 0);
+  const outputTokens = Math.max(0, Number(row.output_tokens) || 0);
+  const trackedTokens = inputTokens + outputTokens;
+  const requests = Math.max(1, Number(row.request_count) || 1);
+  const avoidable = row.avoidable_tokens === null || row.avoidable_tokens === undefined
+    ? null
+    : Math.max(0, Number(row.avoidable_tokens) || 0);
+  const cost = row.cost_usd_micros === null || row.cost_usd_micros === undefined
+    ? null
+    : Math.max(0, Number(row.cost_usd_micros) || 0);
+  const avoidableCost = row.avoidable_cost_usd_micros === null
+      || row.avoidable_cost_usd_micros === undefined
+    ? null
+    : Math.max(0, Number(row.avoidable_cost_usd_micros) || 0);
+
+  accumulator.records += 1;
+  accumulator.requests += requests;
+  accumulator.trackedTokens += trackedTokens;
+  accumulator.avoidableTokens += avoidable ?? 0;
+  accumulator.unclassifiedTokens += avoidable === null ? trackedTokens : 0;
+  accumulator.classifiedRequests += avoidable === null ? 0 : requests;
+  accumulator.pricedRequests += cost === null ? 0 : requests;
+  accumulator.costUsdMicros += cost ?? 0;
+  accumulator.avoidableCostUsdMicros += avoidableCost ?? 0;
+  if (!accumulator.latestAt || row.occurred_at > accumulator.latestAt) {
+    accumulator.latestAt = row.occurred_at;
+  }
+}
+
+function finalizeUsage(accumulator) {
+  return {
+    ...accumulator,
+    fullyClassified: accumulator.requests > 0
+      && accumulator.classifiedRequests === accumulator.requests,
+    fullyPriced: accumulator.requests > 0
+      && accumulator.pricedRequests === accumulator.requests,
+  };
+}
+
+export function summarizeAiUsage(rows) {
+  const scopes = {
+    development: usageAccumulator(),
+    runtime: usageAccumulator(),
+  };
+  const total = usageAccumulator();
+  const byDay = new Map();
+  const byVersion = new Map();
+  const runtimeCauses = new Map();
+
+  for (const row of rows || []) {
+    if (!AI_USAGE_SCOPES.has(row.scope)) continue;
+    addUsage(scopes[row.scope], row);
+    addUsage(total, row);
+
+    const day = String(row.occurred_at || "").slice(0, 10) || "unknown";
+    if (!byDay.has(day)) {
+      byDay.set(day, {
+        day,
+        development: usageAccumulator(),
+        runtime: usageAccumulator(),
+      });
+    }
+    addUsage(byDay.get(day)[row.scope], row);
+
+    const version = row.version || "Unassigned";
+    if (!byVersion.has(version)) {
+      byVersion.set(version, {
+        version,
+        development: usageAccumulator(),
+        runtime: usageAccumulator(),
+        total: usageAccumulator(),
+        latestAt: null,
+      });
+    }
+    const versionEntry = byVersion.get(version);
+    addUsage(versionEntry[row.scope], row);
+    addUsage(versionEntry.total, row);
+    if (!versionEntry.latestAt || row.occurred_at > versionEntry.latestAt) {
+      versionEntry.latestAt = row.occurred_at;
+    }
+
+    if (row.scope === "runtime" && Number(row.avoidable_tokens) > 0) {
+      const cause = row.waste_rule || row.purpose || "other";
+      if (!runtimeCauses.has(cause)) {
+        runtimeCauses.set(cause, {
+          cause,
+          tokens: 0,
+          requests: 0,
+        });
+      }
+      const causeEntry = runtimeCauses.get(cause);
+      causeEntry.tokens += Number(row.avoidable_tokens) || 0;
+      causeEntry.requests += Math.max(1, Number(row.request_count) || 1);
+    }
+  }
+
+  return {
+    scopes: {
+      development: finalizeUsage(scopes.development),
+      runtime: finalizeUsage(scopes.runtime),
+    },
+    total: finalizeUsage(total),
+    byDay: [...byDay.values()]
+      .sort((left, right) => left.day.localeCompare(right.day))
+      .map((entry) => ({
+        day: entry.day,
+        development: finalizeUsage(entry.development),
+        runtime: finalizeUsage(entry.runtime),
+      })),
+    byVersion: [...byVersion.values()]
+      .sort((left, right) => String(right.latestAt).localeCompare(String(left.latestAt)))
+      .map((entry) => ({
+        ...entry,
+        development: finalizeUsage(entry.development),
+        runtime: finalizeUsage(entry.runtime),
+        total: finalizeUsage(entry.total),
+      })),
+    runtimeCauses: [...runtimeCauses.values()]
+      .sort((left, right) => right.tokens - left.tokens),
+  };
+}
+
+async function ensureAiUsageSchema(env) {
+  if (!env.DB || typeof env.DB.prepare !== "function") return false;
+  await env.DB.prepare(AI_USAGE_SCHEMA_SQL).run();
+  for (const statement of AI_USAGE_INDEX_SQL) {
+    await env.DB.prepare(statement).run();
+  }
+  return true;
+}
+
 async function readObservationBody(request) {
   const contentLength = Number(request.headers.get("content-length") || 0);
   if (contentLength > 4096) throw new Error("body_too_large");
@@ -481,6 +807,222 @@ function controlMutationAuthorized(request, env) {
     && origin === new URL(request.url).origin
     && fetchSite === "same-origin",
   );
+}
+
+function aiUsageIngestAuthorized(request, env) {
+  const sharedSecret = String(env.FINANCIALS_INGEST_SECRET || "");
+  const authorization = request.headers.get("authorization");
+  return Boolean(
+    (sharedSecret && authorization === "Bearer " + sharedSecret)
+    || controlMutationAuthorized(request, env),
+  );
+}
+
+async function aiUsageInstrumentation(env) {
+  const defaults = {
+    development: { connected: false, records: 0, lastAt: null },
+    runtime: { connected: false, records: 0, lastAt: null },
+  };
+  const result = await env.DB.prepare(`
+    SELECT scope, COUNT(*) AS records, MAX(occurred_at) AS last_at
+    FROM ai_usage_events
+    GROUP BY scope
+  `).all();
+  for (const row of result.results || []) {
+    if (!defaults[row.scope]) continue;
+    defaults[row.scope] = {
+      connected: Number(row.records) > 0,
+      records: Math.max(0, Number(row.records) || 0),
+      lastAt: row.last_at || null,
+    };
+  }
+  return defaults;
+}
+
+async function financialsResponse(request, env) {
+  const url = new URL(request.url);
+  const windowKey = url.searchParams.get("window") || "30";
+  if (!AI_USAGE_WINDOWS.has(windowKey)) {
+    return registryJson({ error: "invalid_window" }, 400);
+  }
+  if (!env.DB || typeof env.DB.prepare !== "function") {
+    return registryJson({
+      status: "persistence_unavailable",
+      window: windowKey,
+      generatedAt: new Date().toISOString(),
+      instrumentation: {
+        development: { connected: false, records: 0, lastAt: null },
+        runtime: { connected: false, records: 0, lastAt: null },
+      },
+      summary: summarizeAiUsage([]),
+      truncated: false,
+    });
+  }
+  try {
+    await ensureAiUsageSchema(env);
+    const days = AI_USAGE_WINDOWS.get(windowKey);
+    const statement = days === null
+      ? env.DB.prepare(`
+        SELECT * FROM ai_usage_events
+        ORDER BY occurred_at DESC
+        LIMIT ?
+      `).bind(AI_USAGE_QUERY_LIMIT + 1)
+      : env.DB.prepare(`
+        SELECT * FROM ai_usage_events
+        WHERE occurred_at >= ?
+        ORDER BY occurred_at DESC
+        LIMIT ?
+      `).bind(
+        new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString(),
+        AI_USAGE_QUERY_LIMIT + 1,
+      );
+    const [eventsResult, instrumentation] = await Promise.all([
+      statement.all(),
+      aiUsageInstrumentation(env),
+    ]);
+    const allRows = eventsResult.results || [];
+    const truncated = allRows.length > AI_USAGE_QUERY_LIMIT;
+    const rows = truncated ? allRows.slice(0, AI_USAGE_QUERY_LIMIT) : allRows;
+    return registryJson({
+      status: instrumentation.development.connected || instrumentation.runtime.connected
+        ? "ok"
+        : "not_instrumented",
+      window: windowKey,
+      generatedAt: new Date().toISOString(),
+      instrumentation,
+      summary: summarizeAiUsage(rows),
+      truncated,
+      expectations: {
+        stableGameplay: {
+          expectedLlmCallsPerMove: 0,
+          metered: false,
+        },
+        magicRules: {
+          phase: "before_game_creation",
+          expectedLlmCallsPerCompile: 1,
+          expectedLlmCallsPerMove: 0,
+          sharedPromptCache: false,
+        },
+      },
+    });
+  } catch {
+    return registryJson({
+      status: "persistence_unavailable",
+      window: windowKey,
+      generatedAt: new Date().toISOString(),
+      instrumentation: {
+        development: { connected: false, records: 0, lastAt: null },
+        runtime: { connected: false, records: 0, lastAt: null },
+      },
+      summary: summarizeAiUsage([]),
+      truncated: false,
+    });
+  }
+}
+
+async function readAiUsageBody(request) {
+  const contentLength = Number(request.headers.get("content-length") || 0);
+  if (contentLength > 96 * 1024) throw new Error("body_too_large");
+  const text = await request.text();
+  if (text.length > 96 * 1024) throw new Error("body_too_large");
+  return JSON.parse(text);
+}
+
+async function aiUsageIngestResponse(request, env) {
+  if (!aiUsageIngestAuthorized(request, env)) {
+    return registryJson({ error: "not_authorized" }, 403);
+  }
+  if (!env.DB || typeof env.DB.prepare !== "function") {
+    return registryJson({ error: "persistence_unavailable" }, 503);
+  }
+  let payload;
+  try {
+    payload = await readAiUsageBody(request);
+  } catch {
+    return registryJson({ error: "invalid_json" }, 400);
+  }
+  const candidates = Array.isArray(payload?.events)
+    ? payload.events
+    : payload?.event ? [payload.event] : [payload];
+  if (!candidates.length || candidates.length > 100) {
+    return registryJson({ error: "invalid_batch" }, 400);
+  }
+  const now = new Date().toISOString();
+  const events = [];
+  for (let index = 0; index < candidates.length; index += 1) {
+    const normalized = normalizeAiUsageEvent(candidates[index], now);
+    if (!normalized.ok) {
+      return registryJson({
+        error: normalized.error,
+        eventIndex: index,
+      }, 400);
+    }
+    events.push(normalized.event);
+  }
+
+  try {
+    await ensureAiUsageSchema(env);
+    const statements = events.map((event) => env.DB.prepare(`
+      INSERT OR IGNORE INTO ai_usage_events (
+        id,
+        occurred_at,
+        scope,
+        version,
+        environment,
+        model,
+        purpose,
+        outcome,
+        input_tokens,
+        cached_input_tokens,
+        output_tokens,
+        reasoning_tokens,
+        avoidable_tokens,
+        cost_usd_micros,
+        avoidable_cost_usd_micros,
+        waste_rule,
+        source,
+        source_event_id,
+        request_count,
+        schema_version,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      event.id,
+      event.occurredAt,
+      event.scope,
+      event.version,
+      event.environment,
+      event.model,
+      event.purpose,
+      event.outcome,
+      event.inputTokens,
+      event.cachedInputTokens,
+      event.outputTokens,
+      event.reasoningTokens,
+      event.avoidableTokens,
+      event.costUsdMicros,
+      event.avoidableCostUsdMicros,
+      event.wasteRule,
+      event.source,
+      event.sourceEventId,
+      event.requestCount,
+      event.schemaVersion,
+      event.createdAt,
+    ));
+    const results = typeof env.DB.batch === "function"
+      ? await env.DB.batch(statements)
+      : await Promise.all(statements.map((statement) => statement.run()));
+    const changesKnown = results.every((result) => Number.isFinite(result?.meta?.changes));
+    return registryJson({
+      received: events.length,
+      stored: changesKnown
+        ? results.reduce((sum, result) => sum + Number(result.meta.changes), 0)
+        : null,
+      idempotent: true,
+    }, 202);
+  } catch {
+    return registryJson({ error: "persistence_unavailable" }, 503);
+  }
 }
 
 async function signDemoRequest(env, action, jobId, details) {
@@ -799,7 +1341,7 @@ const page = `<!doctype html>
       .cadence{display:flex;align-items:center;gap:7px;color:var(--green);font:800 9px/1 var(--mono)}.pulse{
         width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green)}
       .checked{margin:7px 0 0;color:#aebbd0;font:700 9px/1.4 var(--mono)}
-      .pipeline{display:grid;grid-template-columns:minmax(140px,1fr) 116px minmax(140px,1fr) 116px minmax(140px,1fr);
+      .pipeline{display:grid;grid-template-columns:minmax(140px,1fr) 116px minmax(140px,1fr);
         align-items:stretch;gap:8px}.pipeline-node{min-width:0;display:flex;flex-direction:column;align-items:flex-start;
         padding:14px;border:1px solid var(--line);background:rgba(5,9,20,.6)}.pipeline-node.development{border-color:rgba(154,108,255,.55)}
       .pipeline-label{display:block;color:var(--muted);font:800 8px/1 var(--mono);letter-spacing:.8px}
@@ -896,6 +1438,46 @@ const page = `<!doctype html>
         font:italic 17px/1 var(--display)}.metric span{display:block;margin-top:4px;color:var(--muted);
         font:700 7px/1.2 var(--mono);text-transform:uppercase}.metric.error b{color:#ff8cab}
       .telemetry-note{margin:9px 0 0;color:#9eacc2;font:650 9px/1.4 var(--mono)}
+      .finance-summary-badge{margin-left:7px;padding:3px 6px;border:1px solid #43516a;color:var(--muted);
+        font:800 8px/1 var(--mono);letter-spacing:.4px}.finance-summary-badge[data-state=partial]{color:var(--gold);
+        border-color:rgba(255,196,0,.5)}.finance-summary-badge[data-state=ready]{color:var(--green);
+        border-color:rgba(23,224,194,.5)}
+      .finance-shell{display:grid;gap:13px}.finance-toolbar{display:flex;align-items:center;justify-content:space-between;
+        gap:12px}.finance-status{margin:0;color:#9eacc2;font:700 9px/1.4 var(--mono)}.finance-windows{
+        display:flex;gap:6px}.finance-window{min-height:30px;padding:0 9px;border:1px solid #3b4964;color:#9eacc2;
+        background:transparent;cursor:pointer;font:850 8px/1 var(--mono)}.finance-window[aria-pressed=true]{
+        border-color:var(--cyan);color:var(--cyan);background:rgba(0,229,255,.08)}
+      .finance-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.finance-kpi{min-width:0;padding:13px;
+        border:1px solid #2d3b58;background:rgba(17,26,45,.72)}.finance-kpi[data-scope=development]{
+        border-color:rgba(154,108,255,.46)}.finance-kpi[data-scope=runtime]{border-color:rgba(255,196,0,.42)}
+      .finance-kpi b{display:block;overflow:hidden;color:var(--text);font:italic clamp(21px,3vw,29px)/1 var(--display);
+        text-overflow:ellipsis;white-space:nowrap}.finance-kpi span{display:block;margin-top:6px;color:var(--muted);
+        font:750 8px/1.3 var(--mono);text-transform:uppercase}.finance-kpi small{display:block;margin-top:7px;color:#9eacc2;
+        font:650 8px/1.4 var(--mono)}
+      .finance-grid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(260px,.8fr);gap:10px}.finance-panel{
+        min-width:0;padding:14px;border:1px solid #2b3956;background:rgba(5,9,20,.46)}.finance-panel-head{
+        display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}.finance-panel h2{
+        margin:0;font:italic 21px/1 var(--display);text-transform:uppercase}.finance-panel-copy{margin:6px 0 0;
+        color:#9eacc2;font:650 9px/1.45 var(--mono)}.finance-panel-tag{flex:0 0 auto;padding:4px 6px;
+        border:1px solid #43516a;color:var(--muted);font:800 8px/1 var(--mono)}
+      .finance-empty{min-height:125px;display:grid;place-items:center;padding:20px;border:1px dashed #33425f;
+        color:var(--muted);text-align:center;font:700 10px/1.5 var(--mono)}.finance-trend{height:164px;display:flex;
+        align-items:flex-end;gap:5px;padding:8px 4px 22px;border-bottom:1px solid #33425f;overflow-x:auto}.finance-day{
+        position:relative;min-width:12px;flex:1;height:100%;display:flex;align-items:flex-end;justify-content:center;gap:1px}
+      .finance-bar{width:46%;min-height:2px}.finance-bar.development{background:var(--purple)}.finance-bar.runtime{
+        background:var(--gold)}.finance-day-label{position:absolute;bottom:-18px;left:50%;color:#6f7f99;
+        font:650 7px/1 var(--mono);transform:translateX(-50%);white-space:nowrap}.finance-legend{display:flex;gap:14px;
+        margin-top:10px;color:#8f9eb6;font:700 8px/1 var(--mono)}.finance-legend i{display:inline-block;width:8px;
+        height:8px;margin-right:5px}.finance-legend .development{background:var(--purple)}.finance-legend .runtime{background:var(--gold)}
+      .finance-causes{display:grid;gap:10px}.finance-cause{display:grid;grid-template-columns:minmax(100px,1fr) 2fr auto;
+        align-items:center;gap:9px;color:#b9c5d8;font:700 8px/1.25 var(--mono)}.finance-cause-track{height:8px;
+        background:#1b2740}.finance-cause-fill{display:block;height:100%;background:var(--gold)}.finance-cause-value{
+        color:var(--text);font-weight:850}
+      .finance-table-wrap{overflow:auto;border:1px solid #2b3956}.finance-table{width:100%;min-width:820px;
+        border-collapse:collapse;font:700 9px/1.35 var(--mono)}.finance-table caption{padding:12px;text-align:left;
+        color:var(--text);font:italic 20px/1 var(--display);text-transform:uppercase}.finance-table td:first-child{
+        color:var(--cyan);font-weight:850}.finance-table td.unavailable{color:#718099}.finance-footnote{margin:0;
+        color:#8797af;font:650 8px/1.45 var(--mono)}
       .card-tools{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:11px}.open{
         display:inline-flex;align-items:center;min-height:32px;padding:0 10px;border:1px solid rgba(0,229,255,.42);
         color:var(--cyan);font:800 9px/1 var(--mono);text-decoration:none}.advanced-details{margin:0}.advanced-details summary{
@@ -928,12 +1510,15 @@ const page = `<!doctype html>
       button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
       @media(max-width:980px){.pipeline{grid-template-columns:1fr}.pipeline-node b{font-size:clamp(22px,7vw,24px)}
         .pipeline-connector{min-height:62px}.pipeline-arrow{transform:rotate(90deg)}
-        .pipeline-action{width:min(260px,100%)}.environment-summary{grid-template-columns:100px 1fr}.metrics{grid-column:1/-1}}
+        .pipeline-action{width:min(260px,100%)}.environment-summary{grid-template-columns:100px 1fr}.metrics{grid-column:1/-1}
+        .finance-kpis{grid-template-columns:repeat(2,1fr)}.finance-grid{grid-template-columns:1fr}}
       @media(max-width:680px){.topbar{padding:10px 13px}.brand strong{font-size:21px}.brand small{display:none}
         .github{width:38px;padding:0;justify-content:center}.github span{display:none}.github.releases-link{width:auto;padding:0 10px}main{padding:14px 10px 40px}.release-board{padding:14px}
         .hero{flex-direction:column}.auto{max-width:none;width:100%}.drawer>summary{font-size:19px}.environment-summary{grid-template-columns:1fr}
         .preview-card{grid-template-columns:1fr}.preview-actions{justify-content:flex-start}
         .demo-control{grid-template-columns:1fr}
+        .finance-toolbar{align-items:flex-start;flex-direction:column}.finance-kpis{grid-template-columns:1fr 1fr}
+        .finance-kpi{padding:11px}.finance-kpi b{font-size:22px}.finance-panel-head{flex-direction:column}
         .metrics{grid-template-columns:repeat(2,1fr)}.card-tools{align-items:flex-start;flex-direction:column}.actions{grid-template-columns:1fr}
         .handoff-fields{grid-template-columns:1fr}.handoff-actions{justify-content:stretch}.handoff-actions button,.handoff-actions a{flex:1}
         .feedback-inbox-dialog{width:100%;height:calc(100dvh - 58px);margin-top:58px}.drawer-body{padding:0 11px 11px;overflow:auto}.events-head{align-items:start;flex-direction:column}
@@ -948,7 +1533,7 @@ const page = `<!doctype html>
           aria-label="Feedback status is loading" aria-controls="feedback-inbox"
           aria-expanded="false" data-state="incomplete">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h16a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H9l-5 4v-4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2 5v2h12V8H6Zm0 4v2h8v-2H6Z"/></svg>
-          <span class="feedback-badge" id="feedback-badge">?</span>
+          <span class="feedback-badge" id="feedback-badge" hidden></span>
         </button>
         <a class="github releases-link" href="https://chessriot.ripper234.chatgpt.site/changelog" target="_blank" rel="noopener noreferrer">Releases</a>
         <a class="github github-source" href="https://github.com/ripper234/ChessRiot" target="_blank" rel="noopener noreferrer" aria-label="View ChessRiot source on GitHub">
@@ -969,6 +1554,53 @@ const page = `<!doctype html>
         <section class="pipeline" id="pipeline" aria-label="Release pipeline"></section>
         <p class="authority-note"><span aria-hidden="true">⚿</span><span><b>Direct deployment is not connected.</b> The active controls prepare a manual ChatGPT Work request. Paste it into Work to perform and verify the deployment. Control itself changes nothing.</span></p>
       </section>
+      <details class="drawer" id="financial-dashboard">
+        <summary><span class="summary-title">AI cost &amp; waste <span class="finance-summary-badge" id="finance-badge" data-state="empty">NOT INSTRUMENTED</span></span></summary>
+        <div class="drawer-body">
+          <section class="finance-shell" aria-label="AI cost and waste">
+            <div class="finance-toolbar">
+              <p class="finance-status" id="finance-status" aria-live="polite">Open to check token telemetry.</p>
+              <div class="finance-windows" aria-label="Financial dashboard time window">
+                <button class="finance-window" type="button" data-window="7" aria-pressed="false">7D</button>
+                <button class="finance-window" type="button" data-window="30" aria-pressed="true">30D</button>
+                <button class="finance-window" type="button" data-window="90" aria-pressed="false">90D</button>
+                <button class="finance-window" type="button" data-window="all" aria-pressed="false">ALL</button>
+              </div>
+            </div>
+            <section class="finance-kpis" aria-label="Token usage summary">
+              <article class="finance-kpi" data-scope="development"><b id="finance-dev-waste">—</b><span>Development / build waste</span><small id="finance-dev-detail">Not tracked yet</small></article>
+              <article class="finance-kpi" data-scope="runtime"><b id="finance-runtime-waste">—</b><span>Runtime waste</span><small id="finance-runtime-detail">Not metered yet</small></article>
+              <article class="finance-kpi"><b id="finance-total-use">—</b><span>Total tracked AI use</span><small id="finance-cost-detail">Unpriced</small></article>
+              <article class="finance-kpi"><b id="finance-coverage">—</b><span>Classification coverage</span><small id="finance-coverage-detail">No usage records</small></article>
+            </section>
+            <section class="finance-grid">
+              <article class="finance-panel">
+                <header class="finance-panel-head">
+                  <div><h2>Development first · over time</h2><p class="finance-panel-copy">Avoidable build tokens are purple. Avoidable runtime tokens are gold. Missing telemetry stays a gap.</p></div>
+                  <span class="finance-panel-tag" id="finance-trend-tag">30D</span>
+                </header>
+                <div id="finance-trend"><div class="finance-empty">Development/build token records are not connected.</div></div>
+                <div class="finance-legend" aria-hidden="true"><span><i class="development"></i>Development</span><span><i class="runtime"></i>Runtime</span></div>
+              </article>
+              <article class="finance-panel">
+                <header class="finance-panel-head">
+                  <div><h2>Runtime waste by cause</h2><p class="finance-panel-copy">Only explicit, objective waste rules count. Usage itself is not waste.</p></div>
+                  <span class="finance-panel-tag">RUNTIME</span>
+                </header>
+                <div id="finance-causes"><div class="finance-empty">Magic Rules and other runtime AI do not report tokens yet.</div></div>
+              </article>
+            </section>
+            <div class="finance-table-wrap">
+              <table class="finance-table">
+                <caption>By game version</caption>
+                <thead><tr><th>Version</th><th>Last seen</th><th>Dev tracked</th><th>Dev avoidable</th><th>Runtime tracked</th><th>Runtime avoidable</th><th>Est. cost</th><th>Coverage</th></tr></thead>
+                <tbody id="finance-version-rows"><tr><td class="unavailable" colspan="8">No per-version usage has been recorded.</td></tr></tbody>
+              </table>
+            </div>
+            <p class="finance-footnote" id="finance-footnote">Stable gameplay expects zero LLM calls per move, but is not metered. The Magic Rules preview calls the model once per Compile Rules action before game creation, never per move, and currently has no shared prompt cache. Cached input and reasoning tokens are detail fields and are never added twice.</p>
+          </section>
+        </div>
+      </details>
       <details class="drawer">
         <summary><span class="summary-title">Feature previews <span class="drawer-count">1 · ISOLATED</span></span></summary>
         <div class="drawer-body">
@@ -1061,6 +1693,7 @@ const page = `<!doctype html>
 const clientScript = String.raw`
   ${summarizeFeedbackEnvironments.toString()}
   ${normalizeFeedbackOverview.toString()}
+  ${concreteUnresolvedFeedbackCount.toString()}
   const grid = document.querySelector("#grid");
   const pipeline = document.querySelector("#pipeline");
   const checked = document.querySelector("#checked");
@@ -1074,6 +1707,23 @@ const clientScript = String.raw`
   const feedbackCompleted = document.querySelector("#feedback-completed");
   const feedbackCompletedSummary = document.querySelector("#feedback-completed-summary");
   const feedbackCompletedList = document.querySelector("#feedback-completed-list");
+  const financeDrawer = document.querySelector("#financial-dashboard");
+  const financeBadge = document.querySelector("#finance-badge");
+  const financeStatus = document.querySelector("#finance-status");
+  const financeWindows = [...document.querySelectorAll(".finance-window")];
+  const financeDevWaste = document.querySelector("#finance-dev-waste");
+  const financeRuntimeWaste = document.querySelector("#finance-runtime-waste");
+  const financeTotalUse = document.querySelector("#finance-total-use");
+  const financeCoverage = document.querySelector("#finance-coverage");
+  const financeDevDetail = document.querySelector("#finance-dev-detail");
+  const financeRuntimeDetail = document.querySelector("#finance-runtime-detail");
+  const financeCostDetail = document.querySelector("#finance-cost-detail");
+  const financeCoverageDetail = document.querySelector("#finance-coverage-detail");
+  const financeTrend = document.querySelector("#finance-trend");
+  const financeTrendTag = document.querySelector("#finance-trend-tag");
+  const financeCauses = document.querySelector("#finance-causes");
+  const financeVersionRows = document.querySelector("#finance-version-rows");
+  const financeFootnote = document.querySelector("#finance-footnote");
   const demoStatus = document.querySelector("#demo-video-status");
   const demoStatusText = document.querySelector("#demo-video-status-text");
   const demoBadge = document.querySelector("#demo-video-badge");
@@ -1137,6 +1787,9 @@ const clientScript = String.raw`
   let lastSuccessfulAt = null;
   let refreshIntervalMs = 300000;
   let statusRequest = null;
+  let financeWindow = "30";
+  let financeRequest = null;
+  let financeRequestSequence = 0;
   const requestTimeoutMs = 15000;
 
   function setDemoStatus(state, text) {
@@ -1171,6 +1824,326 @@ const clientScript = String.raw`
       }
     } catch {
       setDemoStatus("error", "Could not verify the current video.");
+    }
+  }
+
+  function compactTokens(value) {
+    if (!Number.isFinite(value)) return "—";
+    return new Intl.NumberFormat(undefined, {
+      notation: value >= 10_000 ? "compact" : "standard",
+      maximumFractionDigits: 1,
+    }).format(value);
+  }
+
+  function tokenDisplay(accumulator, field, truncated, requireClassification = false) {
+    if (!accumulator || accumulator.requests === 0) return "—";
+    if (requireClassification && accumulator.classifiedRequests === 0) return "—";
+    const lowerBound = truncated
+      || (requireClassification && !accumulator.fullyClassified);
+    const value = Number(accumulator[field]) || 0;
+    if (lowerBound && value === 0) return "0 known";
+    return (lowerBound ? "≥ " : "") + compactTokens(value);
+  }
+
+  function costDisplay(accumulator, truncated) {
+    if (!accumulator || accumulator.requests === 0 || accumulator.pricedRequests === 0) {
+      return "Unpriced";
+    }
+    const dollars = (Number(accumulator.costUsdMicros) || 0) / 1_000_000;
+    const formatted = new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: dollars < 1 ? 3 : 2,
+      maximumFractionDigits: dollars < 1 ? 3 : 2,
+    }).format(dollars);
+    return (truncated || !accumulator.fullyPriced ? "≥ " : "") + formatted;
+  }
+
+  function classificationDisplay(accumulator) {
+    if (!accumulator || accumulator.requests === 0) return "—";
+    return Math.round(accumulator.classifiedRequests / accumulator.requests * 100) + "%";
+  }
+
+  function financeDayRange(payload) {
+    const rows = payload.summary.byDay || [];
+    if (payload.window === "all") {
+      if (!rows.length) return [];
+      const start = new Date(rows[0].day + "T00:00:00Z");
+      const end = new Date(rows.at(-1).day + "T00:00:00Z");
+      const days = Math.min(90, Math.round((end - start) / 86400000) + 1);
+      return Array.from({ length: days }, function (_, index) {
+        const day = new Date(end.getTime() - (days - index - 1) * 86400000);
+        return day.toISOString().slice(0, 10);
+      });
+    }
+    const count = Number(payload.window);
+    const end = new Date();
+    return Array.from({ length: count }, function (_, index) {
+      const day = new Date(end.getTime() - (count - index - 1) * 86400000);
+      return day.toISOString().slice(0, 10);
+    });
+  }
+
+  function renderFinanceTrend(payload) {
+    const data = new Map((payload.summary.byDay || []).map(function (entry) {
+      return [entry.day, entry];
+    }));
+    const days = financeDayRange(payload);
+    const knownValues = [];
+    days.forEach(function (day) {
+      const entry = data.get(day);
+      for (const scope of ["development", "runtime"]) {
+        if (entry && entry[scope].classifiedRequests > 0) {
+          knownValues.push(entry[scope].avoidableTokens);
+        }
+      }
+    });
+    if (!days.length || !knownValues.length) {
+      const empty = document.createElement("div");
+      empty.className = "finance-empty";
+      const hasRecords = payload.summary.total.requests > 0;
+      empty.textContent = hasRecords
+        ? "Usage is recorded, but avoidable-token classification is not connected yet."
+        : "Development/build token records are not connected.";
+      financeTrend.replaceChildren(empty);
+      return;
+    }
+    const maximum = Math.max(1, ...knownValues);
+    const chart = document.createElement("div");
+    chart.className = "finance-trend";
+    const labelEvery = Math.max(1, Math.ceil(days.length / 7));
+    days.forEach(function (day, index) {
+      const entry = data.get(day);
+      const column = document.createElement("span");
+      column.className = "finance-day";
+      const descriptions = [];
+      for (const scope of ["development", "runtime"]) {
+        const bucket = entry && entry[scope];
+        if (!bucket || bucket.classifiedRequests === 0) {
+          descriptions.push(scope + ": unclassified");
+          continue;
+        }
+        const value = bucket.avoidableTokens;
+        if (value > 0) {
+          const bar = document.createElement("i");
+          bar.className = "finance-bar " + scope;
+          bar.style.height = Math.max(2, value / maximum * 100) + "%";
+          column.append(bar);
+        }
+        descriptions.push(scope + ": " + compactTokens(value));
+      }
+      column.title = day + " · " + descriptions.join(" · ");
+      if (index === 0 || index === days.length - 1 || index % labelEvery === 0) {
+        const label = document.createElement("span");
+        label.className = "finance-day-label";
+        label.textContent = day.slice(5);
+        column.append(label);
+      }
+      chart.append(column);
+    });
+    financeTrend.replaceChildren(chart);
+  }
+
+  const financeCauseLabels = {
+    runtime_after_creation: "Runtime call after creation",
+    duplicate_compilation: "Duplicate compilation",
+    cache_miss_known_prompt: "Known-prompt cache miss",
+    failed_no_artifact: "Failed without artifact",
+    manual: "Manually classified",
+  };
+
+  function renderFinanceCauses(payload) {
+    const causes = payload.summary.runtimeCauses || [];
+    if (!causes.length) {
+      const empty = document.createElement("div");
+      empty.className = "finance-empty";
+      empty.textContent = payload.instrumentation.runtime.connected
+        ? "Runtime usage is tracked, but no avoidable tokens are classified."
+        : "Magic Rules and other runtime AI do not report tokens yet.";
+      financeCauses.replaceChildren(empty);
+      return;
+    }
+    const maximum = Math.max(...causes.map(function (entry) { return entry.tokens; }), 1);
+    const list = document.createElement("div");
+    list.className = "finance-causes";
+    causes.forEach(function (entry) {
+      const row = document.createElement("div");
+      row.className = "finance-cause";
+      const label = document.createElement("span");
+      label.textContent = financeCauseLabels[entry.cause]
+        || entry.cause.replace(/[._-]+/g, " ");
+      const track = document.createElement("span");
+      track.className = "finance-cause-track";
+      const fill = document.createElement("i");
+      fill.className = "finance-cause-fill";
+      fill.style.width = Math.max(2, entry.tokens / maximum * 100) + "%";
+      track.append(fill);
+      const value = document.createElement("span");
+      value.className = "finance-cause-value";
+      value.textContent = compactTokens(entry.tokens);
+      row.append(label, track, value);
+      list.append(row);
+    });
+    financeCauses.replaceChildren(list);
+  }
+
+  function financeCell(text, unavailable = false) {
+    const cell = document.createElement("td");
+    cell.textContent = text;
+    if (unavailable) cell.className = "unavailable";
+    return cell;
+  }
+
+  function renderFinanceVersions(payload) {
+    const versions = payload.summary.byVersion || [];
+    if (!versions.length) {
+      const row = document.createElement("tr");
+      const cell = financeCell("No per-version usage has been recorded.", true);
+      cell.colSpan = 8;
+      row.append(cell);
+      financeVersionRows.replaceChildren(row);
+      return;
+    }
+    financeVersionRows.replaceChildren(...versions.map(function (entry) {
+      const row = document.createElement("tr");
+      const latest = entry.latestAt ? new Date(entry.latestAt).toLocaleDateString() : "—";
+      const totalCost = costDisplay(entry.total, payload.truncated);
+      row.append(
+        financeCell(entry.version),
+        financeCell(latest, latest === "—"),
+        financeCell(
+          tokenDisplay(entry.development, "trackedTokens", payload.truncated),
+          entry.development.requests === 0,
+        ),
+        financeCell(
+          tokenDisplay(
+            entry.development,
+            "avoidableTokens",
+            payload.truncated,
+            true,
+          ),
+          entry.development.classifiedRequests === 0,
+        ),
+        financeCell(
+          tokenDisplay(entry.runtime, "trackedTokens", payload.truncated),
+          entry.runtime.requests === 0,
+        ),
+        financeCell(
+          tokenDisplay(entry.runtime, "avoidableTokens", payload.truncated, true),
+          entry.runtime.classifiedRequests === 0,
+        ),
+        financeCell(totalCost, totalCost === "Unpriced"),
+        financeCell(
+          classificationDisplay(entry.total),
+          entry.total.requests === 0,
+        ),
+      );
+      return row;
+    }));
+  }
+
+  function renderFinancials(payload) {
+    const development = payload.summary.scopes.development;
+    const runtime = payload.summary.scopes.runtime;
+    const total = payload.summary.total;
+    const developmentConnected = payload.instrumentation.development.connected;
+    const runtimeConnected = payload.instrumentation.runtime.connected;
+
+    financeDevWaste.textContent = tokenDisplay(
+      development,
+      "avoidableTokens",
+      payload.truncated,
+      true,
+    );
+    financeRuntimeWaste.textContent = tokenDisplay(
+      runtime,
+      "avoidableTokens",
+      payload.truncated,
+      true,
+    );
+    financeTotalUse.textContent = tokenDisplay(
+      total,
+      "trackedTokens",
+      payload.truncated,
+    );
+    financeCoverage.textContent = classificationDisplay(total);
+    financeDevDetail.textContent = developmentConnected
+      ? compactTokens(development.trackedTokens) + " tracked · "
+        + compactTokens(development.classifiedRequests) + "/"
+        + compactTokens(development.requests) + " requests classified"
+      : "Not tracked yet";
+    financeRuntimeDetail.textContent = runtimeConnected
+      ? compactTokens(runtime.trackedTokens) + " tracked · "
+        + compactTokens(runtime.classifiedRequests) + "/"
+        + compactTokens(runtime.requests) + " requests classified"
+      : "0 expected per move · not metered";
+    financeCostDetail.textContent = costDisplay(total, payload.truncated);
+    financeCoverageDetail.textContent = total.requests
+      ? compactTokens(total.classifiedRequests) + " of "
+        + compactTokens(total.requests) + " requests"
+      : "No usage records";
+
+    if (developmentConnected && runtimeConnected) {
+      financeBadge.dataset.state = "ready";
+      financeBadge.textContent = "TRACKING";
+      financeStatus.textContent = "Both token sources have reported data. Last generated "
+        + new Date(payload.generatedAt).toLocaleString() + ".";
+    } else if (developmentConnected || runtimeConnected) {
+      financeBadge.dataset.state = "partial";
+      financeBadge.textContent = "PARTIAL";
+      financeStatus.textContent = (developmentConnected ? "Development" : "Runtime")
+        + " is connected; " + (developmentConnected ? "runtime" : "development")
+        + " token telemetry is still missing.";
+    } else {
+      financeBadge.dataset.state = "empty";
+      financeBadge.textContent = "NOT INSTRUMENTED";
+      financeStatus.textContent = "No token source is connected. Historical build totals cannot be reconstructed.";
+    }
+    if (payload.status === "persistence_unavailable") {
+      financeBadge.dataset.state = "partial";
+      financeBadge.textContent = "UNAVAILABLE";
+      financeStatus.textContent = "The token ledger could not be read. No zeroes were substituted.";
+    }
+    financeTrendTag.textContent = payload.window === "all"
+      ? "ALL"
+      : payload.window + "D";
+    renderFinanceTrend(payload);
+    renderFinanceCauses(payload);
+    renderFinanceVersions(payload);
+    financeFootnote.textContent = "Stable gameplay expects zero LLM calls per move, but is not metered. "
+      + "The Magic Rules preview calls the model once per Compile Rules action before game creation, "
+      + "never per move, and currently has no shared prompt cache. Cached input and reasoning tokens "
+      + "are detail fields and are never added twice."
+      + (payload.truncated ? " This view is a lower bound because the selected window exceeded 10,000 records." : "");
+  }
+
+  async function loadFinancials() {
+    const requestSequence = ++financeRequestSequence;
+    const requestedWindow = financeWindow;
+    financeStatus.textContent = "Checking token telemetry…";
+    financeWindows.forEach(function (button) {
+      button.setAttribute("aria-pressed", String(button.dataset.window === requestedWindow));
+    });
+    const request = (async function () {
+      try {
+        const response = await fetch("/api/financials?window=" + encodeURIComponent(requestedWindow), {
+          cache: "no-store",
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error("financials_failed");
+        if (requestSequence === financeRequestSequence) renderFinancials(payload);
+      } catch {
+        if (requestSequence !== financeRequestSequence) return;
+        financeBadge.dataset.state = "partial";
+        financeBadge.textContent = "UNAVAILABLE";
+        financeStatus.textContent = "Could not verify token telemetry. No zeroes were substituted.";
+      }
+    })();
+    financeRequest = request;
+    try {
+      await request;
+    } finally {
+      if (financeRequest === request) financeRequest = null;
     }
   }
 
@@ -1843,7 +2816,6 @@ const clientScript = String.raw`
   function environmentName(stage) {
     return {
       development: "Development",
-      staging: "Staging",
       production: "Production",
     }[stage.key] || stage.label;
   }
@@ -2032,12 +3004,6 @@ const clientScript = String.raw`
         url: snapshots.get("development") && snapshots.get("development").item.url,
       },
       {
-        key: "staging",
-        label: "STAGING",
-        version: verifiedVersion(snapshots.get("staging")),
-        url: snapshots.get("staging") && snapshots.get("staging").item.url,
-      },
-      {
         key: "production",
         label: "PROD",
         version: verifiedVersion(snapshots.get("production")),
@@ -2185,23 +3151,31 @@ const clientScript = String.raw`
     return summarizeFeedbackEnvironments(states);
   }
 
+  function currentConcreteUnresolvedCount() {
+    const overviews = [];
+    for (const snapshot of snapshots.values()) {
+      if (snapshot.telemetryFresh) overviews.push(snapshot.overview);
+    }
+    return concreteUnresolvedFeedbackCount(overviews);
+  }
+
   function renderFeedbackLauncher() {
     const summary = currentFeedbackSummary();
+    const concreteUnread = currentConcreteUnresolvedCount();
     const quiet = summary.complete && summary.known === 0;
-    feedbackBadge.hidden = quiet;
-    feedbackBadge.textContent = summary.display;
-    feedbackLauncher.dataset.state = quiet
-      ? "quiet"
-      : summary.known > 0 ? "attention" : "incomplete";
+    feedbackBadge.hidden = concreteUnread === 0;
+    feedbackBadge.textContent = String(concreteUnread);
+    feedbackLauncher.dataset.state = concreteUnread > 0
+      ? "attention"
+      : quiet ? "quiet" : "incomplete";
     feedbackLauncher.setAttribute(
       "aria-label",
-      summary.complete
-        ? (summary.known === 0
+      concreteUnread > 0
+        ? "Feedback inbox, " + concreteUnread
+          + (concreteUnread === 1 ? " visible unresolved item" : " visible unresolved items")
+        : summary.complete
           ? "Feedback inbox, no unresolved items"
-          : "Feedback inbox, " + summary.known + " unresolved items")
-        : (summary.known
-          ? "Feedback inbox, at least " + summary.known + " unresolved items; some environment counts are incomplete"
-          : "Feedback inbox, unresolved count is incomplete"),
+          : "Feedback inbox, no visible unresolved items; some environment counts are incomplete",
     );
     feedbackInboxSummary.textContent = summary.complete
       ? (summary.known === 0
@@ -2481,6 +3455,16 @@ const clientScript = String.raw`
   feedbackInbox.addEventListener("click", function (event) {
     if (event.target === feedbackInbox) feedbackInbox.close();
   });
+  financeDrawer.addEventListener("toggle", function () {
+    if (financeDrawer.open) void loadFinancials();
+  });
+  financeWindows.forEach(function (button) {
+    button.addEventListener("click", function () {
+      if (button.dataset.window === financeWindow) return;
+      financeWindow = button.dataset.window;
+      void loadFinancials();
+    });
+  });
   handoffCopy.disabled = true;
   document.querySelector("#handoff-cancel").addEventListener("click", function () {
     handoffDialog.close();
@@ -2516,7 +3500,7 @@ const securityHeaders = {
   "content-type": "text/html; charset=utf-8",
   "cache-control": "no-store",
   "content-security-policy":
-    "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; img-src 'self'; media-src 'self' blob:; connect-src 'self' https://chessriot.ripper234.chatgpt.site https://chessriot-staging.ripper234.chatgpt.site https://chessriot-dev.ripper234.chatgpt.site; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+    "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; img-src 'self'; media-src 'self' blob:; connect-src 'self' https://chessriot.ripper234.chatgpt.site https://chessriot-dev.ripper234.chatgpt.site; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
   "permissions-policy": "camera=(), microphone=(), geolocation=()",
   "referrer-policy": "no-referrer",
   "x-content-type-options": "nosniff",
@@ -2526,6 +3510,12 @@ const securityHeaders = {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (request.method === "GET" && url.pathname === "/api/financials") {
+      return financialsResponse(request, env);
+    }
+    if (request.method === "POST" && url.pathname === "/api/financials/events") {
+      return aiUsageIngestResponse(request, env);
+    }
     if (request.method === "GET" && url.pathname === "/api/status") {
       return statusResponse(env);
     }

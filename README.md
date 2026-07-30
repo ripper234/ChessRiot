@@ -1,7 +1,6 @@
 # ChessRiot Control
 
-Owner-only, pipeline-first view of ChessRiot Development, Staging, and
-Production.
+Owner-only, pipeline-first view of ChessRiot Development and Production.
 
 The dashboard keeps an operational registry in its own D1, but visible versions
 come only from the current page check. Opening, refreshing, or starting a
@@ -10,14 +9,14 @@ environment responds. Cached, bundled, and persisted versions never flash as
 current data. Short-lived, environment-specific grants protect telemetry
 without putting long-lived secrets in page source or browser storage.
 
-The first viewport is intentionally narrow in scope: `Dev → Staging → Prod`,
-currently verified versions, quick-open links, and the two manual promotion
-states. Dev itself is the automatically updated latest environment; there is no
-stage before it. A compact message icon at the top right stays subdued when all
-three environments report zero unresolved feedback. New or reviewed feedback
-adds a high-contrast count; incomplete environment reads show a lower bound or
-question mark instead of a false zero. The right-side inbox reads feedback from
-all environments, keeps completed items collapsed, and uses a fresh,
+The first viewport is intentionally narrow in scope: `Dev → Prod`, currently
+verified versions, quick-open links, and the manual promotion state. Dev itself
+is the automatically updated latest environment. A compact message icon at the
+top right stays subdued when no concrete unresolved feedback record is loaded.
+Only an actual visible unresolved message adds a red numbered badge. An
+incomplete environment read may tint the launcher gold, but never produces a
+red question-mark badge. The right-side inbox reads feedback from both
+environments, keeps completed items collapsed, and uses a fresh,
 environment-scoped `feedback:manage` grant to mark one item done. Environments
 without the matching backend release remain explicitly unavailable. Health,
 telemetry, and events stay collapsed until they are needed. Release history
@@ -27,10 +26,9 @@ lives on the public
 The release policy is intentionally asymmetric:
 
 - Every changed release deploys automatically to Development.
-- Development → Staging requires an explicit manual promotion click.
-- Staging → Production requires an explicit manual promotion click.
+- Development → Production requires an explicit manual promotion click.
 - Pushes, merges, tests, successful builds, agents, and schedules must never
-  promote to Staging or Production.
+  promote to Production.
 
 The Control Worker currently has no credential, webhook, or callable Sites API
 that can deploy another project. It therefore does not claim to promote
@@ -53,8 +51,23 @@ is signed across narration and publishing so an older Control build cannot
 replace the current story. It never receives Sites deployment authority and
 does not redeploy the game.
 
+The collapsed AI cost and waste dashboard keeps development/build usage first,
+then runtime usage. It reports total tracked tokens separately from objectively
+classified avoidable tokens, trends them over time, and groups them by game
+version. Missing sources, pricing, and classification remain visible as gaps or
+lower bounds. Historical build totals cannot be reconstructed, and stable
+gameplay's expected zero LLM calls per move is not presented as a measured zero.
+Usage sources write idempotent events to Control's append-only D1 ledger through
+`POST /api/financials/events`.
+
 ## Control changelog
 
+- `0.7.0`: Retired Staging from the active pipeline and feedback aggregation.
+  The notification badge now turns red only for concrete unresolved records
+  that are actually present in the inbox.
+- `0.6.0`: Added the development-first AI cost and waste dashboard, append-only
+  per-version token ledger, explicit waste classification, time trends, runtime
+  cause breakdowns, and honest uninstrumented states.
 - `0.5.0`: Added a compact top-right unresolved-feedback notification, one
   cross-environment inbox, and scoped Mark done actions with honest
   partial-rollout states.
@@ -101,19 +114,21 @@ does not redeploy the game.
 Required runtime variables:
 
 - `PROD_URL`
-- `STAGING_URL`
 - `DEV_URL`
 - `PROD_DEPLOYED_VERSION`
-- `STAGING_DEPLOYED_VERSION`
 - `DEV_DEPLOYED_VERSION`
 - `PROD_OPS_READ_SECRET`
-- `STAGING_OPS_READ_SECRET`
 - `DEV_OPS_READ_SECRET`
 
 Optional runtime variable:
 
 - `DEPLOYMENT_STATE_JSON` for deployment and verification timestamps. Individual
   `*_DEPLOYED_VERSION` values override the corresponding version in this JSON.
+- `FINANCIALS_INGEST_SECRET` for authenticated server-to-server token-event
+  ingestion. Each event must include an idempotent `source` + `sourceEventId`,
+  `scope` (`development` or `runtime`), timestamp, purpose, input and output
+  tokens, and may include version, environment, model, cached and reasoning
+  details, estimated cost, and a named avoidable-token rule.
 
 Demo-video runtime variables:
 
