@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 import worker, {
@@ -6,6 +7,10 @@ import worker, {
   normalizeFeedbackOverview,
   summarizeFeedbackEnvironments,
 } from "../worker/index.js";
+
+const expectedControlVersion = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+).version;
 
 const environment = {
   DEV_URL: "https://dev.chessriot.gg",
@@ -124,7 +129,7 @@ test("mints separate short-lived read and feedback grants", async () => {
   );
   assert.equal(response.status, 200);
   const status = await response.json();
-  assert.equal(status.controlVersion, "0.8.0");
+  assert.equal(status.controlVersion, expectedControlVersion);
   assert.equal(status.environments.length, 2);
   for (const item of status.environments) {
     const read = grantPayload(item.grant);
@@ -233,7 +238,7 @@ test("reports a read-only Control health check", async () => {
   assert.equal(healthy.status, 200);
   assert.deepEqual(await healthy.json(), {
     status: "ok",
-    version: "0.8.0",
+    version: expectedControlVersion,
     database: "ok",
     ownerConfigured: true,
     environments: {
