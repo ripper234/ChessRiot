@@ -146,8 +146,6 @@
   box-shadow: none;
 }
 
-.game-shell .history-controls .history-live { background: var(--teal-spark); }
-
 /* Main board structure. All depth is removed from the squares and pieces. */
 .game-shell .board-wrap {
   padding: clamp(5px, .65vw, 8px);
@@ -312,37 +310,6 @@ html[data-theme] .game-shell .dark-square {
   to { filter: saturate(1.22) brightness(1.04); }
 }
 
-/* Replay, victory, recent matches, and promotion use the identical silhouettes. */
-.game-shell .replay-board-frame {
-  padding: 6px;
-  border: 1px solid color-mix(in srgb, var(--theme-frame-border, #102126) 72%, transparent);
-  border-radius: 14px;
-  background: var(--theme-frame, #1b343a);
-  box-shadow: none;
-}
-
-.game-shell .replay-board {
-  overflow: hidden;
-  border: 0;
-  border-radius: 9px;
-}
-
-.game-shell .replay-piece {
-  width: 84%;
-  height: 84%;
-  display: grid;
-  place-items: center;
-  font-size: 0;
-  filter: none;
-  -webkit-text-stroke: 0;
-}
-
-.game-shell .replay-square.replay-last::after {
-  inset: 4px;
-  border: clamp(2px, .8cqw, 4px) solid var(--chess-gold);
-  border-radius: 5px;
-}
-
 .game-shell .finisher-piece {
   height: 100%;
   font-size: 0;
@@ -360,7 +327,7 @@ html[data-theme] .game-shell .dark-square {
 /* The homepage illustration is deliberately front-on and uses the live piece set. */
 .public-board-card {
   border-radius: 24px;
-  background: #17292d;
+  background: var(--theme-card, #17292d);
   box-shadow: 0 24px 68px rgba(0, 0, 0, .34);
   transform: none;
   clip-path: none;
@@ -369,21 +336,60 @@ html[data-theme] .game-shell .dark-square {
 .public-board-card::before { box-shadow: none; }
 
 .public-board {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-rows: repeat(8, minmax(0, 1fr));
+  aspect-ratio: 1;
   overflow: hidden;
-  border: 7px solid #20383e;
+  border: 7px solid var(--theme-frame, #20383e);
   border-radius: 14px;
-  background: #dce7e4;
+  background: var(--board-light, #dce7e4);
   box-shadow: none;
 }
 
 .public-board > span {
   min-width: 0;
+  min-height: 0;
   display: grid;
   place-items: center;
   color: inherit;
-  background: #dce7e4;
+  background: var(--board-light, #dce7e4);
   font-size: 0;
   text-shadow: none;
+}
+
+.public-board > span > i {
+  position: relative;
+  z-index: 2;
+  width: 84%;
+  height: 84%;
+  display: grid;
+  place-items: center;
+  font-style: normal;
+  will-change: transform;
+}
+.public-board > span:has(> i[class]) { overflow: visible; }
+.home-move-e2-e4 { animation: home-e2-e4 8s cubic-bezier(.2,.75,.2,1) infinite; }
+.home-move-e7-e5 { animation: home-e7-e5 8s cubic-bezier(.2,.75,.2,1) infinite; }
+.home-move-g1-f3 { animation: home-g1-f3 8s cubic-bezier(.2,.75,.2,1) infinite; }
+.home-move-b8-c6 { animation: home-b8-c6 8s cubic-bezier(.2,.75,.2,1) infinite; }
+
+@keyframes home-e2-e4 {
+  0%, 8%, 94%, 100% { transform: translate(0,0); }
+  14%, 86% { transform: translate(0,-200%); }
+}
+@keyframes home-e7-e5 {
+  0%, 22%, 94%, 100% { transform: translate(0,0); }
+  28%, 86% { transform: translate(0,200%); }
+}
+@keyframes home-g1-f3 {
+  0%, 36%, 94%, 100% { transform: translate(0,0); }
+  43%, 86% { transform: translate(-100%,-200%); }
+}
+@keyframes home-b8-c6 {
+  0%, 51%, 94%, 100% { transform: translate(0,0); }
+  58%, 86% { transform: translate(100%,200%); }
 }
 
 .public-board > span:nth-child(16n + 2),
@@ -394,12 +400,12 @@ html[data-theme] .game-shell .dark-square {
 .public-board > span:nth-child(16n + 11),
 .public-board > span:nth-child(16n + 13),
 .public-board > span:nth-child(16n + 15) {
-  background: #527681;
+  background: var(--board-dark, #527681);
 }
 
-.public-board .chess-piece-svg { width: 84%; height: 84%; }
-.public-board .piece-w { --piece-outline: #24373d; color: #f8f3e6; }
-.public-board .piece-b { --piece-outline: #d9e6e3; color: #17262c; }
+.public-board .chess-piece-svg { width: 100%; height: 100%; }
+.public-board .piece-w { --piece-outline: var(--theme-piece-white-stroke, #24373d); color: var(--theme-piece-white, #f8f3e6); }
+.public-board .piece-b { --piece-outline: var(--theme-piece-black-stroke, #d9e6e3); color: var(--theme-piece-black, #17262c); }
 
 @media (max-width: 620px) {
   .game-shell .board-wrap { border-radius: 12px; }
@@ -422,4 +428,5 @@ html[data-theme] .game-shell .dark-square {
 @media (prefers-reduced-motion: reduce) {
   .game-shell .square.king-in-check { animation: none; }
   .game-shell .square:hover .piece { transform: none; }
+  .public-board > span > i { animation: none !important; }
 }

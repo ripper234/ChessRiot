@@ -2,14 +2,36 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
 import { apiErrorMessage, requestHeaders } from "@/lib/client-http";
+import {
+  readChessCoachPreference,
+  readTacticalCelebrationsPreference,
+  writeChessCoachPreference,
+  writeTacticalCelebrationsPreference,
+} from "@/lib/chess-coach";
 import {
   generateUuid,
   playerKey,
   readSeatTokenFromHash,
 } from "@/lib/client-storage";
 import { WHATSAPP_COMMUNITY_URL } from "@/lib/external-links";
+import {
+  AUDIO_PREFERENCES_EVENT,
+  playGameSound,
+  readMasterVolume,
+  readMusicPreference,
+  readSoundPreference,
+  unlockGameSounds,
+  writeMasterVolume,
+  writeMusicPreference,
+  writeSoundPreference,
+  type AudioPreferences,
+} from "@/lib/game-sounds";
+import {
+  readMoveConfirmationPreference,
+  writeMoveConfirmationPreference,
+} from "@/lib/move-confirmation";
 import {
   gameIdFromPathname,
   hasUnseenRelease,
@@ -22,7 +44,16 @@ import {
   browserPushPayload,
   pushEndpointHash,
 } from "@/lib/push-client";
+import {
+  DEFAULT_THEME,
+  isThemeId,
+  THEMES,
+  THEME_STORAGE_KEY,
+  type ThemeId,
+} from "@/lib/themes";
 import { APP_VERSION } from "@/lib/version";
+import { FeedbackForm } from "./FeedbackButton";
+import { ChessPiece } from "./ChessPiece";
 import styles from "./AppUpdates.module.css";
 
 interface InstallPromptEvent extends Event {
@@ -42,6 +73,10 @@ interface PushConfigPayload {
 interface PushStatusPayload {
   available?: unknown;
   enabled?: unknown;
+}
+
+interface GameMenuState {
+  status: "waiting" | "active" | "completed";
 }
 
 const SERVICE_WORKER_READY_TIMEOUT_MS = 10_000;
@@ -69,6 +104,7 @@ export function AppUpdates() {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const serviceWorkerRef = useRef<ServiceWorkerRegistration | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [availableVersion, setAvailableVersion] = useState<string | null>(null);
   const [releaseDot, setReleaseDot] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
@@ -79,6 +115,14 @@ export function AppUpdates() {
   const [turnAlertsEnabled, setTurnAlertsEnabled] = useState(false);
   const [turnAlertsBusy, setTurnAlertsBusy] = useState(false);
   const [turnAlertsMessage, setTurnAlertsMessage] = useState("");
+  const [selectedTheme, setSelectedTheme] = useState<ThemeId>(DEFAULT_THEME);
+  const [gameMenuState, setGameMenuState] = useState<GameMenuState | null>(null);
+  const [soundOn, setSoundOn] = useState(true);
+  const [musicOn, setMusicOn] = useState(true);
+  const [masterVolume, setMasterVolume] = useState(.45);
+  const [chessCoachOn, setChessCoachOn] = useState(true);
+  const [tacticalCelebrationsOn, setTacticalCelebrationsOn] = useState(true);
+  const [confirmEveryMove, setConfirmEveryMove] = useState(false);
 
   const getServiceWorkerRegistration = useCallback(async () => {
     if (serviceWorkerRef.current) return serviceWorkerRef.current;
@@ -163,6 +207,50 @@ export function AppUpdates() {
   }, [checkRelease, getServiceWorkerRegistration]);
 
   useEffect(() => {
+    const currentTheme = document.documentElement.dataset.theme;
+    if (isThemeId(currentTheme)) setSelectedTheme(currentTheme);
+    const syncPreferences = (publish = false) => {
+      const preferences = {
+        effectsOn: readSoundPreference(),
+        musicOn: readMusicPreference(),
+        masterVolume: readMasterVolume(),
+      };
+      setSoundOn(preferences.effectsOn);
+      setMusicOn(preferences.musicOn);
+      setMasterVolume(preferences.masterVolume);
+      setChessCoachOn(readChessCoachPreference());
+      setTacticalCelebrationsOn(readTacticalCelebrationsPreference());
+      setConfirmEveryMove(readMoveConfirmationPreference());
+      if (publish) {
+        window.dispatchEvent(new CustomEvent<AudioPreferences>(
+          AUDIO_PREFERENCES_EVENT,
+          { detail: preferences },
+        ));
+      }
+    };
+    syncPreferences();
+
+    const syncTheme = (event: StorageEvent) => {
+      if (event.key === THEME_STORAGE_KEY && isThemeId(event.newValue)) {
+        document.documentElement.dataset.theme = event.newValue;
+        setSelectedTheme(event.newValue);
+        window.dispatchEvent(new CustomEvent("chessriot:theme-changed", { detail: event.newValue }));
+      }
+      syncPreferences(true);
+    };
+    const syncGameMenu = (event: Event) => {
+      const detail = (event as CustomEvent<GameMenuState | null>).detail;
+      setGameMenuState(detail);
+    };
+    window.addEventListener("storage", syncTheme);
+    window.addEventListener("chessriot:game-menu-state", syncGameMenu);
+    return () => {
+      window.removeEventListener("storage", syncTheme);
+      window.removeEventListener("chessriot:game-menu-state", syncGameMenu);
+    };
+  }, []);
+
+  useEffect(() => {
     setTurnAlertsMessage("");
     setPushReady(false);
     setPushPublicKey(null);
@@ -230,6 +318,68 @@ export function AppUpdates() {
 
   function closeDialog() {
     dialogRef.current?.close();
+  }
+
+  function chooseTheme(theme: ThemeId) {
+    document.documentElement.dataset.theme = theme;
+    setSelectedTheme(theme);
+    storeValue(THEME_STORAGE_KEY, theme);
+    window.dispatchEvent(new CustomEvent("chessriot:theme-changed", { detail: theme }));
+  }
+
+  function publishAudio(preferences: AudioPreferences) {
+    window.dispatchEvent(new CustomEvent(AUDIO_PREFERENCES_EVENT, { detail: preferences }));
+  }
+
+  function changeMasterVolume(volume: number) {
+    const next = Math.max(0, Math.min(1, volume));
+    setMasterVolume(next);
+    writeMasterVolume(next);
+    publishAudio({ effectsOn: soundOn, musicOn, masterVolume: next });
+  }
+
+  function toggleSoundEffects() {
+    const next = !soundOn;
+    setSoundOn(next);
+    writeSoundPreference(next);
+    publishAudio({ effectsOn: next, musicOn, masterVolume });
+    if (next) void unlockGameSounds().then((unlocked) => {
+      if (unlocked) playGameSound("move");
+    });
+  }
+
+  function toggleMusic() {
+    const next = !musicOn;
+    setMusicOn(next);
+    writeMusicPreference(next);
+    if (next) void unlockGameSounds();
+    publishAudio({ effectsOn: soundOn, musicOn: next, masterVolume });
+  }
+
+  function toggleCoach() {
+    const next = !chessCoachOn;
+    setChessCoachOn(next);
+    writeChessCoachPreference(next);
+    window.dispatchEvent(new CustomEvent("chessriot:coach-preference", { detail: next }));
+  }
+
+  function toggleCelebrations() {
+    const next = !tacticalCelebrationsOn;
+    setTacticalCelebrationsOn(next);
+    writeTacticalCelebrationsPreference(next);
+    window.dispatchEvent(new CustomEvent("chessriot:celebrations-preference", { detail: next }));
+  }
+
+  function toggleMoveConfirmation() {
+    const next = !confirmEveryMove;
+    setConfirmEveryMove(next);
+    writeMoveConfirmationPreference(next);
+    window.dispatchEvent(new CustomEvent("chessriot:move-confirmation-preference", { detail: next }));
+  }
+
+  function requestSurrender() {
+    closeDialog();
+    window.dispatchEvent(new CustomEvent("chessriot:surrender"));
   }
 
   async function installApp() {
@@ -347,20 +497,20 @@ export function AppUpdates() {
         type="button"
         ref={triggerRef}
         aria-label={releaseDot
-          ? "App updates, new release available"
-          : "App updates"}
+          ? "Open ChessRiot menu, new release available"
+          : "Open ChessRiot menu"}
         aria-expanded={dialogOpen}
         aria-haspopup="dialog"
-        title="App updates"
+        title="Settings"
         onClick={openDialog}
       >
-        <span aria-hidden="true">♟</span>
+        <span aria-hidden="true">⚙</span>
         {releaseDot ? <span className={styles.dot} aria-hidden="true" /> : null}
       </button>
       <dialog
         className={styles.dialog}
         ref={dialogRef}
-        aria-labelledby="app-updates-title"
+        aria-labelledby="app-menu-title"
         onClose={() => {
           setDialogOpen(false);
           triggerRef.current?.focus();
@@ -372,58 +522,91 @@ export function AppUpdates() {
         <div className={styles.card}>
           <div className={styles.heading}>
             <div>
-              <p>APP</p>
-              <h2 id="app-updates-title">ChessRiot</h2>
+              <p>CHESSRIOT</p>
+              <h2 id="app-menu-title">Settings</h2>
             </div>
             <button className={styles.close} type="button" onClick={closeDialog} aria-label="Close">×</button>
           </div>
 
-          <section className={styles.section} aria-labelledby="release-settings-title">
-            <h3 id="release-settings-title">Release updates</h3>
-            <p>
-              {availableVersion
-                ? `v${availableVersion} is ready. Reload to use it.`
-                : `You are using v${APP_VERSION}.`}
-            </p>
-            {availableVersion ? (
-              <button className={styles.action} type="button" onClick={() => window.location.reload()}>
-                RELOAD UPDATE
-              </button>
-            ) : null}
-            <p><Link href="/changelog" onClick={closeDialog}>See what changed</Link></p>
-          </section>
+          <nav className={styles.quickLinks} aria-label="ChessRiot menu">
+            <Link href="/app" onClick={closeDialog}>NEW GAME</Link>
+            <Link href="/changelog" onClick={closeDialog}>WHAT&apos;S NEW</Link>
+          </nav>
 
-          <section className={styles.section} aria-labelledby="install-settings-title">
-            <h3 id="install-settings-title">Install app</h3>
-            <p>
-              {installed
-                ? "ChessRiot is running as an installed app."
-                : "Install ChessRiot from your browser for a desktop-style window. Gameplay remains online-only."}
-            </p>
-            {!installed && installPrompt ? (
-              <button className={styles.action} type="button" onClick={() => void installApp()}>
-                INSTALL CHESSRIOT
-              </button>
-            ) : null}
-          </section>
+          <details
+            className={styles.group}
+            open={appearanceOpen}
+            onToggle={(event) => setAppearanceOpen(event.currentTarget.open)}
+          >
+            <summary>Appearance and skin</summary>
+            <div className={styles.groupBody}>
+              <p>Changes the whole app, including setup, menus, board, pieces, music, and effects.</p>
+              {dialogOpen && appearanceOpen ? <fieldset className={styles.skinGrid}>
+              <legend className="visually-hidden">ChessRiot skin</legend>
+              {THEMES.map((theme) => (
+                <label data-selected={selectedTheme === theme.id} key={theme.id}>
+                  <input
+                    type="radio"
+                    name="menu-theme"
+                    value={theme.id}
+                    checked={selectedTheme === theme.id}
+                    onChange={() => chooseTheme(theme.id)}
+                  />
+                  <span style={{
+                    backgroundImage: theme.art
+                      ? `linear-gradient(rgba(0,0,0,.2),rgba(0,0,0,.45)),url(${theme.art})`
+                      : `linear-gradient(135deg,${theme.preview[0]} 0 50%,${theme.preview[1]} 50%)`,
+                    "--preview-light": theme.preview[0],
+                    "--preview-dark": theme.preview[2],
+                    "--preview-accent": theme.preview[3],
+                  } as CSSProperties}>
+                    <ChessPiece type="n" color="w" theme={theme.id} />
+                    <ChessPiece type="q" color="b" theme={theme.id} />
+                  </span>
+                  <b>{theme.name}</b>
+                </label>
+              ))}
+              </fieldset> : null}
+            </div>
+          </details>
 
-          <section className={styles.section} aria-labelledby="community-settings-title">
-            <h3 id="community-settings-title">Community</h3>
-            <p>Join ChessRiot players for updates, playtests, and Magic Rule ideas.</p>
-            <a
-              className={styles.communityAction}
-              href={WHATSAPP_COMMUNITY_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Join the ChessRiot community on WhatsApp (opens in a new tab)"
-            >
-              JOIN WHATSAPP COMMUNITY
-            </a>
-          </section>
+          <details className={styles.group}>
+            <summary>Sound, music and volume</summary>
+            <div className={styles.groupBody}>
+              <button className={styles.action} type="button" data-enabled={soundOn} aria-pressed={soundOn} onClick={toggleSoundEffects}>
+                SOUND EFFECTS {soundOn ? "ON" : "OFF"}
+              </button>
+              <button className={styles.action} type="button" data-enabled={musicOn} aria-pressed={musicOn} onClick={toggleMusic}>
+                MUSIC {musicOn ? "ON" : "OFF"}
+              </button>
+              <label className={styles.volumeControl}>
+                <span>MASTER VOLUME</span>
+                <output>{Math.round(masterVolume * 100)}%</output>
+                <input type="range" min="0" max="1" step="0.05" value={masterVolume}
+                  onChange={(event) => changeMasterVolume(Number(event.currentTarget.value))} />
+              </label>
+            </div>
+          </details>
+
+          <details className={styles.group}>
+            <summary>Play assistance</summary>
+            <div className={styles.groupBody}>
+              <button className={styles.action} type="button" data-enabled={chessCoachOn} aria-pressed={chessCoachOn} onClick={toggleCoach}>
+                CHESS COACH {chessCoachOn ? "ON" : "OFF"}
+              </button>
+              <button className={styles.action} type="button" data-enabled={tacticalCelebrationsOn} aria-pressed={tacticalCelebrationsOn} onClick={toggleCelebrations}>
+                GREAT-MOVE CELEBRATIONS {tacticalCelebrationsOn ? "ON" : "OFF"}
+              </button>
+              <button className={styles.action} type="button" data-enabled={confirmEveryMove} aria-pressed={confirmEveryMove} onClick={toggleMoveConfirmation}>
+                CONFIRM EVERY MOVE {confirmEveryMove ? "ON" : "OFF"}
+              </button>
+            </div>
+          </details>
 
           {activeGameId ? (
-            <section className={styles.section} aria-labelledby="turn-alert-settings-title">
-              <h3 id="turn-alert-settings-title">Turn alerts</h3>
+            <section className={styles.section} aria-labelledby="game-settings-title">
+              <h3 id="game-settings-title">Current game</h3>
+              <h4>Turn alerts</h4>
               <p>
                 Get a notification when an opponent hands you the turn, even
                 after ChessRiot is closed. Alerts are off until you enable them.
@@ -437,6 +620,7 @@ export function AppUpdates() {
                   className={styles.action}
                   type="button"
                   data-enabled={turnAlertsEnabled}
+                  aria-pressed={turnAlertsEnabled}
                   disabled={!pushReady || turnAlertsBusy}
                   onClick={() => void (
                     turnAlertsEnabled
@@ -452,8 +636,54 @@ export function AppUpdates() {
               {turnAlertsMessage ? (
                 <p className={styles.note} role="status">{turnAlertsMessage}</p>
               ) : null}
+              {gameMenuState && gameMenuState.status !== "completed" ? (
+                <button
+                  className={`${styles.action} ${styles.danger}`}
+                  type="button"
+                  onClick={requestSurrender}
+                >
+                  {gameMenuState?.status === "waiting" ? "CANCEL GAME" : "SURRENDER"}
+                </button>
+              ) : null}
             </section>
           ) : null}
+
+          <details className={styles.group}>
+            <summary>Send feedback</summary>
+            <div className={styles.groupBody}><FeedbackForm /></div>
+          </details>
+
+          <details className={styles.group}>
+            <summary>App, updates and community</summary>
+            <div className={styles.groupBody}>
+              <p>
+                {availableVersion
+                  ? `v${availableVersion} is ready. Reload to use it.`
+                  : `You are using v${APP_VERSION}.`}
+              </p>
+              {availableVersion ? (
+                <button className={styles.action} type="button" onClick={() => window.location.reload()}>
+                  RELOAD UPDATE
+                </button>
+              ) : null}
+              {!installed && installPrompt ? (
+                <button className={styles.action} type="button" onClick={() => void installApp()}>
+                  INSTALL CHESSRIOT
+                </button>
+              ) : null}
+              <a
+                className={styles.communityAction}
+                href={WHATSAPP_COMMUNITY_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                JOIN WHATSAPP COMMUNITY
+              </a>
+              <Link className={styles.communityAction} href="/privacy" onClick={closeDialog}>
+                PRIVACY
+              </Link>
+            </div>
+          </details>
         </div>
       </dialog>
     </>

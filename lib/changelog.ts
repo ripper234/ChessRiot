@@ -8,8 +8,24 @@ export interface ReleaseNote {
 }
 
 const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
+const commitSource = (sha: string) => `${REPOSITORY_URL}/commit/${sha}`;
 
 export const RELEASES: ReleaseNote[] = [
+  {
+    version: "0.17.0",
+    date: "2026-08-01",
+    title: "One world, one menu",
+    summary: "Skins now shape the whole experience, while one Settings menu gathers audio, assistance, feedback, and game actions.",
+    changes: [
+      "Applied all 11 skins before paint across the homepage, setup, menus, board, pieces, music, and special effects.",
+      "Unified duplicate controls into one accessible Settings menu with independent sound, music, master-volume, coach, celebration, notification, surrender, privacy, and version controls.",
+      "Added low-key skin-specific music, longer piece-specific captures, special check, castling, queen-loss, promotion, and white-flag resignation effects.",
+      "Replaced the separate replay dialog with a compact current-move row and expandable full move table, plus a complete captured-piece panel.",
+      "Added a default-on local risk coach for obvious material losses and small tactical fork celebrations, each independently optional.",
+      "Hardened bounded request parsing, health readiness, observability privacy, response headers, Magic compatibility, dependencies, CI, and release artifact validation.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.17.0`,
+  },
   {
     version: "0.16.0",
     date: "2026-08-01",
@@ -22,7 +38,7 @@ export const RELEASES: ReleaseNote[] = [
       "Added red inline errors, accessible descriptions, and first-invalid-field focus to Create Game, Join Game, and Feedback.",
       "Published /capture-lab as the visual regression surface for all six combat actions and reduced motion.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.16.0`,
+    githubUrl: commitSource("3e81a0d535a4922ba966b5330470093cddaa1e53"),
   },
   {
     version: "0.15.0",
@@ -35,7 +51,7 @@ export const RELEASES: ReleaseNote[] = [
       "Kept one version link in the active-game header so the duplicate global label cannot overlap the board.",
       "Retired Staging from the active deployment and owner-feedback model, leaving Development and Production.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.15.0`,
+    githubUrl: commitSource("c3aec0d7087be86b80220ec4e7979f287aee4971"),
   },
   {
     version: "0.14.0",
@@ -47,7 +63,7 @@ export const RELEASES: ReleaseNote[] = [
       "Made every setup server-owned, immutable, and compatible with Riot Bot, invitations, history, replay, and deadlines.",
       "Disclosed the selected game before joining and throughout the active match without accepting arbitrary starting positions.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.14.0`,
+    githubUrl: commitSource("df5c9c1f394d9573f2339e6fb40a67b769e22276"),
   },
   {
     version: "0.13.5",
@@ -59,7 +75,7 @@ export const RELEASES: ReleaseNote[] = [
       "Added a separate short-lived feedback-management grant and an idempotent close action.",
       "Recorded privacy-safe feedback completion events with normalized routes and no feedback content.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.13.5`,
+    githubUrl: commitSource("6d8e026fed3dcfedf707ad96edf52273a797ee0c"),
   },
   {
     version: "0.13.4",
@@ -70,7 +86,7 @@ export const RELEASES: ReleaseNote[] = [
       "Replaced the native share dialog with one direct Copy invitation link action.",
       "Confirmed successful copies in place and kept the private link selectable when clipboard access is unavailable.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.13.4`,
+    githubUrl: commitSource("1f77d2fa99302f99853e7d0357f0ca9527f53a78"),
   },
   {
     version: "0.13.3",
@@ -83,7 +99,7 @@ export const RELEASES: ReleaseNote[] = [
       "Revalidated the bot reply server-side and atomically stored the human and bot plies in one database batch.",
       "Removed the second bot request and successful post-commit database reads while retaining pending-turn recovery for older or interrupted games.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.13.3`,
+    githubUrl: commitSource("e8f16b78e0f042b9829e2148b26da258cdc8d99b"),
   },
   {
     version: "0.13.2",
@@ -95,7 +111,7 @@ export const RELEASES: ReleaseNote[] = [
       "Kept every bot level’s depth, move ordering, evaluation, and tactical checkmate behavior unchanged.",
       "Added a frozen-clock regression that reproduces the hosted runtime and bounds Level 5 search.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.13.2`,
+    githubUrl: commitSource("79bb9400af60617f74a71e8d667b93bed3022fdb"),
   },
   {
     version: "0.13.1",
@@ -107,7 +123,7 @@ export const RELEASES: ReleaseNote[] = [
       "Added the same link to the App panel without interrupting the current game.",
       "Centralized the destination and opened both placements safely in a separate tab.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.13.1`,
+    githubUrl: commitSource("e0a44175cca99cbcf62e5759810ebe949dfa6938"),
   },
   {
     version: "0.13.0",
@@ -120,7 +136,7 @@ export const RELEASES: ReleaseNote[] = [
       "Delivered notifications only after a committed opponent move, with duplicate suppression, stale-endpoint cleanup, and no private seat key or player detail in the payload.",
       "Restricted push endpoints, validated notification navigation, and kept delivery best-effort so a push-service failure can never affect the chess move.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.13.0`,
+    githubUrl: commitSource("19dc71cd2035e890be23d50b8d77a0351ba1a4ad"),
   },
   {
     version: "0.12.1",
@@ -130,7 +146,7 @@ export const RELEASES: ReleaseNote[] = [
     changes: [
       "Updated rendered-page regression coverage from the retired Blockfield label to Riot.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.12.1`,
+    githubUrl: commitSource("5269d23b7124fb9203c8916a28d38f92721aff0b"),
   },
   {
     version: "0.12.0",
@@ -143,7 +159,7 @@ export const RELEASES: ReleaseNote[] = [
       "Made Riot the fresh teal-and-ivory default while preserving every existing theme as a palette choice.",
       "Replaced the tilted homepage mock board with a front-on 2D board using the same production pieces.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.12.0`,
+    githubUrl: commitSource("cbe0cac6ddfe5a844483c4fbc804640701b0fe24"),
   },
   {
     version: "0.11.1",
@@ -156,7 +172,7 @@ export const RELEASES: ReleaseNote[] = [
       "Reordered the real interface captures around the story while removing inactive Magic Rules from the narration.",
       "Versioned the storyboard contract so an outdated Control build cannot publish stale video over the current story.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.11.1`,
+    githubUrl: commitSource("5b53e624f8875efbebeed1f7f6d2122a52848204"),
   },
   {
     version: "0.11.0",
@@ -169,7 +185,7 @@ export const RELEASES: ReleaseNote[] = [
       "Separated video regeneration from application releases by publishing validated media through a versioned R2 manifest.",
       "Added a signed, owner-only, rate-limited regeneration lane for the ChessRiot Control panel.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.11.0`,
+    githubUrl: commitSource("12c7871410470d0d46e3f67216fb944da84d1563"),
   },
   {
     version: "0.10.2",
@@ -181,7 +197,7 @@ export const RELEASES: ReleaseNote[] = [
       "Centralized new-game request payloads and authenticated client request helpers.",
       "Added focused regression tests while preserving the Magic Rules Coming Soon boundary.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.10.2`,
+    githubUrl: commitSource("45d3910230a5f19a701c2731f5abb767b8c077f2"),
   },
   {
     version: "0.10.1",
@@ -193,7 +209,7 @@ export const RELEASES: ReleaseNote[] = [
       "Removed the runtime LLM compiler, its endpoint, and its token-consuming path from the stable release.",
       "Moved active Magic development to an isolated feature branch and preview lane.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.10.1`,
+    githubUrl: commitSource("31be1f32efc249b91c49d2918be831d023ad2395"),
   },
   {
     version: "0.9.3",
@@ -205,7 +221,7 @@ export const RELEASES: ReleaseNote[] = [
       "Kept Multiplayer one tap away without changing either mode's saved behavior.",
       "Added regression coverage for the default selection and the existing White-first invariant.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.9.3`,
+    githubUrl: commitSource("9e047e799a8011a829d8aa64677ea260bd2235e8"),
   },
   {
     version: "0.9.2",
@@ -216,7 +232,7 @@ export const RELEASES: ReleaseNote[] = [
       "Kept the Back arrow available at ply zero when a staged Magic position is visible.",
       "Made Back cancel that draft and reveal the authoritative starting position.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.9.2`,
+    githubUrl: commitSource("a4da6bdaf8f5e1ede38d6fbf10fab5eb259faf2a"),
   },
   {
     version: "0.9.1",
@@ -231,7 +247,7 @@ export const RELEASES: ReleaseNote[] = [
       "Restored focus safely after move confirmation, including promotion and committed-move flows.",
       "Clarified that Confirm every move is stored in the current browser.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.9.1`,
+    githubUrl: commitSource("2b7ff89b94887325c4dc673eaa79d3317ccbbf33"),
   },
   {
     version: "0.9.0",
@@ -245,7 +261,7 @@ export const RELEASES: ReleaseNote[] = [
       "Applied one confirmation to every human move path, including tap, drag, promotion, and complete atomic Magic turns.",
       "Blocked stale and duplicate confirmations before they can submit a move.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.9.0`,
+    githubUrl: commitSource("959b7339ccb4369b05f3a700fb33e66a89ca06e4"),
   },
   {
     version: "0.8.2",
@@ -259,7 +275,7 @@ export const RELEASES: ReleaseNote[] = [
       "Limited themes to active games so public, setup, invitation, changelog, loading, and error pages keep one consistent style.",
       "Removed all user-facing login prompts and kept the retired CAPTCHA path absent.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.8.2`,
+    githubUrl: commitSource("f6511bb3f3307b64c52cdf560e087615a38ab2b2"),
   },
   {
     version: "0.8.1",
@@ -271,7 +287,7 @@ export const RELEASES: ReleaseNote[] = [
       "Kept trusted hosting identity, account-bound game membership, request-origin checks, and account rate limits.",
       "Retired the old CAPTCHA endpoint and redirected existing verification entry points safely into the game.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.8.1`,
+    githubUrl: commitSource("0365892af512885ce0608ab41b012176401bad82"),
   },
   {
     version: "0.8.0",
@@ -285,7 +301,7 @@ export const RELEASES: ReleaseNote[] = [
       "Extended tap, drag, keyboard, replay, move history, labels, and Riot Bot play to two-step knights.",
       "Fixed the production request-origin blocker without relaxing cross-site protection.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.8.0`,
+    githubUrl: commitSource("a1205a473fcf467dab86663e3cc2f481096ef890"),
   },
   {
     version: "0.7.0",
@@ -299,7 +315,7 @@ export const RELEASES: ReleaseNote[] = [
       "Added no-promotion, no-castling, and no-en-passant rules with server, client, replay, and Riot Bot enforcement.",
       "Showed Magic Rules before joining, during play, in replay and move history, and on My Games cards.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.7.0`,
+    githubUrl: commitSource("360caa384478b2f26ba1555d36822b278d2fea17"),
   },
   {
     version: "0.6.0",
@@ -313,7 +329,7 @@ export const RELEASES: ReleaseNote[] = [
       "Removed the alert dependency on a legacy private-seat token or the currently open game route.",
       "Added a clear Switch Account action through the trusted ChatGPT sign-out flow.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.6.0`,
+    githubUrl: commitSource("f5c7dbbb78eeb1a0bb783bb0f162148ce5efcbb0"),
   },
   {
     version: "0.5.0",
@@ -328,7 +344,7 @@ export const RELEASES: ReleaseNote[] = [
       "Placed captured Black pieces with White and captured White pieces with Black.",
       "Added seven original illustrated theme backgrounds, including medieval army and moonlit castle styles, plus two new themes.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.5.0`,
+    githubUrl: commitSource("664812fc87b77e39ba6cccee9e6c119ebe662411"),
   },
   {
     version: "0.4.1",
@@ -341,7 +357,7 @@ export const RELEASES: ReleaseNote[] = [
       "Added clearance after the final mobile card and compacted replay controls around the board.",
       "Removed a duplicate checkmate announcement and made invalid deadline text neutral.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.4.1`,
+    githubUrl: commitSource("5a0ec848f8dc1c5517d00cf33d54946e25a4d534"),
   },
   {
     version: "0.4.0",
@@ -358,7 +374,7 @@ export const RELEASES: ReleaseNote[] = [
       "Added installable PWA support, an unseen-release dot, and opt-in open-app opponent-move notifications.",
       "Made the exact release version visible on every route and state.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.4.0`,
+    githubUrl: commitSource("04bf82c2a044dae4d4b709bdadc490fe4ee67c85"),
   },
   {
     version: "0.3.5",
@@ -370,7 +386,7 @@ export const RELEASES: ReleaseNote[] = [
       "Restored game-completion telemetry when Riot Bot delivers the final move.",
       "Kept race telemetry limited to the move that actually committed.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.3.5`,
+    githubUrl: commitSource("6f80b050bf9747625f4c3d4cfa69f905f4d9970a"),
   },
   {
     version: "0.3.4",
@@ -382,7 +398,7 @@ export const RELEASES: ReleaseNote[] = [
       "Made the human move durable and visible before Riot Bot starts its reply.",
       "Added background bot-turn recovery so refresh or browser closure cannot strand a solo game.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.3.4`,
+    githubUrl: commitSource("c704f43d6ffe79ecb1bab9a64596495995ecc2f6"),
   },
   {
     version: "0.3.3",
@@ -393,7 +409,7 @@ export const RELEASES: ReleaseNote[] = [
       "Replaced hollow White glyphs with solid light pieces so the player color cannot look inverted.",
       "Reduced the bright outline on Black pieces so they read as Black at a glance.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.3.3`,
+    githubUrl: commitSource("c0032d3567273af368364a649992847f18eda1ec"),
   },
   {
     version: "0.3.2",
@@ -403,7 +419,7 @@ export const RELEASES: ReleaseNote[] = [
     changes: [
       "Tightened the desktop height cap after real-browser visual QA so the board no longer clips at the bottom.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.3.2`,
+    githubUrl: commitSource("8e6c9a924d128a93dc2a9d93211cca749dbcd1e1"),
   },
   {
     version: "0.3.1",
@@ -417,7 +433,7 @@ export const RELEASES: ReleaseNote[] = [
       "Added New Game and confirmed End Game or Cancel Game actions.",
       "Renamed computer difficulty to bot level.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.3.1`,
+    githubUrl: commitSource("0063f7058a2c8ce1c599b6d0a81dc56168a65fa7"),
   },
   {
     version: "0.3.0",
@@ -430,7 +446,7 @@ export const RELEASES: ReleaseNote[] = [
       "Added a feedback form and an owner-only feedback pool.",
       "Added this changelog to every environment.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.3.0`,
+    githubUrl: commitSource("9d5fa7548f96994768d1986483c982423ca78a85"),
   },
   {
     version: "0.2.2",
@@ -442,7 +458,7 @@ export const RELEASES: ReleaseNote[] = [
       "Added claimable and automatic FIDE draw handling.",
       "Added privacy-safe health, action, error, and latency telemetry.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.2.2`,
+    githubUrl: commitSource("8e51d1ebece1843ed72659a76879d946a778c4ed"),
   },
   {
     version: "0.2.1",
@@ -453,7 +469,7 @@ export const RELEASES: ReleaseNote[] = [
       "Added a single SemVer source and release commands.",
       "Added build-time checks for reused or inconsistent versions.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.2.1`,
+    githubUrl: commitSource("8e51d1ebece1843ed72659a76879d946a778c4ed"),
   },
   {
     version: "0.2.0",
@@ -465,7 +481,7 @@ export const RELEASES: ReleaseNote[] = [
       "Added five difficulty levels with Medium as the default.",
       "Added mouse and touch drag-and-drop while preserving tap and keyboard input.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.2.0`,
+    githubUrl: commitSource("8e51d1ebece1843ed72659a76879d946a778c4ed"),
   },
   {
     version: "0.1.2",
@@ -477,7 +493,7 @@ export const RELEASES: ReleaseNote[] = [
       "Added explicit private-link sharing and cross-device recovery.",
       "Restyled the complete experience with an original voxel-inspired look.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.1.2`,
+    githubUrl: commitSource("8e51d1ebece1843ed72659a76879d946a778c4ed"),
   },
   {
     version: "0.1.1",
@@ -489,7 +505,7 @@ export const RELEASES: ReleaseNote[] = [
       "Added mute controls, clearer loading, and safer local storage.",
       "Improved invitation, status, and promotion interactions.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.1.1`,
+    githubUrl: commitSource("a3239b646de477e520b83b1d8ad0405638b23b89"),
   },
   {
     version: "0.1.0",
@@ -501,7 +517,7 @@ export const RELEASES: ReleaseNote[] = [
       "Added complete standard chess rules and immutable move history.",
       "Added persistent two-device play with server-authoritative state.",
     ],
-    githubUrl: `${REPOSITORY_URL}/tree/release/v0.1.0`,
+    githubUrl: commitSource("213fc7256da030f52927e1ae7206da21e31ec203"),
   },
 ];
 

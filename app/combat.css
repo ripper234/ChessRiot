@@ -250,6 +250,168 @@
   font: 900 clamp(14px, 4cqw, 34px)/1 var(--display);
 }
 
+.action-special {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.action-special::before {
+  position: absolute;
+  top: 5%;
+  right: 6%;
+  color: var(--chess-gold);
+  content: var(--combat-sigil, "✦");
+  font: 900 clamp(16px,4cqw,34px)/1 var(--display);
+  opacity: .82;
+  animation: combat-special-title var(--action-duration) ease-out both;
+}
+html[data-theme="classic"] { --combat-sigil: "♜"; }
+html[data-theme="ocean"] { --combat-sigil: "≋"; }
+html[data-theme="blockfield"] { --combat-sigil: "⚡"; }
+html[data-theme="toybox"] { --combat-sigil: "◆"; }
+html[data-theme="arena-pop"] { --combat-sigil: "★"; }
+html[data-theme="high-fantasy"] { --combat-sigil: "✧"; }
+html[data-theme="arcane-cards"] { --combat-sigil: "⌬"; }
+html[data-theme="iron-legions"] { --combat-sigil: "⚔"; }
+html[data-theme="shadow-shogun"] { --combat-sigil: "◉"; }
+html[data-theme="neon-grid"] { --combat-sigil: "⌁"; }
+html[data-theme="mono"] { --combat-sigil: "■"; }
+.action-check b {
+  padding: .18em .36em;
+  border: max(2px,.4cqw) solid var(--riot-pink);
+  color: #fff;
+  background: color-mix(in srgb, var(--riot-pink) 78%, #190913);
+  box-shadow: 0 0 1em var(--riot-pink);
+  font: 900 clamp(22px,8cqw,70px)/1 var(--display);
+  animation: combat-check-flash var(--action-duration) ease-out both;
+}
+.action-castle { grid-template-columns: 1fr 1fr; align-items: end; padding: 10%; }
+.action-castle i {
+  width: 32%;
+  aspect-ratio: 1;
+  border: max(3px,.6cqw) solid var(--theme-frame-border,var(--stone-dark));
+  background: var(--theme-frame,var(--surface));
+  animation: combat-castle-wall var(--action-duration) ease-out both;
+}
+.action-castle i:nth-child(2) { justify-self: end; animation-delay: .04s; }
+.action-castle b {
+  position: absolute;
+  bottom: 10%;
+  color: var(--chess-gold);
+  font: 900 clamp(16px,5cqw,42px)/1 var(--display);
+  animation: combat-special-title var(--action-duration) ease-out both;
+}
+.action-queen-fall b {
+  width: clamp(50px,22cqw,170px);
+  height: clamp(50px,22cqw,170px);
+  display: block;
+  color: var(--chess-gold);
+  text-shadow: 0 0 .35em var(--riot-pink);
+  animation: combat-queen-crown-fall var(--action-duration) ease-in both;
+}
+.action-queen-fall b .chess-piece-svg { width: 100%; height: 100%; }
+.action-queen-fall i {
+  position: absolute;
+  bottom: 12%;
+  color: var(--chess-gold);
+  font: 900 clamp(14px,4cqw,34px)/1 var(--display);
+  font-style: normal;
+  animation: combat-special-title var(--action-duration) ease-out both;
+}
+.action-promotion {
+  background: radial-gradient(circle, color-mix(in srgb, var(--chess-gold) 28%, transparent), transparent 58%);
+}
+.action-promotion b {
+  width: clamp(58px,24cqw,190px);
+  height: clamp(58px,24cqw,190px);
+  display: block;
+  color: var(--theme-piece-white,var(--text));
+  -webkit-text-stroke: max(1px,.18cqw) var(--theme-piece-white-stroke,var(--surface));
+  filter: drop-shadow(0 0 .24em var(--chess-gold));
+  animation: combat-promotion-rise var(--action-duration) cubic-bezier(.18,.78,.18,1) both;
+}
+.action-promotion b .chess-piece-svg { width: 100%; height: 100%; }
+.action-promotion i {
+  position: absolute;
+  bottom: 12%;
+  padding: .24em .42em;
+  color: #172515;
+  background: var(--chess-gold);
+  font: 900 clamp(14px,4cqw,34px)/1 var(--display);
+  font-style: normal;
+  animation: combat-special-title var(--action-duration) ease-out both;
+}
+.action-promotion[data-promotion="r"] b { animation-name: combat-promotion-rook; }
+.action-promotion[data-promotion="b"] b { animation-name: combat-promotion-bishop; }
+.action-promotion[data-promotion="n"] b { animation-name: combat-promotion-knight; }
+.action-fork { place-content: start center; padding-top: 8%; }
+.action-fork b {
+  padding: .28em .52em;
+  border: max(2px,.35cqw) solid var(--chess-gold);
+  color: #172515;
+  background: var(--chess-gold);
+  box-shadow: 0 0 .7em color-mix(in srgb,var(--chess-gold) 72%,transparent);
+  font: 900 clamp(18px,5cqw,44px)/1 var(--display);
+  animation: combat-fork-pop var(--action-duration) ease-out both;
+}
+.action-fork i {
+  margin-top: .5em;
+  color: var(--text);
+  font: 900 clamp(10px,2.5cqw,20px)/1 var(--mono);
+  font-style: normal;
+  animation: combat-special-title var(--action-duration) ease-out both;
+}
+
+@keyframes combat-check-flash {
+  0%, 58% { opacity: 0; transform: scale(.55); }
+  68%, 86% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.08); }
+}
+@keyframes combat-castle-wall {
+  0%, 36% { opacity: 0; transform: translateY(70%) scale(.7); }
+  58%, 86% { opacity: .9; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-5%) scale(1.04); }
+}
+@keyframes combat-queen-crown-fall {
+  0%, 52% { opacity: 0; transform: translateY(-20%) rotate(-12deg) scale(1.1); }
+  66% { opacity: 1; transform: translateY(0) rotate(8deg) scale(1); }
+  100% { opacity: 0; transform: translateY(58%) rotate(68deg) scale(.72); }
+}
+@keyframes combat-special-title {
+  0%, 60% { opacity: 0; transform: translateY(10px); }
+  72%, 90% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; }
+}
+@keyframes combat-promotion-rise {
+  0%, 48% { opacity: 0; transform: translateY(45%) scale(.35) rotate(-16deg); }
+  68%, 88% { opacity: 1; transform: translateY(0) scale(1.08) rotate(0); }
+  100% { opacity: 0; transform: translateY(-10%) scale(1); }
+}
+@keyframes combat-promotion-rook {
+  0%, 48% { opacity: 0; transform: translateY(55%) scale(.4,.2); }
+  68%, 88% { opacity: 1; transform: translateY(0) scale(1.12,.96); }
+  100% { opacity: 0; transform: scale(1); }
+}
+@keyframes combat-promotion-bishop {
+  0%, 48% { opacity: 0; transform: translate(-30%,35%) scale(.35) rotate(-28deg); }
+  68%, 88% { opacity: 1; transform: translate(0,0) scale(1.08) rotate(0); }
+  100% { opacity: 0; transform: translate(12%,-12%) scale(1); }
+}
+@keyframes combat-promotion-knight {
+  0%, 48% { opacity: 0; transform: translateY(50%) scale(.38,.22); }
+  66% { opacity: 1; transform: translateY(-12%) scale(1.15); }
+  78%, 90% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; }
+}
+@keyframes combat-fork-pop {
+  0%, 56% { opacity: 0; transform: translateY(-10px) scale(.75); }
+  68%, 88% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-4px) scale(1.02); }
+}
+
 @keyframes combat-lifetime { from, to { opacity: 1; } }
 
 @keyframes combat-glide {
@@ -389,7 +551,8 @@
 
 .board-action-animation.is-reduced .action-attacker,
 .board-action-animation.is-reduced .action-victim,
-.board-action-animation.is-reduced .action-impact {
+.board-action-animation.is-reduced .action-impact,
+.board-action-animation.is-reduced .action-special {
   display: none;
 }
 
@@ -494,7 +657,8 @@
 @media (prefers-reduced-motion: reduce) {
   .board-action-animation .action-attacker,
   .board-action-animation .action-victim,
-  .board-action-animation .action-impact {
+  .board-action-animation .action-impact,
+  .board-action-animation .action-special {
     display: none;
     animation: none !important;
   }

@@ -21,8 +21,14 @@ parallel automatic Production deployment from repository pushes.
 - Build and test one immutable source state.
 - Deploy that state automatically to Development.
 - Keep Production unchanged until the manual promotion click.
-- Promote the exact same source state, without environment-specific source
-  edits or rebuilds.
+- Build each target from the same immutable application tree and verified
+  lockfile. `.openai/hosting.json` is a target adapter: only its Site project id
+  may differ, while D1 must remain `DB` and R2 must remain `BUCKET`. The build
+  records application, lockfile, migration, portable-manifest, and target-
+  manifest SHA-256 fingerprints so the Work promotion step can prove the
+  allowed difference. Surfacing this comparison in Control remains follow-up.
+- Target-local builds may inject only the target Site id, declared bindings,
+  public configuration, and secrets. They may not edit application source.
 - Preserve each environment’s isolated data and runtime configuration.
 - Keep arbitrary-version deploys and rollbacks behind the advanced manual flow.
 
@@ -30,25 +36,24 @@ parallel automatic Production deployment from repository pushes.
 
 - Small, low-risk changes land on `main` and deploy automatically to
   Development after the full release gate.
-- Complicated or high-risk work stays on `feature/*` and receives an isolated,
-  opt-in Preview. A feature branch alone does not deploy anything.
-- A Preview can be reviewed and updated, but never promoted directly to
-  Production.
+- Complicated or high-risk work stays on `feature/*` and receives an isolated
+  local Sites preview. A feature branch alone does not deploy anything.
+- A local preview can be reviewed and updated, but never promoted directly to
+  Production. Hosted feature previews remain deferred until the release tool
+  has a separate prerelease channel (backlog CR-012).
 - Merging the reviewed branch creates a normal stable release on `main`, which
   is then verified independently in Development.
 
-## Preview environment invariants
+## Preview invariants
 
-- Each Preview has isolated runtime configuration and data. It receives no
-  Production secrets and sends no release announcements.
-- Preview builds display a visible `PREVIEW` label, branch, prerelease version,
-  and exact commit.
-- Control keeps previews collapsed under `Feature Previews (N)` and shows only
-  active previews unless history is requested.
-- Preview health starts at `— / Checking…` and is populated only by a fresh
-  check.
-- Closing a Preview removes its runtime resources while retaining a small audit
-  record.
+- Local previews are non-deploying review surfaces identified by their
+  `terminal.local` URL and checkout. They use disposable local D1/R2 state, no
+  Production secrets, and no release announcements.
+- The package version remains the last stable release until the reviewed branch
+  is prepared for merge. The stable version is bumped before the final release
+  gate and Development deployment.
+- Do not use a public Sites checkpoint as a feature preview until the repository
+  can label prerelease builds and Control can distinguish them from releases.
 
 ## Control-panel behavior
 

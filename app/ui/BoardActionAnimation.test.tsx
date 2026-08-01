@@ -25,6 +25,7 @@ function effect(attacker: PieceSymbol, capture = true): BoardEffect {
     victim: capture
       ? { color: "b", type: "r", square: attacker === "n" ? "d3" : "d4" }
       : null,
+    special: { castle: false, check: false, queenCapture: false, promotion: null, greatMove: null },
   };
 }
 
@@ -48,10 +49,11 @@ describe("BoardActionAnimation", () => {
     },
   );
 
-  it("uses short, non-blocking durations and a reduced-motion fallback", () => {
+  it("uses one-second non-blocking captures and a reduced-motion fallback", () => {
     expect(boardActionDuration(effect("p"))).toBe(CAPTURE_ACTION_MS);
     expect(boardActionDuration(effect("p", false))).toBe(MOVE_ACTION_MS);
     expect(boardActionDuration(effect("n"), true)).toBe(REDUCED_ACTION_MS);
+    expect(CAPTURE_ACTION_MS).toBe(1_000);
 
     const html = renderToStaticMarkup(
       <BoardActionAnimation

@@ -22,6 +22,7 @@ import { ensureSchema, getDatabase } from "@/db";
 import type { Color } from "@/lib/game-types";
 import type { AiDifficulty } from "@/lib/game-types";
 import { recordEvent } from "@/lib/observability";
+import { applicationOrigin } from "@/lib/runtime";
 import { enforceAccountRateLimit, resolveGuestApiAccount } from "@/lib/accounts";
 import {
   compileMagicPrompt,
@@ -89,7 +90,10 @@ export async function POST(request: Request) {
     : null;
   let magicPrompt: string | null = null;
   let magicRules: CompiledMagicRules | null = null;
-  if (body.magicPrompt !== undefined && body.magicPrompt !== null && body.magicPrompt !== "") {
+  const requestedMagic = body.magicPrompt !== undefined
+    && body.magicPrompt !== null
+    && body.magicPrompt !== "";
+  if (requestedMagic) {
     if (variantId !== "standard") {
       return apiError(
         422,
@@ -97,14 +101,8 @@ export async function POST(request: Request) {
         "Mini Games use their own fixed setup and cannot add Magic Rules",
       );
     }
-    const magic = compileMagicPrompt(body.magicPrompt);
-    if (!magic.ok) {
-      return apiError(422, "magic_rule_unsupported", magic.message);
-    }
-    magicPrompt = magic.prompt;
-    magicRules = magic.compiled;
   }
-  const magicRulesJson = serializeMagicRules(magicRules);
+  let magicRulesJson = serializeMagicRules(magicRules);
   const turnPaceMatches = (value: number | null) =>
     value === turnPaceDays
     || (mode === "multiplayer" && body.turnPaceDays === undefined && value === null);
@@ -131,6 +129,22 @@ export async function POST(request: Request) {
   await ensureSchema();
   const [playerHash, inviteHash] = await Promise.all([hashSecret(playerToken), hashSecret(inviteToken)]);
   const existing = await findGameByCreateRequest(requestId);
+  if (requestedMagic) {
+    if (!existing) {
+      return apiError(
+        422,
+        "magic_rules_unavailable",
+        "Magic Rules are coming soon and cannot create stable games yet",
+      );
+    }
+    const magic = compileMagicPrompt(body.magicPrompt);
+    if (!magic.ok) {
+      return apiError(409, "idempotency_conflict", "This request id was already used");
+    }
+    magicPrompt = magic.prompt;
+    magicRules = magic.compiled;
+    magicRulesJson = serializeMagicRules(magicRules);
+  }
   if (existing) {
     const existingColor = await accountPlayerColor(existing, account.id, playerHash);
     if (
@@ -152,7 +166,7 @@ export async function POST(request: Request) {
     return json({
       game,
       ...(mode === "multiplayer"
-        ? { inviteUrl: `${new URL(request.url).origin}/join/${inviteToken}` }
+        ? { inviteUrl: `${applicationOrigin(request)}/join/${inviteToken}` }
         : {}),
     });
   }
@@ -288,7 +302,7 @@ export async function POST(request: Request) {
     return json({
       game: snapshot(raced, await readMoves(raced.id), raced.human_color),
       ...(mode === "multiplayer"
-        ? { inviteUrl: `${new URL(request.url).origin}/join/${inviteToken}` }
+        ? { inviteUrl: `${applicationOrigin(request)}/join/${inviteToken}` }
         : {}),
     });
   }
@@ -316,7 +330,7 @@ export async function POST(request: Request) {
     {
       game: snapshot(created, await readMoves(created.id), created.human_color),
       ...(mode === "multiplayer"
-        ? { inviteUrl: `${new URL(request.url).origin}/join/${inviteToken}` }
+        ? { inviteUrl: `${applicationOrigin(request)}/join/${inviteToken}` }
         : {}),
     },
     { status: 201 },

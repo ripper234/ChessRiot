@@ -36,6 +36,9 @@ test("renders an identity-independent public homepage and guest play route", asy
     context,
   );
   assert.equal(signedOutResponse.status, 200);
+  assert.equal(signedOutResponse.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(signedOutResponse.headers.get("referrer-policy"), "no-referrer");
+  assert.equal(signedOutResponse.headers.get("strict-transport-security"), null);
   const signedOutHtml = await signedOutResponse.text();
   assert.match(signedOutHtml, /REAL CHESS/);
   assert.match(signedOutHtml, /TOTAL PLAY/);
@@ -59,6 +62,18 @@ test("renders an identity-independent public homepage and guest play route", asy
   );
   assert.equal(signedInResponse.status, 200);
   assert.equal(await signedInResponse.text(), signedOutHtml);
+
+  const secureResponse = await worker.fetch(
+    new Request("https://chessriot.gg/", { headers: { accept: "text/html" } }),
+    renderEnv(),
+    context,
+  );
+  assert.equal(secureResponse.status, 200);
+  assert.equal(secureResponse.headers.get("strict-transport-security"), "max-age=86400");
+  assert.doesNotMatch(
+    secureResponse.headers.get("strict-transport-security") ?? "",
+    /includeSubDomains/i,
+  );
 
   const appHostResponse = await worker.fetch(
     new Request("http://app.localhost/", {
@@ -93,9 +108,10 @@ test("renders an identity-independent public homepage and guest play route", asy
   assert.match(html, /WHAT&#x27;S NEW|WHAT'S NEW/);
   assert.doesNotMatch(html, /SIGN IN|Playing as|SWITCH ACCOUNT/i);
   assert.match(html, new RegExp(`v${packageJson.version.replaceAll(".", "\\.")}`));
-  assert.doesNotMatch(html, /aria-label="Choose visual theme"/);
-  assert.match(html, /App updates/);
+  assert.match(html, /Open ChessRiot menu/);
+  assert.match(html, /skin/i);
   assert.match(html, /manifest\.webmanifest/);
+  assert.doesNotMatch(html, /https:\/\/chessriot\.gg\/(?:manifest|icons)\//);
   assert.match(
     html,
     /<input(?=[^>]*name="game-mode")(?=[^>]*value="solo")(?=[^>]*checked)[^>]*>/,
@@ -136,9 +152,9 @@ test("renders an identity-independent public homepage and guest play route", asy
   assert.equal(gameResponse.status, 200);
   const gameHtml = await gameResponse.text();
   assert.match(gameHtml, /<html(?![^>]*data-theme)[^>]*>/i);
-  assert.match(gameHtml, /aria-label="Choose visual theme"/);
-  assert.match(gameHtml, /Classic/);
-  assert.match(gameHtml, /Riot/);
+  assert.match(gameHtml, /Open ChessRiot menu/);
+  assert.match(gameHtml, /Appearance and skin/);
+  assert.doesNotMatch(gameHtml, /name="menu-theme"/);
   assert.doesNotMatch(gameHtml, /class="global-version"/);
   assert.doesNotMatch(gameHtml, /LOCKING MOVE/);
   assert.match(
@@ -181,7 +197,7 @@ test("renders the production capture lab and keeps combat non-blocking", async (
   }
 });
 
-test("keeps one mobile-visible game version and no locking label", () => {
+test("keeps the version inside the unified menu and no locking label", () => {
   const gameRoomSource = readFileSync(
     new URL("../app/ui/GameRoom.tsx", import.meta.url),
     "utf8",
@@ -194,14 +210,30 @@ test("keeps one mobile-visible game version and no locking label", () => {
     new URL("../app/globals.css", import.meta.url),
     "utf8",
   );
-
-  assert.match(gameRoomSource, /className="home-link game-version"/);
-  assert.doesNotMatch(gameRoomSource, /LOCKING MOVE/);
-  assert.match(routeChromeSource, /!activeGame \? <Link className="global-version"/);
-  assert.match(
-    globalStyles,
-    /\.game-topbar \.home-link:not\(\.game-version\) \{ display: none; \}/,
+  const healthSource = readFileSync(
+    new URL("../app/api/health/route.ts", import.meta.url),
+    "utf8",
   );
+
+  assert.doesNotMatch(gameRoomSource, /game-version/);
+  assert.doesNotMatch(gameRoomSource, /LOCKING MOVE/);
+  assert.match(
+    gameRoomSource,
+    /surrenderDialog\.current\?\.close\(\);[\s\S]*setSurrendering\(true\)/,
+  );
+  assert.match(gameRoomSource, /aria-controls="coach-risk-explanation"/);
+  assert.match(gameRoomSource, /const surrenderKeepPlaying = useRef<HTMLButtonElement \| null>\(null\)/);
+  assert.match(
+    gameRoomSource,
+    /dialog\.showModal\(\);\s*surrenderKeepPlaying\.current\?\.focus\(\)/,
+  );
+  assert.match(gameRoomSource, /ref=\{surrenderKeepPlaying\}/);
+  assert.doesNotMatch(routeChromeSource, /global-version/);
+  assert.match(routeChromeSource, /<AppUpdates/);
+  assert.match(globalStyles, /surrender-confirm/);
+  assert.match(globalStyles, /\.privacy-shell > \.topbar/);
+  assert.doesNotMatch(globalStyles, /\.move-confirm-card > div/);
+  assert.doesNotMatch(healthSource, /ensureSchema/);
 });
 
 test("renders the narrated 90-second demo page", async () => {
@@ -228,6 +260,33 @@ test("renders the narrated 90-second demo page", async () => {
   assert.doesNotMatch(html, /Magic Rules/);
   assert.match(html, /The narration voice is synthetic/);
   assert.doesNotMatch(html, /INTERPRET RULES|COMPILE RULES/);
+});
+
+test("publishes crawler policy and a working favicon route", async () => {
+  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
+  workerUrl.searchParams.set("test", `public-metadata-${process.pid}-${Date.now()}`);
+  const { default: worker } = await import(workerUrl.href);
+  const context = { waitUntil() {}, passThroughOnException() {} };
+
+  const robots = await worker.fetch(
+    new Request("http://localhost/robots.txt"),
+    renderEnv(),
+    context,
+  );
+  assert.equal(robots.status, 200);
+  const policy = await robots.text();
+  assert.match(policy, /Disallow: \/api\//);
+  assert.match(policy, /Disallow: \/g\//);
+  assert.match(policy, /Disallow: \/verify/);
+  assert.match(policy, /Sitemap: https:\/\/chessriot\.gg\/sitemap\.xml/);
+
+  const favicon = await worker.fetch(
+    new Request("http://localhost/favicon.ico", { redirect: "manual" }),
+    renderEnv(),
+    context,
+  );
+  assert.equal(favicon.status, 308);
+  assert.equal(new URL(favicon.headers.get("location")).pathname, "/icons/chessriot-192.png");
 });
 
 test("retires the old verification and human-check routes", async () => {
@@ -268,12 +327,16 @@ test("renders the newest-first public changelog", async () => {
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /WHAT.*NEW/);
-  const currentVersionIndex = html.indexOf(`v${packageJson.version}`);
+  const normalizedHtml = html.replaceAll("<!-- -->", "");
+  const currentVersionIndex = normalizedHtml.indexOf(`v${packageJson.version}`);
   assert.ok(currentVersionIndex >= 0);
-  assert.ok(currentVersionIndex < html.indexOf("v0.3.5"));
-  assert.ok(html.indexOf("v0.3.5") < html.indexOf("v0.3.4"));
-  assert.ok(html.indexOf("v0.3.3") < html.indexOf("v0.3.2"));
-  assert.ok(html.indexOf("v0.3.2") < html.indexOf("v0.3.1"));
-  assert.ok(html.indexOf("v0.3.1") < html.indexOf("v0.3.0"));
+  for (const version of ["v0.3.5", "v0.3.4", "v0.3.3", "v0.3.2", "v0.3.1"]) {
+    assert.ok(normalizedHtml.indexOf(version) >= 0);
+  }
+  assert.ok(currentVersionIndex < normalizedHtml.indexOf("v0.3.5"));
+  assert.ok(normalizedHtml.indexOf("v0.3.5") < normalizedHtml.indexOf("v0.3.4"));
+  assert.ok(normalizedHtml.indexOf("v0.3.3") < normalizedHtml.indexOf("v0.3.2"));
+  assert.ok(normalizedHtml.indexOf("v0.3.2") < normalizedHtml.indexOf("v0.3.1"));
+  assert.ok(normalizedHtml.indexOf("v0.3.1") < normalizedHtml.indexOf("v0.3.0"));
   assert.match(html, /github\.com\/ripper234\/ChessRiot/);
 });

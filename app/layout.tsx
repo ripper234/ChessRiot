@@ -20,7 +20,6 @@ export const metadata: Metadata = {
     ],
     apple: "/icons/chessriot-192.png",
   },
-  other: { "codex-preview": "development" },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -29,8 +28,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <head><script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }} /></head>
       <body>
         <ClientTelemetry />
-        {children}
         <RouteChrome />
+        {children}
       </body>
     </html>
   );

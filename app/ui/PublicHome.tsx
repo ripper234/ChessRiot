@@ -1,18 +1,7 @@
 import Link from "next/link";
-import type { PieceSymbol } from "chess.js";
 import { WHATSAPP_COMMUNITY_URL } from "@/lib/external-links";
-import type { Color } from "@/lib/game-types";
+import { AnimatedPublicBoard } from "./AnimatedPublicBoard";
 import { Brand } from "./Brand";
-import { ChessPiece } from "./ChessPiece";
-
-const BACK_RANK: PieceSymbol[] = ["r", "n", "b", "q", "k", "b", "n", "r"];
-const PUBLIC_POSITION: Array<{ type: PieceSymbol; color: Color } | null> = [
-  ...BACK_RANK.map((type) => ({ type, color: "b" as const })),
-  ...Array.from({ length: 8 }, () => ({ type: "p" as const, color: "b" as const })),
-  ...Array.from({ length: 32 }, () => null),
-  ...Array.from({ length: 8 }, () => ({ type: "p" as const, color: "w" as const })),
-  ...BACK_RANK.map((type) => ({ type, color: "w" as const })),
-];
 
 export function PublicHome() {
   return (
@@ -21,7 +10,7 @@ export function PublicHome() {
         <Brand />
         <nav className="public-nav" aria-label="ChessRiot">
           <Link className="public-nav-link" href="/demo">90-SEC DEMO</Link>
-          <Link className="public-nav-link" href="/changelog">WHAT&apos;S NEW</Link>
+          <Link className="public-nav-link" href="/privacy">PRIVACY</Link>
         </nav>
       </header>
       <section className="public-hero">
@@ -53,14 +42,8 @@ export function PublicHome() {
             <li>Magic Rules coming soon</li>
           </ul>
         </div>
-        <div className="public-board-card" aria-hidden="true">
-          <div className="public-board">
-            {PUBLIC_POSITION.map((piece, index) => (
-              <span key={index}>
-                {piece ? <ChessPiece type={piece.type} color={piece.color} /> : null}
-              </span>
-            ))}
-          </div>
+        <div className="public-board-card">
+          <AnimatedPublicBoard />
           <p>STANDARD CHESS <span>+</span> OPTIONAL CHAOS</p>
         </div>
       </section>

@@ -36,7 +36,7 @@ const SEARCH_NODE_BUDGET: Record<Exclude<AiDifficulty, 1>, number> = {
   2: 64,
   3: 768,
   4: 1_100,
-  5: 1_800,
+  5: 1_200,
 };
 
 export function seededComputerRandom(seed: string): () => number {
@@ -65,13 +65,11 @@ function terminalScore(
       ? -100_000 + plyFromRoot
       : 100_000 - plyFromRoot;
   }
-  if (chess.isGameOver()) return 0;
+  if (chess.isDraw()) return 0;
   return null;
 }
 
 function evaluate(chess: Chess, computerColor: Color): number {
-  const terminal = terminalScore(chess, computerColor, 0);
-  if (terminal !== null) return terminal;
   let score = 0;
   for (const row of chess.board()) {
     for (const piece of row) {
@@ -194,6 +192,13 @@ export function chooseComputerMove(
       random,
       true,
     );
+  }
+
+  // Checkmating SAN is already produced by chess.js and ordered first. Avoid
+  // spending the full search budget after a forced one-ply win is known.
+  const immediateMate = moves.find((move) => move.san.includes("#"));
+  if (immediateMate) {
+    return asComputerMove(immediateMate, fen, rules, random, false);
   }
 
   const depth = difficulty === 2 ? 1 : difficulty === 3 ? 2 : difficulty === 4 ? 3 : 4;

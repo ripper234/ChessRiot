@@ -4,13 +4,14 @@ import type { BoardEffect } from "@/lib/game-effects";
 import { ChessPiece } from "./ChessPiece";
 
 export const MOVE_ACTION_MS = 220;
-export const CAPTURE_ACTION_MS = 560;
+export const CAPTURE_ACTION_MS = 1_000;
 export const REDUCED_ACTION_MS = 120;
 
 interface BoardActionAnimationProps {
   effect: BoardEffect;
   squares: Square[];
   reducedMotion?: boolean;
+  tacticalCelebrations?: boolean;
   onComplete?: () => void;
 }
 
@@ -33,15 +34,26 @@ function victimReaction(type: PieceSymbol, dx: number, dy: number): [number, num
   }
 }
 
-export function boardActionDuration(effect: BoardEffect, reducedMotion = false): number {
+export function boardActionDuration(
+  effect: BoardEffect,
+  reducedMotion = false,
+  tacticalCelebrations = true,
+): number {
   if (reducedMotion) return REDUCED_ACTION_MS;
-  return effect.capture ? CAPTURE_ACTION_MS : MOVE_ACTION_MS;
+  const celebrated = effect.capture
+    || effect.special.castle
+    || effect.special.check
+    || effect.special.queenCapture
+    || Boolean(effect.special.promotion)
+    || Boolean(effect.special.greatMove && tacticalCelebrations);
+  return celebrated ? CAPTURE_ACTION_MS : MOVE_ACTION_MS;
 }
 
 function actionStyle(
   effect: BoardEffect,
   squares: Square[],
   reducedMotion: boolean,
+  tacticalCelebrations: boolean,
 ): CSSProperties {
   const from = squareCoordinates(squares, effect.from);
   const to = squareCoordinates(squares, effect.to);
@@ -71,16 +83,23 @@ function actionStyle(
     "--victim-kick-x": `${kickX}%`,
     "--victim-kick-y": `${kickY}%`,
     "--victim-spin": `${victimSpin}deg`,
-    "--action-duration": `${boardActionDuration(effect, reducedMotion)}ms`,
+    "--action-duration": `${boardActionDuration(effect, reducedMotion, tacticalCelebrations)}ms`,
   } as CSSProperties;
 }
 
 const CHIP_ANGLES = [-78, -42, -8, 28, 66, 104, 146, 184];
+const PROMOTION_CELEBRATION = {
+  q: "QUEEN RISES",
+  r: "ROOK RISES",
+  b: "BISHOP RISES",
+  n: "KNIGHT RISES",
+} as const;
 
 export function BoardActionAnimation({
   effect,
   squares,
   reducedMotion = false,
+  tacticalCelebrations = true,
   onComplete,
 }: BoardActionAnimationProps) {
   if (!effect.attacker) return null;
@@ -91,7 +110,7 @@ export function BoardActionAnimation({
       data-attacker={effect.attacker.type}
       data-effect-id={effect.id}
       data-victim={effect.victim?.type ?? undefined}
-      style={actionStyle(effect, squares, reducedMotion)}
+      style={actionStyle(effect, squares, reducedMotion, tacticalCelebrations)}
       aria-hidden="true"
       onAnimationEnd={(event) => {
         if (event.currentTarget === event.target) onComplete?.();
@@ -123,6 +142,28 @@ export function BoardActionAnimation({
               style={{ "--chip-angle": `${angle}deg` } as CSSProperties}
             />
           ))}
+        </span>
+      ) : null}
+
+      {effect.special.castle ? (
+        <span className="action-special action-castle"><i /><i /><b>CASTLE</b></span>
+      ) : null}
+      {effect.special.check ? (
+        <span className="action-special action-check"><b>CHECK!</b></span>
+      ) : null}
+      {effect.special.queenCapture ? (
+        <span className="action-special action-queen-fall"><b><ChessPiece type="q" color={effect.victim?.color ?? "b"} /></b><i>QUEEN DOWN</i></span>
+      ) : null}
+      {effect.special.promotion ? (
+        <span className="action-special action-promotion" data-promotion={effect.special.promotion}>
+          <b><ChessPiece type={effect.special.promotion} color={effect.attacker.color} /></b>
+          <i>{PROMOTION_CELEBRATION[effect.special.promotion]}</i>
+        </span>
+      ) : null}
+      {effect.special.greatMove && tacticalCelebrations ? (
+        <span className="action-special action-fork" data-kind={effect.special.greatMove.kind}>
+          <b>✦ {effect.special.greatMove.label} ✦</b>
+          <i>{effect.special.greatMove.kind === "fork" ? "DOUBLE ATTACK" : "MATERIAL WON"}</i>
         </span>
       ) : null}
 

@@ -8,24 +8,13 @@ import {
 } from "@/lib/form-validation";
 import { RequiredTextInput } from "./RequiredTextInput";
 
-export function FeedbackButton() {
-  const dialog = useRef<HTMLDialogElement>(null);
+export function FeedbackForm() {
   const [title, setTitle] = useState("");
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [titleError, setTitleError] = useState("");
   const titleInput = useRef<HTMLInputElement>(null);
-
-  function open() {
-    setMessage("");
-    setTitleError("");
-    dialog.current?.showModal();
-  }
-
-  function close() {
-    if (!busy) dialog.current?.close();
-  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -67,24 +56,7 @@ export function FeedbackButton() {
   }
 
   return (
-    <>
-      <button className="feedback-launcher" type="button" onClick={open}>
-        FEEDBACK
-      </button>
-      <dialog
-        className="feedback-dialog"
-        ref={dialog}
-        aria-labelledby="feedback-title"
-        onClick={(event) => {
-          if (event.target === dialog.current) close();
-        }}
-        onCancel={(event) => {
-          if (busy) event.preventDefault();
-        }}
-      >
-        <form onSubmit={submit} noValidate>
-          <span className="card-kicker">HELP SHAPE CHESSRIOT</span>
-          <h2 id="feedback-title">Send feedback</h2>
+        <form className="feedback-inline-form" onSubmit={submit} noValidate>
           <RequiredTextInput
             ref={titleInput}
             id="feedback-summary"
@@ -92,7 +64,6 @@ export function FeedbackButton() {
             value={title}
             error={titleError}
             maxLength={120}
-            autoFocus
             placeholder="What should change?"
             disabled={busy}
             onChange={(event) => {
@@ -113,9 +84,8 @@ export function FeedbackButton() {
           />
           {message ? <p className="feedback-message" role="status">{message}</p> : null}
           <div className="feedback-actions">
-            <button type="button" className="feedback-cancel" onClick={close} disabled={busy}>CLOSE</button>
             <button className="primary-button" type="submit" disabled={busy}>
-              {busy ? "SENDING…" : "SUBMIT"}
+              {busy ? "SENDING…" : "SEND FEEDBACK"}
             </button>
           </div>
           <a
@@ -127,7 +97,5 @@ export function FeedbackButton() {
             Advanced: view issues or send a pull request on GitHub ↗
           </a>
         </form>
-      </dialog>
-    </>
   );
 }

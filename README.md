@@ -1,113 +1,89 @@
 # ChessRiot
 
-Play the current game at [chessriot.ripper234.chatgpt.site](https://chessriot.ripper234.chatgpt.site).
-**[View the official ChessRiot release history](https://chessriot.ripper234.chatgpt.site/changelog).**
-[Join for updates on WhatsApp](https://chat.whatsapp.com/FaBgiUgl73vLdeqzcqx0vX).
+Play at [chessriot.gg](https://chessriot.gg), read the
+[release history](https://chessriot.gg/changelog), or
+[join the WhatsApp community](https://chat.whatsapp.com/FaBgiUgl73vLdeqzcqx0vX).
 
-ChessRiot v0.16.0 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
+ChessRiot v0.17.0 is a mobile-first chess game for solo play against Riot Bot
+or asynchronous play with someone you know. Guest play never requires an
+account, CAPTCHA, or email address.
 
-Found something confusing or have a cool rule request? Use **Feedback** inside
-the game or [open a GitHub issue](https://github.com/ripper234/ChessRiot/issues).
-
-See the durable [product backlog](BACKLOG.md) for shipped foundations, blocked
-progression work, and features that still need explicit rule design.
+Use **Send feedback** in the unified Settings menu or
+[open a GitHub issue](https://github.com/ripper234/ChessRiot/issues). See
+[BACKLOG.md](BACKLOG.md) for deferred work and unresolved product decisions.
 
 ## What works
 
-- Open `/app`, enter a display name, and start in Solo mode by default. Switch
-  to Multiplayer whenever you want to challenge someone you know.
-- Use an identity-independent public homepage at `/`; saved game themes and
-  hosting login state cannot change it.
-- Open `/demo` from the public homepage for a narrated, captioned 90-second
-  story about Ron and Omri keeping one private match alive across a real day.
-- Play Riot Bot at one of five levels, starting at Level 3, Medium, as either
-  color. White always moves first; if the bot is White, it opens automatically.
-  The same depth and evaluation run behind a deterministic node cap, keeping
-  even Level 5 responsive on the hosted edge.
-- Create a multiplayer game with one, three, or five days per move, then copy one private invitation link. Missing the deadline loses the game.
-- Resume recent games on the same device or use a private seat link on another
-  device.
-- Play complete standard chess with server-authoritative legal move validation.
-- Open the game menu and choose Pawn Riot, Half Army, or Pawn Duel for a
-  smaller starting army with the same authoritative chess rules. Every Mini
-  Game works in Solo and Multiplayer.
-- Open the Mating Set for Solo practice as White with King + Pawn, King + Rook,
-  or King + Two Bishops against Riot Bot's lone king. Normal checkmate and draw
-  rules remain authoritative.
-- See the Magic Rules concept in new-game setup. New rule entry is paused behind
-  a Coming Soon placeholder while the runtime feature develops in an isolated
-  preview branch.
-- Persist the board, player names, result, and immutable move history in Cloudflare D1.
-- Protect each seat with a private 256-bit bearer secret while preserving
-  existing account memberships and older private links.
-- Detect check, checkmate, stalemate, castling, en passant, all four promotions, insufficient material, claimable threefold/50-move draws, and automatic fivefold/75-move draws.
-- Choose from 11 original visual themes during a game, including six original illustrated backgrounds and the flat Riot default, with optional synthesized move, capture, check, and game-ending sounds.
-- Drag and drop crisp original 2D vector pieces with mouse or touch, while tap,
-  click, and keyboard input still work. Your legal move appears immediately in
-  Solo and Multiplayer while the server validates it. Every piece now has a
-  distinct, non-blocking capture action; `/capture-lab` replays all six.
-- See explicit White and Black player cards, captured pieces, a highlighted checked king, and check-specific move guidance.
-- Step backward and forward through committed positions directly on the live
-  board, or open the full read-only, keyboard-accessible replay viewer.
-- Optionally enable Confirm every move in the current browser before any human
-  move is sent.
-- See a short checkmate finisher using the actual winning piece, with reduced-motion support.
-- End an active game by resignation, cancel a waiting game, or start a separate new game without deleting history.
-- Start from one compact new-game screen at `/app`.
-- Open a newest-first public changelog from the home screen or any active game.
-- Join the ChessRiot WhatsApp community from the public homepage or App panel
-  without leaving the current game.
-- Send a titled feedback item without leaving the current flow; each environment
-  stores its own owner-review pool with an exact unresolved count and a scoped,
-  idempotent owner action for marking an item done.
-- Missing required names or feedback titles produce a red inline explanation
-  and move focus to the exact field instead of making the action appear broken.
-- Send one-tap preset cheers during two-player games, plus Good Game or Thanks for 15 minutes after play, without opening unrestricted chat.
-- Install the online game as a desktop-style PWA and see a subtle dot for
-  unseen releases.
-- Opt one browser into a generic notification for a specific multiplayer game
-  when an opponent hands you the turn, even after ChessRiot is closed.
-- See one exact release version throughout the game app without covering the
-  board.
-- Inspect privacy-safe, isolated health, activity, and unresolved feedback for
-  Development and Production in the owner control panel.
+- Start Solo or Multiplayer chess from `/app`, choose one of five Riot Bot
+  levels, and use Standard, three Mini Game, or three Solo Mating Set positions.
+- Play complete server-authoritative chess with private seat links, durable D1
+  state, immutable move history, deadlines, draw claims, promotion, castling,
+  en passant, resignation, cancellation, and optimistic rendering.
+- Choose one of 11 original skins before or during play. The skin changes the
+  public shell, setup, menus, board, pieces, music, and visual effects before
+  the game starts and stays synchronized across browser tabs.
+- Use one Settings menu for appearance, separate music and sound-effect
+  toggles, master volume, play assistance, notifications, surrender, feedback,
+  install, privacy, community, and the unobtrusive version readout.
+- Hear low-key skin-specific music and distinct sounds for movement, capture,
+  check, castling, queen loss, promotion, and results. Reduced-motion and mute
+  preferences are respected.
+- See a roughly one-second, piece-specific capture sequence, a white-flag
+  resignation finish, promotion effects, and small fork celebrations without
+  delaying or blocking legal play.
+- Keep the current position visible in a compact history row or expand the side
+  panel for the complete move table. Captures carry a sword marker, and all
+  captured pieces remain visible in their own side panel.
+- Keep the default-on local Chess Coach enabled for obvious one-move material
+  losses. It asks before submission and hides its short explanation until the
+  player requests it. It does not use an LLM or alter chess legality.
+- Send safe preset reactions, enable per-game closed-app turn notifications,
+  install the PWA, and review the public changelog and privacy policy.
+- Keep legacy stored Magic games playable while new Magic entry remains
+  unavailable. Unsupported new Magic requests fail closed at the API boundary.
+- Inspect isolated Development and Production health, activity, and feedback in
+  the owner-only Control site.
 
 ## Current limits
 
-No new Magic Rules, arbitrary executable rule prompts, AI coach, email
+No new Magic Rules, arbitrary executable rule prompts, LLM chess coach, email
 notifications, free-form chat, friend graph, matchmaking, ratings, rewards,
-collectible skins, or payments. Cross-device account history, Google sign-in,
-and Telegram release
-announcements remain disabled until their external credentials are configured
-and the corresponding code is explicitly enabled. Guest-scoped throttles
-protect application resources, while volumetric denial-of-service protection
-remains the hosting edge’s responsibility.
+account-bound cosmetic ownership, payments, or credit-priced Undo. Google
+sign-in, cross-device account history, and multi-account switching remain
+disabled until the OAuth implementation and external configuration are ready.
 
-## Versioning
+## Versioning and deployment
 
-ChessRiot uses SemVer. Every changed deployment gets a new, higher version and the build rejects an unchanged or inconsistent release number. Patch releases are the default; `0.y.0` marks a coherent new user capability. Version `1.0.0` means two people can create, join, securely resume, receive turn notifications, and finish asynchronous games without developer help.
+ChessRiot uses SemVer. Every changed deployment must have a new, higher version;
+`npm run build` rejects reused or inconsistent versions. Use
+`npm run release:patch`, `npm run release:minor`, or `npm run release:major`.
 
-Prepare releases with `npm run release:patch`, `npm run release:minor`, or
-`npm run release:major`. The version is updated in one place and displayed in
-the app interface.
+- Development receives each reviewed release after the complete gate passes.
+- Production changes only after the owner explicitly promotes the approved
+  Development release in Control.
+- GitHub is canonical. A release is tied to an immutable commit and release
+  branch or tag.
+- Development and Production build the same immutable Git tree with
+  target-local bindings. Data, secrets, and hostnames remain isolated.
 
-## Deployment policy
-
-- Every changed release goes to Development automatically.
-- Development → Production requires the owner’s explicit Control-panel click.
-- Pushes, merges, tests, successful builds, agents, and schedules never promote
-  Production.
-- A promotion reuses the exact tested source state. It never rebuilds different
-  source for the target environment.
+See [docs/DEPLOYMENT_POLICY.md](docs/DEPLOYMENT_POLICY.md),
+[docs/OPERATIONS.md](docs/OPERATIONS.md), and [SECURITY.md](SECURITY.md).
 
 ## Stack
 
-Vinext/React, Cloudflare Workers, D1 and R2, TypeScript, and chess.js.
+Vinext/React, Cloudflare Workers, D1, R2, TypeScript, and chess.js.
 
-## Checks
+## Local verification
 
-- `npm run lint`
-- `npm run typecheck`
-- `npm test`
-- `npm run build`
-- `npm run test:e2e`
+```bash
+npm ci
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
+
+`npm run build` is the release gate: lint, typecheck, unit tests, the production
+artifact build and validation, rendered-output tests, and the Miniflare
+end-to-end suite. CI runs the same gate, audits production dependencies, and
+retains a CycloneDX SBOM. Contributor setup is in [CONTRIBUTING.md](CONTRIBUTING.md).

@@ -15,6 +15,12 @@ import {
   moveBoardEffects,
   type BoardEffect,
 } from "@/lib/game-effects";
+import {
+  analyzeMoveRisk,
+  readChessCoachPreference,
+  readTacticalCelebrationsPreference,
+  type CoachWarning,
+} from "@/lib/chess-coach";
 import { apiErrorMessage, requestHeaders } from "@/lib/client-http";
 import {
   generateUuid,
@@ -26,11 +32,13 @@ import {
   rememberGame,
 } from "@/lib/client-storage";
 import {
-  classifyGameSound,
+  AUDIO_PREFERENCES_EVENT,
+  classifyGameSounds,
   playGameSound,
+  playGameSounds,
   readSoundPreference,
   unlockGameSounds,
-  writeSoundPreference,
+  type AudioPreferences,
 } from "@/lib/game-sounds";
 import { copyInvitationLink } from "@/lib/invitation-copy";
 import {
@@ -73,21 +81,21 @@ import {
   moveIntentStillValid,
   readMoveConfirmationPreference,
   type MoveIntent,
-  writeMoveConfirmationPreference,
 } from "@/lib/move-confirmation";
 import type { DrawClaim, GameSnapshot, Promotion } from "@/lib/game-types";
 import { gameVariant } from "@/lib/game-variants";
-import { APP_VERSION } from "@/lib/version";
 import {
   boardActionDuration,
   BoardActionAnimation,
 } from "./BoardActionAnimation";
 import { Brand } from "./Brand";
+import { CapturedPiecesPanel } from "./CapturedPiecesPanel";
 import { ChessPiece } from "./ChessPiece";
 import { CheckmateFinisher } from "./CheckmateFinisher";
 import { HistoryControls } from "./HistoryControls";
+import { MoveHistoryPanel } from "./MoveHistoryPanel";
 import { ReactionPanel } from "./ReactionPanel";
-import { ReplayViewer } from "./ReplayViewer";
+import { ResignationFinisher } from "./ResignationFinisher";
 import { TurnDeadline } from "./TurnDeadline";
 
 const CONNECTION_MESSAGE = "Connection interrupted. We’ll keep trying.";
@@ -134,9 +142,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [reducedMotion, setReducedMotion] = useState(false);
   const [historyPly, setHistoryPly] = useState<HistoryCursor>(null);
   const [confirmEveryMove, setConfirmEveryMove] = useState(false);
+  const [chessCoachOn, setChessCoachOn] = useState(true);
+  const [tacticalCelebrationsOn, setTacticalCelebrationsOn] = useState(true);
   const [pendingMove, setPendingMove] = useState<MoveIntent | null>(null);
+  const [coachWarning, setCoachWarning] = useState<CoachWarning | null>(null);
+  const [coachExplanationOpen, setCoachExplanationOpen] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [ending, setEnding] = useState(false);
+  const [surrendering, setSurrendering] = useState(false);
   const [reactions, setReactions] = useState<PublicReaction[]>([]);
   const [reactionQueue, setReactionQueue] = useState<PublicReaction[]>([]);
   const [reactionBurst, setReactionBurst] = useState<PublicReaction | null>(null);
@@ -158,6 +171,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const finisherTimer = useRef<number | null>(null);
   const reactionTrigger = useRef<HTMLButtonElement | null>(null);
   const moveConfirmDialog = useRef<HTMLDialogElement | null>(null);
+  const surrenderDialog = useRef<HTMLDialogElement | null>(null);
+  const surrenderKeepPlaying = useRef<HTMLButtonElement | null>(null);
   const moveConfirmReturnFocus = useRef<HTMLElement | null>(null);
   const moveConfirmFallback = useRef<HTMLDivElement | null>(null);
   const moveCommitInFlight = useRef(false);
@@ -166,10 +181,46 @@ export function GameRoom({ gameId }: { gameId: string }) {
     ? effectQueue.filter((effect) => effect.ply === activeEffect.ply).at(-1)?.to
       ?? activeEffect.to
     : null;
+  const celebrateActiveEffect = Boolean(
+    tacticalCelebrationsOn
+    && activeEffect?.attacker?.color === game?.you.color,
+  );
   const postGameReactionsOpen = Boolean(
     game?.status === "completed"
     && postGameReactionWindowOpen(game.updatedAt),
   );
+
+  useEffect(() => {
+    if (!game) return;
+    window.dispatchEvent(new CustomEvent("chessriot:game-menu-state", {
+      detail: { status: game.status },
+    }));
+    return () => {
+      window.dispatchEvent(new CustomEvent("chessriot:game-menu-state", { detail: null }));
+    };
+  }, [game]);
+
+  useEffect(() => {
+    const syncAudio = (event: Event) => {
+      setSoundOn((event as CustomEvent<AudioPreferences>).detail.effectsOn);
+    };
+    const surrenderFromMenu = () => setConfirmEnd(true);
+    const syncCoach = (event: Event) => setChessCoachOn(Boolean((event as CustomEvent<boolean>).detail));
+    const syncCelebrations = (event: Event) => setTacticalCelebrationsOn(Boolean((event as CustomEvent<boolean>).detail));
+    const syncMoveConfirmation = (event: Event) => setConfirmEveryMove(Boolean((event as CustomEvent<boolean>).detail));
+    window.addEventListener(AUDIO_PREFERENCES_EVENT, syncAudio);
+    window.addEventListener("chessriot:surrender", surrenderFromMenu);
+    window.addEventListener("chessriot:coach-preference", syncCoach);
+    window.addEventListener("chessriot:celebrations-preference", syncCelebrations);
+    window.addEventListener("chessriot:move-confirmation-preference", syncMoveConfirmation);
+    return () => {
+      window.removeEventListener(AUDIO_PREFERENCES_EVENT, syncAudio);
+      window.removeEventListener("chessriot:surrender", surrenderFromMenu);
+      window.removeEventListener("chessriot:coach-preference", syncCoach);
+      window.removeEventListener("chessriot:celebrations-preference", syncCelebrations);
+      window.removeEventListener("chessriot:move-confirmation-preference", syncMoveConfirmation);
+    };
+  }, []);
 
   const acceptGame = useCallback((nextGame: GameSnapshot) => {
     if (!shouldAcceptGameSnapshot(latestVersion.current, nextGame.version)) return false;
@@ -362,6 +413,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
     }
     setSoundOn(readSoundPreference());
     setConfirmEveryMove(readMoveConfirmationPreference());
+    setChessCoachOn(readChessCoachPreference());
+    setTacticalCelebrationsOn(readTacticalCelebrationsPreference());
     void loadGame();
     const reloadSeat = () => void loadGame();
     window.addEventListener("hashchange", reloadSeat);
@@ -427,25 +480,25 @@ export function GameRoom({ gameId }: { gameId: string }) {
     if (optimisticGame) return;
     const previous = previousGame.current;
     previousGame.current = game;
-    const markerKey = `chessriot:sound:last-ply:${gameId}`;
+    const markerKey = `chessriot:sound:last-version:${gameId}`;
     if (!previous) {
       try {
-        sessionStorage.setItem(markerKey, String(game.plyCount));
+        sessionStorage.setItem(markerKey, String(game.version));
       } catch {
         // The in-memory previous snapshot still prevents replay in this view.
       }
       return;
     }
-    const sound = classifyGameSound(previous, game);
-    if (!sound || !soundOn) return;
+    const sounds = classifyGameSounds(previous, game);
+    if (!sounds.length || !soundOn) return;
     try {
-      const lastPlayedPly = Number(sessionStorage.getItem(markerKey) ?? "-1");
-      if (lastPlayedPly >= game.plyCount) return;
-      sessionStorage.setItem(markerKey, String(game.plyCount));
+      const lastPlayedVersion = Number(sessionStorage.getItem(markerKey) ?? "-1");
+      if (lastPlayedVersion >= game.version) return;
+      sessionStorage.setItem(markerKey, String(game.version));
     } catch {
       // Continue with in-memory deduplication when session storage is blocked.
     }
-    playGameSound(sound);
+    playGameSounds(sounds);
   }, [game, gameId, optimisticGame, soundOn]);
 
   useEffect(() => {
@@ -498,12 +551,12 @@ export function GameRoom({ gameId }: { gameId: string }) {
     effectTimer.current = window.setTimeout(() => {
       effectTimer.current = null;
       finishBoardEffect(activeEffect.id);
-    }, boardActionDuration(activeEffect, reducedMotion) + 120);
+    }, boardActionDuration(activeEffect, reducedMotion, celebrateActiveEffect) + 120);
     return () => {
       if (effectTimer.current !== null) window.clearTimeout(effectTimer.current);
       effectTimer.current = null;
     };
-  }, [activeEffect, finishBoardEffect, reducedMotion]);
+  }, [activeEffect, celebrateActiveEffect, finishBoardEffect, reducedMotion]);
 
   useEffect(() => {
     const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -591,6 +644,17 @@ export function GameRoom({ gameId }: { gameId: string }) {
       dialog.close();
     }
   }, [pendingMove]);
+
+  useEffect(() => {
+    const dialog = surrenderDialog.current;
+    if (!dialog) return;
+    if (confirmEnd && !dialog.open) {
+      dialog.showModal();
+      surrenderKeepPlaying.current?.focus();
+    } else if (!confirmEnd && dialog.open) {
+      dialog.close();
+    }
+  }, [confirmEnd]);
 
   useEffect(() => {
     if (!promotionMove) return;
@@ -714,7 +778,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
       expectedVersion: game.version,
       piece,
     };
-    if (!confirmEveryMove) {
+    const warning = chessCoachOn ? analyzeMoveRisk(game.fen, intent) : null;
+    if (!confirmEveryMove && !warning) {
       void commitMove(intent);
       return;
     }
@@ -722,12 +787,16 @@ export function GameRoom({ gameId }: { gameId: string }) {
       ? document.activeElement
       : null;
     setPromotionMove(null);
+    setCoachWarning(warning);
+    setCoachExplanationOpen(false);
     setPendingMove(intent);
   }
 
   function closeMoveConfirmation(): void {
     if (moveConfirmDialog.current?.open) moveConfirmDialog.current.close();
     setPendingMove(null);
+    setCoachWarning(null);
+    setCoachExplanationOpen(false);
   }
 
   function cancelMoveConfirmation(): void {
@@ -1098,10 +1167,6 @@ export function GameRoom({ gameId }: { gameId: string }) {
     showHistory(nextHistoryCursor(historyPly, latestHistoryPly));
   }
 
-  function returnToLive(): void {
-    showHistory(null);
-  }
-
   async function copyInvite() {
     if (!inviteUrl) return;
     const markCopied = () => {
@@ -1113,18 +1178,6 @@ export function GameRoom({ gameId }: { gameId: string }) {
       return;
     }
     setMessage("Clipboard access is unavailable. Select and copy the invitation link below.");
-  }
-
-  async function toggleSound() {
-    const next = !soundOn;
-    setSoundOn(next);
-    writeSoundPreference(next);
-    if (next && await unlockGameSounds()) playGameSound("move");
-  }
-
-  function toggleMoveConfirmation(enabled: boolean): void {
-    setConfirmEveryMove(enabled);
-    writeMoveConfirmationPreference(enabled);
   }
 
   async function sendReaction(key: ReactionKey) {
@@ -1177,6 +1230,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     setEnding(true);
     setBusy(true);
     setMessage("");
+    let finisherStartedAt: number | null = null;
     try {
       const response = await fetch(`/api/games/${gameId}/end`, {
         method: "POST",
@@ -1190,14 +1244,30 @@ export function GameRoom({ gameId }: { gameId: string }) {
         game?: GameSnapshot;
         error?: { message?: string };
       };
-      if (data.game) acceptGame(data.game);
-      if (!response.ok) setMessage(apiErrorMessage(data, "Could not end the game"));
+      if (!response.ok || !data.game) {
+        setMessage(apiErrorMessage(data, "Could not end the game"));
+        return;
+      }
+      // Remove the modal/top-layer backdrop before mounting the board finisher.
+      surrenderDialog.current?.close();
+      setConfirmEnd(false);
+      if (game.status === "active") {
+        finisherStartedAt = Date.now();
+        setSurrendering(true);
+      }
+      acceptGame(data.game);
     } catch {
       setMessage("Could not end the game. Refreshing the board…");
       await loadGame(latestVersion.current);
     } finally {
+      if (finisherStartedAt !== null) {
+        const minimum = reducedMotion ? 120 : 1_000;
+        const remaining = Math.max(0, minimum - (Date.now() - finisherStartedAt));
+        if (remaining) await new Promise((resolve) => window.setTimeout(resolve, remaining));
+      }
       setBusy(false);
       setEnding(false);
+      setSurrendering(false);
       setConfirmEnd(false);
     }
   }
@@ -1252,21 +1322,41 @@ export function GameRoom({ gameId }: { gameId: string }) {
     <main className="game-shell">
       <header className="topbar game-topbar">
         <Brand />
-        <div className="topbar-actions">
-          <button
-            className="sound-toggle"
-            type="button"
-            aria-pressed={soundOn}
-            aria-label={soundOn ? "Mute game sounds" : "Turn on game sounds"}
-            onClick={() => void toggleSound()}
-          >
-            <span aria-hidden="true">{soundOn ? "◖))" : "◖×"}</span>
-            <b>{soundOn ? "SOUND ON" : "MUTED"}</b>
-          </button>
-          <Link href="/app" className="home-link">NEW GAME</Link>
-          <Link href="/changelog" className="home-link game-version">v{APP_VERSION}</Link>
-        </div>
       </header>
+      <dialog
+        className="surrender-confirm-backdrop"
+        ref={surrenderDialog}
+        aria-labelledby="surrender-title"
+        aria-describedby="surrender-description"
+        onCancel={(event) => {
+          if (busy) event.preventDefault();
+          else setConfirmEnd(false);
+        }}
+        onClose={() => setConfirmEnd(false)}
+        onClick={(event) => {
+          if (event.target === event.currentTarget && !busy) setConfirmEnd(false);
+        }}
+      >
+          <section className="surrender-confirm">
+            <span aria-hidden="true">⚑</span>
+            <h2 id="surrender-title">{game.status === "waiting" ? "Cancel game?" : "Surrender?"}</h2>
+            <p id="surrender-description">{game.status === "waiting"
+              ? "The invitation will stop working."
+              : "Your king will raise the white flag and your opponent wins."}</p>
+            <button className="danger-button" type="button" disabled={busy} onClick={() => void endGame()}>
+              {busy ? "ENDING…" : game.status === "waiting" ? "CANCEL GAME" : "RAISE WHITE FLAG"}
+            </button>
+            <button
+              className="quiet-button"
+              type="button"
+              ref={surrenderKeepPlaying}
+              disabled={busy}
+              onClick={() => setConfirmEnd(false)}
+            >
+              KEEP PLAYING
+            </button>
+          </section>
+      </dialog>
       <section className="game-layout">
         <div className="board-column">
           <div className="match-banner">
@@ -1277,14 +1367,6 @@ export function GameRoom({ gameId }: { gameId: string }) {
               <div>
                 <small>WHITE{game.you.color === "w" ? " • YOU" : ""}</small>
                 <strong>{game.players.white.name}</strong>
-                <span className="captured-by">
-                  <small>CAPTURED</small>
-                  <b>{lostPieces.b.length ? lostPieces.b.map((piece, index) => (
-                    <i key={`white-captured-${piece}-${index}`} aria-label={`black ${CHESS_PIECE_NAMES[piece]}`}>
-                      <ChessPiece type={piece} color="b" />
-                    </i>
-                  )) : "—"}</b>
-                </span>
               </div>
               <span className="status-lamp" data-active={game.status === "active" && game.turn === "w" ? "true" : "false"} />
               {!reactionsHidden && reactionBurst?.senderColor === "w" && burstPreset ? (
@@ -1301,14 +1383,6 @@ export function GameRoom({ gameId }: { gameId: string }) {
               <div>
                 <small>BLACK{game.you.color === "b" ? " • YOU" : ""}</small>
                 <strong>{game.players.black?.name ?? "Waiting…"}</strong>
-                <span className="captured-by">
-                  <small>CAPTURED</small>
-                  <b>{lostPieces.w.length ? lostPieces.w.map((piece, index) => (
-                    <i key={`black-captured-${piece}-${index}`} aria-label={`white ${CHESS_PIECE_NAMES[piece]}`}>
-                      <ChessPiece type={piece} color="w" />
-                    </i>
-                  )) : "—"}</b>
-                </span>
               </div>
               <span className="status-lamp" data-active={game.status === "active" && game.turn === "b" ? "true" : "false"} />
               {!reactionsHidden && reactionBurst?.senderColor === "b" && burstPreset ? (
@@ -1337,13 +1411,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
             {!viewingHistory && (ending || openingIntro || botThinking) ? <b>{ending ? "ENDING GAME…" : openingIntro ? "WHITE OPENING…" : "RIOT BOT THINKING…"}</b> : null}
             <HistoryControls
               currentPly={visibleHistoryPly}
-              latestPly={latestHistoryPly}
               viewingHistory={viewingHistory}
               unavailable={history.error}
               canStepBackFromDraft={Boolean(magicDraft)}
               onBack={stepHistoryBack}
               onForward={stepHistoryForward}
-              onLive={returnToLive}
             />
           </div>
           {game.variantId !== "standard" ? (
@@ -1426,6 +1498,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
             data-interactive={canMove ? "true" : "false"}
             data-history={viewingHistory ? "true" : "false"}
           >
+            {surrendering && !viewingHistory
+              ? <ResignationFinisher color={game.you.color} />
+              : null}
             {finisher && !viewingHistory && !activeEffect
               ? <CheckmateFinisher finisher={finisher} />
               : null}
@@ -1494,6 +1569,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                   effect={activeEffect}
                   squares={squares}
                   reducedMotion={reducedMotion}
+                  tacticalCelebrations={celebrateActiveEffect}
                   onComplete={() => finishBoardEffect(activeEffect.id)}
                 />
               ) : null}
@@ -1512,6 +1588,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 <p className="form-error">The invitation link is no longer stored on this device.</p>}
             </section>
           ) : null}
+          <CapturedPiecesPanel
+            whiteCaptured={lostPieces.w}
+            blackCaptured={lostPieces.b}
+          />
           {reactionsAvailable ? (
             <ReactionPanel
               playerColor={game.you.color}
@@ -1529,90 +1609,20 @@ export function GameRoom({ gameId }: { gameId: string }) {
               onSend={(key) => void sendReaction(key)}
             />
           ) : null}
-          <details className="game-tools">
-            <summary>
-              <span>MORE</span>
-              <b>Settings, actions, replay and move log</b>
-            </summary>
-            <div className="game-tools-content">
-              <section className="side-card move-settings-card">
-                <h2>MOVE SETTINGS</h2>
-                <label className="move-confirm-setting">
-                  <input
-                    type="checkbox"
-                    checked={confirmEveryMove}
-                    onChange={(event) => toggleMoveConfirmation(event.currentTarget.checked)}
-                  />
-                  <span>
-                    <strong>CONFIRM EVERY MOVE</strong>
-                    <small>Ask “Are you sure?” before a move is sent. Stored in this browser.</small>
-                  </span>
-                  <b>{confirmEveryMove ? "ON" : "OFF"}</b>
-                </label>
-              </section>
-              <section className="side-card actions-card">
-                <h2>GAME ACTIONS</h2>
-                <Link className="secondary-button" href="/app">NEW GAME</Link>
-                {game.status !== "completed" ? (
-                  confirmEnd ? (
-                    <div className="end-confirm" role="alert">
-                      <p>{game.status === "waiting"
-                        ? "Cancel this game? The invitation will stop working."
-                        : "End this game? This counts as a resignation and your opponent wins."}</p>
-                      <button className="danger-button" type="button" disabled={busy} onClick={() => void endGame()}>
-                        {busy ? "ENDING…" : "CONFIRM END"}
-                      </button>
-                      <button className="quiet-button" type="button" disabled={busy} onClick={() => setConfirmEnd(false)}>
-                        KEEP PLAYING
-                      </button>
-                    </div>
-                  ) : (
-                    <button className="quiet-button" type="button" onClick={() => setConfirmEnd(true)}>
-                      {game.status === "waiting" ? "CANCEL GAME" : "END GAME"}
-                    </button>
-                  )
-                ) : null}
-              </section>
-              <ReplayViewer
-                moves={serverGame?.moves ?? game.moves}
-                initialFen={serverGame?.initialFen ?? game.initialFen}
-                orientation={game.you.color}
-                magicRules={game.magicRules ?? null}
-              />
-              <section className="side-card moves-card">
-                <div className="side-heading"><h2>MOVE LOG</h2><span>{game.plyCount} PLY</span></div>
-                {game.moves.length === 0 ? <p className="empty-moves">No moves yet. White opens the riot.</p> : (
-                  <ol className="move-list">
-                    {Array.from({ length: Math.ceil(game.moves.length / 2) }, (_, index) => (
-                      <li key={index}><span>{index + 1}.</span><b>
-                        {game.moves[index * 2]
-                          ? `${game.moves[index * 2].san}${game.moves[index * 2].second
-                            ? ` → ${game.moves[index * 2].second!.san}`
-                            : ""}`
-                          : ""}
-                      </b><b>
-                        {game.moves[index * 2 + 1]
-                          ? `${game.moves[index * 2 + 1].san}${game.moves[index * 2 + 1].second
-                            ? ` → ${game.moves[index * 2 + 1].second!.san}`
-                            : ""}`
-                          : ""}
-                      </b></li>
-                    ))}
-                  </ol>
-                )}
-              </section>
-              <section className="side-card rules-card"><span aria-hidden="true">i</span><div><strong>GAME INFO</strong><small>
-                {game.magicRules
-                  ? `Magic chess • ${game.magicRules.labels.join(" • ")} • `
-                  : `${variant.name} • ${game.variantId === "standard" ? "Standard setup" : "Mini Game"} • `}
-                {game.mode === "solo" && game.aiDifficulty
-                  ? `Riot Bot level ${game.aiDifficulty} • ${DIFFICULTY_LABELS[game.aiDifficulty]}`
-                  : `${game.turnPaceDays
-                    ? `${game.turnPaceDays} ${game.turnPaceDays === 1 ? "day" : "days"} per move`
-                    : "No turn deadline"} • Drag or tap • Every move saved`}
-              </small></div></section>
-            </div>
-          </details>
+          <MoveHistoryPanel
+            moves={game.moves}
+            currentPly={visibleHistoryPly}
+          />
+          <section className="side-card rules-card"><span aria-hidden="true">i</span><div><strong>GAME INFO</strong><small>
+            {game.magicRules
+              ? `Magic chess • ${game.magicRules.labels.join(" • ")} • `
+              : `${variant.name} • ${game.variantId === "standard" ? "Standard setup" : "Mini Game"} • `}
+            {game.mode === "solo" && game.aiDifficulty
+              ? `Riot Bot level ${game.aiDifficulty} • ${DIFFICULTY_LABELS[game.aiDifficulty]}`
+              : `${game.turnPaceDays
+                ? `${game.turnPaceDays} ${game.turnPaceDays === 1 ? "day" : "days"} per move`
+                : "No turn deadline"} • Drag or tap • Every move saved`}
+          </small></div></section>
         </aside>
       </section>
 
@@ -1672,12 +1682,27 @@ export function GameRoom({ gameId }: { gameId: string }) {
         }}
       >
         <div className="move-confirm-card">
-          <small>MOVE CONFIRMATION</small>
+          <small>{coachWarning ? "CHESS COACH" : "MOVE CONFIRMATION"}</small>
           <h2 id="move-confirm-title">ARE YOU SURE?</h2>
           <p id="move-confirm-description">
             {pendingMove ? describeMoveIntent(pendingMove) : "Confirm this move?"}
           </p>
-          <div>
+          {coachWarning ? (
+            <div className="coach-warning">
+              <button
+                type="button"
+                aria-expanded={coachExplanationOpen}
+                aria-controls="coach-risk-explanation"
+                onClick={() => setCoachExplanationOpen((current) => !current)}
+              >
+                {coachExplanationOpen ? "HIDE EXPLANATION" : "WHY IS THIS RISKY?"}
+              </button>
+              {coachExplanationOpen ? (
+                <p id="coach-risk-explanation" role="status">{coachWarning.explanation}</p>
+              ) : null}
+            </div>
+          ) : null}
+          <div className="move-confirm-actions">
             <button
               className="quiet-button"
               type="button"

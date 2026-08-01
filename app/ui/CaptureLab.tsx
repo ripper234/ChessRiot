@@ -1,7 +1,6 @@
 "use client";
 
 import { type PieceSymbol, type Square } from "chess.js";
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { BoardEffect } from "@/lib/game-effects";
 import {
@@ -52,6 +51,7 @@ export function CaptureLab() {
     afterFen: "",
     attacker: { color: "w", type: piece },
     victim: { color: "b", type: setup.victim, square: setup.to },
+    special: { castle: false, check: false, queenCapture: setup.victim === "q", promotion: null, greatMove: null },
   }), [piece, run, setup]);
 
   useEffect(() => {
@@ -76,7 +76,6 @@ export function CaptureLab() {
     <main className="capture-lab-shell">
       <header className="topbar capture-lab-topbar">
         <Brand />
-        <Link className="home-link" href="/app">PLAY A REAL GAME</Link>
       </header>
 
       <section className="capture-lab-layout">

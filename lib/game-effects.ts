@@ -1,4 +1,5 @@
 import { Chess, type PieceSymbol, type Square } from "chess.js";
+import { analyzeGreatMove, type GreatMoveInsight } from "./chess-coach";
 import type { Color, GameSnapshot, Promotion, PublicMove } from "./game-types";
 
 export interface EffectPiece {
@@ -21,6 +22,13 @@ export interface BoardEffect {
   afterFen: string;
   attacker: EffectPiece | null;
   victim: CapturedEffectPiece | null;
+  special: {
+    castle: boolean;
+    check: boolean;
+    queenCapture: boolean;
+    promotion: Promotion | null;
+    greatMove: GreatMoveInsight | null;
+  };
 }
 
 function forceSameTurn(fen: string, color: Color): string {
@@ -59,7 +67,7 @@ function applyEffectLeg(
       square: capturedSquare(from, to, move.isEnPassant()),
     }
     : null;
-
+  const san = leg === "second" ? stored.second?.san ?? stored.san : stored.san;
   return {
     id: `${stored.ply}:${leg}:${from}-${to}`,
     ply: stored.ply,
@@ -73,6 +81,13 @@ function applyEffectLeg(
       ? { color: attacker.color as Color, type: attacker.type }
       : null,
     victim,
+    special: {
+      castle: san.startsWith("O-O"),
+      check: san.includes("+") || san.includes("#"),
+      queenCapture: victim?.type === "q",
+      promotion: stored.promotion ?? null,
+      greatMove: null,
+    },
   };
 }
 
@@ -82,6 +97,7 @@ export function moveBoardEffects(
 ): BoardEffect[] {
   try {
     const chess = new Chess(stored.fenBefore ?? fallbackFen);
+    const startingFen = chess.fen();
     const effects = [
       applyEffectLeg(
         chess,
@@ -105,7 +121,20 @@ export function moveBoardEffects(
     }
 
     const finalEffect = effects.at(-1);
-    if (finalEffect && stored.fenAfter) finalEffect.afterFen = stored.fenAfter;
+    if (finalEffect) {
+      if (stored.fenAfter) finalEffect.afterFen = stored.fenAfter;
+      finalEffect.special.greatMove = analyzeGreatMove(startingFen, {
+        from: stored.from as Square,
+        to: stored.to as Square,
+        ...(stored.promotion ? { promotion: stored.promotion } : {}),
+        ...(stored.second ? { second: {
+          from: stored.second.from as Square,
+          to: stored.second.to as Square,
+        } } : {}),
+        expectedVersion: 0,
+        piece: finalEffect.attacker?.type ?? null,
+      });
+    }
     return effects;
   } catch {
     // Combat is presentation-only. Old or malformed history must never block
@@ -126,5 +155,7 @@ export function boardEffects(
     effects.push(...moveEffects);
     fallbackFen = move.fenAfter ?? moveEffects.at(-1)?.afterFen ?? fallbackFen;
   }
+  const finalEffect = effects.at(-1);
+  if (finalEffect && next.check) finalEffect.special.check = true;
   return effects;
 }

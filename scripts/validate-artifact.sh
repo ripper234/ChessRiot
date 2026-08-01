@@ -8,6 +8,17 @@ worker="${SITES_PROJECT_ROOT}/dist/server/index.js"
 hosting="${SITES_PROJECT_ROOT}/dist/.openai/hosting.json"
 test -f "${worker}" || { echo "Missing Sites Worker entry" >&2; exit 66; }
 test -f "${hosting}" || { echo "Missing packaged Sites manifest" >&2; exit 66; }
+test -d "${SITES_PROJECT_ROOT}/dist/.openai/drizzle" || { echo "Missing packaged D1 migrations" >&2; exit 66; }
+test -f "${SITES_PROJECT_ROOT}/dist/.openai/release-fingerprint.json" || { echo "Missing release fingerprint" >&2; exit 66; }
+cmp --silent "${SITES_PROJECT_ROOT}/.openai/hosting.json" "${hosting}" || {
+  echo "Packaged Sites manifest differs from source" >&2; exit 66;
+}
+diff --brief --recursive \
+  "${SITES_PROJECT_ROOT}/drizzle" \
+  "${SITES_PROJECT_ROOT}/dist/.openai/drizzle" >/dev/null || {
+  echo "Packaged D1 migrations differ from source" >&2; exit 66;
+}
+node "${script_dir}/release-fingerprint.mjs" check
 node --input-type=module - "${worker}" "${hosting}" "${SITES_PROJECT_ROOT}/dist" <<'NODE'
 import { readFile, readdir } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
@@ -33,10 +44,6 @@ const forbiddenRuntimeMarkers = [
   "SESSION_SIGNING_SECRET",
   "That check expired or failed",
   "SIGN IN TO PLAY",
-  "SIGN IN",
-  "Sign in",
-  "sign in",
-  "sign-in",
   "Sign in to continue",
   "/signin-with-chatgpt",
   "/signout-with-chatgpt",

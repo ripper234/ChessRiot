@@ -2,24 +2,20 @@
 
 interface HistoryControlsProps {
   currentPly: number;
-  latestPly: number;
   viewingHistory: boolean;
   unavailable?: boolean;
   canStepBackFromDraft?: boolean;
   onBack(): void;
   onForward(): void;
-  onLive(): void;
 }
 
 export function HistoryControls({
   currentPly,
-  latestPly,
   viewingHistory,
   unavailable = false,
   canStepBackFromDraft = false,
   onBack,
   onForward,
-  onLive,
 }: HistoryControlsProps) {
   return (
     <div className="history-controls" role="group" aria-label="Move history">
@@ -31,21 +27,6 @@ export function HistoryControls({
         onClick={onBack}
       >
         <span aria-hidden="true">←</span>
-      </button>
-      <button
-        type="button"
-        className="history-live"
-        aria-label={viewingHistory
-          ? `Return to live position, move ${currentPly} of ${latestPly}`
-          : "Live position"}
-        disabled={!viewingHistory}
-        onClick={onLive}
-      >
-        {unavailable
-          ? "HISTORY OFF"
-          : viewingHistory
-            ? "GO LIVE"
-            : "LIVE"}
       </button>
       <button
         type="button"

@@ -3,6 +3,7 @@ import { isGameVariantId } from "./game-variants";
 import { isUuid } from "./validation";
 import { APP_VERSION } from "./version";
 import { appEnvironment, observabilityHashSecret } from "./runtime";
+import { readJson } from "./http";
 
 export type EventOutcome = "success" | "rejected" | "failure";
 
@@ -35,6 +36,7 @@ function boundedMetadata(
 export async function hashOpaque(value: string | null | undefined): Promise<string | null> {
   if (!value) return null;
   const secret = observabilityHashSecret();
+  if (!secret && !["local", "test"].includes(appEnvironment())) return null;
   const digest = secret
     ? await crypto.subtle.sign(
       "HMAC",
@@ -108,7 +110,17 @@ export async function recordEvent(input: ObservabilityEvent): Promise<void> {
 
     console.log(JSON.stringify({
       type: "chessriot_event",
-      ...record,
+      occurredAt: record.occurredAt,
+      environment: record.environment,
+      appVersion: record.appVersion,
+      event: record.event,
+      outcome: record.outcome,
+      route: record.route,
+      method: record.method,
+      statusCode: record.statusCode,
+      errorCode: record.errorCode,
+      latencyMs: record.latencyMs,
+      metadataJson: record.metadataJson,
     }));
   } catch (error) {
     console.error(JSON.stringify({
@@ -209,7 +221,7 @@ async function requestDetails(request: Request): Promise<RequestDetails> {
     return details;
   }
   try {
-    const body: unknown = await request.json();
+    const body: unknown = await readJson(request);
     if (!body || typeof body !== "object" || Array.isArray(body)) return details;
     const payload = body as Record<string, unknown>;
     if (isUuid(payload.requestId)) details.requestId = payload.requestId;

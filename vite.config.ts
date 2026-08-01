@@ -1,7 +1,8 @@
 import vinext from "vinext";
 import { defineConfig } from "vite";
-import hostingConfig from "./.openai/hosting.json";
-import { sites } from "./build/sites-vite-plugin";
+import hostingConfig from "./.openai/hosting.json" with { type: "json" };
+import runtimeConfig from "./.openai/runtime.json" with { type: "json" };
+import { sites } from "./build/sites-vite-plugin.ts";
 
 const PLACEHOLDER_DATABASE_ID = "00000000-0000-4000-8000-000000000000";
 const { d1, r2 } = hostingConfig;
@@ -26,6 +27,7 @@ export default defineConfig(async () => {
         inspectorPort: false,
         config: {
           main: "./worker/index.ts",
+          compatibility_date: runtimeConfig.cloudflareCompatibilityDate,
           compatibility_flags: ["nodejs_compat"],
           d1_databases: d1
             ? [{ binding: d1, database_name: "chessriot", database_id: PLACEHOLDER_DATABASE_ID }]

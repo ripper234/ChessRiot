@@ -75,6 +75,7 @@ describe("boardEffects", () => {
       capture: false,
       attacker: { color: "b", type: "p" },
       victim: null,
+      special: { castle: false, check: false, queenCapture: false, promotion: null, greatMove: null },
     });
     expect(effects[1]).toMatchObject({
       id: "3:first:e4-d5",
@@ -83,6 +84,7 @@ describe("boardEffects", () => {
       capture: true,
       attacker: { color: "w", type: "p" },
       victim: { color: "b", type: "p", square: "d5" },
+      special: { castle: false, check: false, queenCapture: false, promotion: null, greatMove: null },
     });
   });
 
@@ -161,6 +163,23 @@ describe("boardEffects", () => {
       { id: "1:first:a1-a3", victim: { color: "b", type: "p", square: "a3" } },
       { id: "1:second:a3-a5", victim: { color: "b", type: "p", square: "a5" } },
     ]);
+  });
+
+  it("uses the second leg SAN for second-leg special effects", () => {
+    const fenBefore = "7k/8/8/p7/8/p7/8/R6K w - - 0 1";
+    const effects = moveBoardEffects({
+      ply: 1,
+      color: "w",
+      from: "a1",
+      to: "a3",
+      promotion: null,
+      san: "Rxa3",
+      second: { from: "a3", to: "a5", san: "Rxa5+" },
+      fenBefore,
+      createdAt: "2026-07-24T00:00:00.000Z",
+    }, fenBefore);
+
+    expect(effects.map((effect) => effect.special.check)).toEqual([false, true]);
   });
 
   it("skips presentation safely when stored history cannot be reconstructed", () => {
