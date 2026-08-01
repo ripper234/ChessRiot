@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { APP_VERSION } from "@/lib/version";
 import { RELEASES, SOURCE_URL } from "@/lib/changelog";
 import { Brand } from "../ui/Brand";
@@ -8,7 +7,6 @@ export default function ChangelogPage() {
     <main className="changelog-shell">
       <header className="topbar">
         <Brand />
-        <Link className="home-link" href="/app">PLAY</Link>
       </header>
       <section className="changelog-page">
         <div className="changelog-heading">

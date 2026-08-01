@@ -34,7 +34,6 @@ import {
   gameVariant,
   type GameVariantId,
 } from "@/lib/game-variants";
-import { APP_VERSION } from "@/lib/version";
 import { Brand } from "./Brand";
 import { ChessPiece } from "./ChessPiece";
 import { GameVariantPicker } from "./GameVariantPicker";
@@ -133,7 +132,6 @@ export function CreateGame() {
     <main className="home-shell">
       <header className="topbar">
         <Brand />
-        <Link className="home-link" href="/changelog">WHAT&apos;S NEW</Link>
       </header>
       <section className="start-stage">
         <form className="voxel-card create-card" onSubmit={createGame} noValidate>
@@ -301,7 +299,7 @@ export function CreateGame() {
         </section>
       ) : null}
       <footer>
-        CHESSRIOT v{APP_VERSION} <span>•</span> <Link href="/changelog">CHANGELOG</Link>
+        CHESSRIOT <span>•</span> <Link href="/changelog">CHANGELOG</Link>
         <span>•</span> <a href="https://github.com/ripper234/ChessRiot" target="_blank" rel="noopener noreferrer">GITHUB</a>
       </footer>
     </main>

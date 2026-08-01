@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded in part by [ADR 0004](0004-sites-workers-d1-r2.md)
 
 ## Context
 

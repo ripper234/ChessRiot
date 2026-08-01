@@ -2,26 +2,33 @@
 
 ## Backlog chat cards
 
-| ID | Feature | Status in v0.13.0 |
+| ID | Feature | Current status |
 |---|---|---|
-| CR-001 | Always-visible exact version | Shipped throughout the game app with a changelog link. The fixed public homepage intentionally omits runtime chrome. |
+| CR-001 | Always-visible exact version | Shipped unobtrusively inside the unified Settings menu. |
 | CR-002 | In-app feedback and GitHub contribution path | Shipped with isolated per-environment storage. |
-| CR-003 | Short move and capture animation | Expanded in v0.16.0 with six non-blocking piece-specific attacks, victim reactions, and a production capture lab. |
-| CR-004 | Textless picker for visual themes | Expanded to 11 original themes and limited to active games so public and setup pages remain fixed. |
+| CR-003 | Short move and capture animation | Expanded in v0.17.0 to roughly one-second, non-blocking, piece-specific combat plus special chess-event effects. |
+| CR-004 | Textless picker for visual themes | Expanded in v0.17.0 to 11 whole-app skins inside Settings, available before a game. |
 | CR-005 | Portable user login | Guest private-seat links are live. Provider login remains disabled until it can add portability without blocking play. |
 | CR-006 | All games for the logged-in user | The account-backed history remains in storage but is not exposed in guest mode. The current device shows recent private-seat games. |
-| CR-007 | Step-by-step game replay | Shipped with always-visible live-board Back and Forward controls plus the full Start, Back, Next, End, and keyboard-accessible replay. |
+| CR-007 | Step-by-step game replay | Shipped as Back/Forward live-board navigation and a collapsible full move table in the game sidebar. |
 | CR-008 | Desktop install, move alerts, and time limits | Shipped. Install support, selectable one, three, or five-day move deadlines, and opt-in per-game closed-app turn notifications are live. |
 | CR-009 | A winning piece defeats the king on checkmate | Shipped as a short, theme-aware, reduced-motion-safe finisher. |
 | CR-010 | Subtle release updates and optional louder alerts | The unseen-release blue dot and generic closed-app turn alerts are shipped. Custom sounds or louder notification modes remain unplanned. |
-| CR-011 | Per-game Magic Rules | Shipped with immutable, allowlisted rules for atomic two-step rooks or knights, no promotion, no castling, and no en passant. Unsupported prose is rejected. |
-| CR-012 | Isolated branch preview environments | In progress. Runtime Magic lives on `feature/runtime-magic-rules`; Control exposes active feature previews without promoting them to Development. |
+| CR-011 | Per-game Magic Rules | Legacy stored games remain compatible. New rule entry is disabled, and the stable API rejects unsupported creation instead of silently creating Standard games. |
+| CR-012 | Isolated branch preview environments | Local Sites preview is required for high-risk work. A durable hosted preview catalog remains backlog. |
 | CR-013 | Optional confirmation before every move | Shipped as a default-off, browser-local setting covering tap, drag, keyboard, promotion, and complete Magic turns. |
 | CR-015 | Solo is the default mode | Shipped in v0.9.3. The new-game screen opens with Solo selected and Level 3 visible. |
 | CR-016 | White always begins | Verified in v0.9.3. White is always the first mover; Riot Bot commits the opening before a Black-side human can act. |
 | CR-017 | Understand Magic Rules at runtime | Planned. Replace the fixed phrase compiler with a safe runtime interpretation boundary while preserving deterministic stored rules. |
 | CR-018 | Numeric knight move counts | Planned with CR-017. Support equivalent wording such as “2 times” and define exact behavior for counts above two before shipping. |
 | CR-019 | Mini Games menu | Shipped in v0.14.0 with Standard as the default plus Pawn Riot, Half Army, and Pawn Duel in Solo and Multiplayer. Literal kingless pawn chess still needs a separate rules engine. |
+| CR-020 | Credit-priced Undo after a mistake | Backlog only. Define whether Undo is allowed against Riot Bot, human opponents, or both; whether the opponent must consent; and separate credit prices by mode before implementation. No current game may silently gain rewind semantics. |
+| CR-021 | Schema authority and migrations | Replace runtime table creation and duplicated schema definitions with one migration-owned source of truth and a deploy-time migration check. |
+| CR-022 | Riot Bot work ownership | Move bot computation behind a durable lease/queue boundary so concurrent Worker invocations cannot duplicate expensive search. |
+| CR-023 | Durable push outbox | Commit notification intent with the game mutation and deliver it asynchronously with bounded retry and cleanup. |
+| CR-024 | Privacy deletion and retention | Add explicit player-data deletion plus scheduled retention for games, feedback, telemetry, and notification records. |
+| CR-025 | GameRoom decomposition | Split transport, optimistic state, history, effects, and controls into testable hooks/components without changing rules. |
+| CR-026 | Content Security Policy | Add a nonce- or hash-based CSP after verifying Sites preview/hosting frames, service workers, media, and image optimization. |
 
 This is the durable product backlog recovered from
 [GitHub issue #11](https://github.com/ripper234/ChessRiot/issues/11) and

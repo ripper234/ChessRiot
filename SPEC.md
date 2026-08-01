@@ -1,4 +1,45 @@
-# ChessRiot v0.16.0 specification
+# ChessRiot v0.17.0 specification
+
+## v0.17.0 release additions
+
+- The persisted skin is applied by an inline allowlisted bootstrap before the
+  first paint on every route. It changes the public shell, setup flow, menus,
+  board, pieces, cards, music, and visual effects, and synchronizes across tabs.
+- A single fixed Settings launcher replaces the competing version, sound,
+  theme, feedback, and game-tools entry points. Its grouped controls cover
+  appearance, audio, play assistance, current-game actions, feedback, install,
+  privacy, community, and the exact release version.
+- Sound effects and music are independent, default-on preferences with one
+  persistent master volume. Each skin uses its own restrained procedural music
+  treatment. Check, castling, queen capture, promotion choice, result, and
+  invalid action have classified sound and visual treatments without network
+  or media-file dependencies.
+- Capture combat lasts approximately one second and remains distinct for pawn,
+  knight, bishop, rook, queen, and king. It is decorative, pointer-transparent,
+  and never delays optimistic rendering, server submission, or the next legal
+  interaction. Reduced-motion mode suppresses nonessential movement.
+- The separate replay dialog and More panel are removed. The game sidebar keeps
+  one compact row for the currently viewed move and expands through a standard
+  disclosure control into the complete move table. Capture rows carry a sword
+  marker. A second always-visible panel lists every captured piece by captor.
+- A confirmed resignation starts a theme-aware white-flag king finisher only
+  after the server accepts the action. Waiting games continue to cancel without
+  presenting a false resignation.
+- The default-on Chess Coach is a deterministic local guard for obvious
+  immediate material loss. It asks whether to continue and reveals one short
+  explanation only on request. It never uses an LLM, changes legal moves, or
+  sends position data off-device. Fork celebrations are also local, small, and
+  independently optional.
+- New Magic prompts fail closed with a stable unavailable error. Exact
+  idempotent retries for existing legacy Magic games and all stored-game reads
+  and moves remain compatible.
+- JSON request bodies are bounded while streaming, health checks verify the
+  real schema and required hosted configuration, privacy-safe observability no
+  longer falls back to unsalted identifiers, and hosted responses add safe
+  baseline security headers.
+- The repository pins the runtime/toolchain, has a reproducible full build
+  gate, validates packaged bindings and migrations, audits dependencies, and
+  runs pull-request CI with an SBOM artifact.
 
 ## v0.16.0 release additions
 
@@ -80,8 +121,8 @@
   evaluation while enforcing a deterministic node cap alongside the local
   elapsed-time budget.
 - The deterministic cap bounds search even on an edge runtime whose clocks do
-  not advance during CPU work. Default play remains roughly 0.2 seconds of
-  search and Level 5 remains under one second in the frozen-clock regression.
+  not advance during CPU work. Immediate mate is selected before deeper search,
+  and the strongest level remains inside the tested Worker request budget.
 
 ## v0.13.1 release additions
 
@@ -203,8 +244,8 @@
 - Invitations can be reviewed before joining. Joining binds the supplied
   private seat token to one game color and never exposes it in the request URL
   or referrer.
-- Visual themes load and render only on active `/g/*` game routes. Public,
-  create, invitation, changelog, loading, and error pages keep one fixed style.
+- At that release, visual themes loaded only on active `/g/*` routes. v0.17.0
+  supersedes this behavior with a whole-app, pre-paint skin.
 - The app-host routing boundary is ready: `/app` works now, and a future owned
   `app.<domain>` hostname may route its root directly to the same create flow.
 - All user-facing sign-in prompts and retired CAPTCHA paths are absent from the
@@ -298,8 +339,8 @@
 - Theme choices affect the page background, panels, board, captured pieces,
   and playable pieces. The choice persists locally, applies before paint, and
   synchronizes across open tabs.
-- A small global version link is visible on home, join, loading, error, game,
-  and changelog states.
+- At that release, a small global version link was visible across routes.
+  v0.17.0 moves it into the unified Settings menu.
 - Active joined multiplayer games expose six safe preset cheers. For 15 minutes
   after completion, only Good Game and Thanks remain available; bounded history
   stays readable afterward. Cheers are authenticated, idempotent, rate-limited,
@@ -307,8 +348,9 @@
 - Multiplayer creation offers one, three, or five days per move, defaulting to
   three. An expired turn ends the game with the side that missed its move as
   the loser. Legacy games without a stored pace keep no deadline.
-- Every game exposes a read-only replay dialog with start, back, next, and end
-  controls. Replay never mutates or replaces the live board.
+- At that release, every game exposed a separate read-only replay dialog.
+  v0.17.0 replaces it with the expandable side-panel move table while keeping
+  live-board history read-only.
 - A live checkmate transition briefly animates the actual winning piece
   defeating the losing king. It does not replay after refresh and honors
   reduced-motion preferences.
@@ -427,20 +469,23 @@ This file and `MVP.md` are the source of truth for the current milestone.
 
 ## Interface
 
-- The public homepage, create flow, invitations, changelog, loading, and error
-  states use one fixed visual system regardless of identity or stored theme.
-- Eleven original visual themes cover active game panels, board, and pieces. The
-  default Riot theme uses flat teal, slate, warm ivory, and gold. Six themes
-  include generated, wholly original illustrations. Every theme keeps the same
-  front-on 2D board structure and original vector piece silhouettes. None copy
+- Eleven original skins cover the whole application before paint. The default
+  Riot skin uses flat teal, slate, warm ivory, and gold. Six skins include
+  generated, wholly original illustrations. Every skin keeps the same front-on
+  2D board structure and original vector piece silhouettes. None copy
   third-party game branding or assets.
+- One Settings menu owns appearance, sound, music, master volume, coach,
+  tactical celebrations, move confirmation, turn alerts, surrender/cancel,
+  feedback, install, privacy, community, updates, and version information.
 - Drag and drop a piece, or tap/click a piece and then a legal destination.
 - Board rotates for Black while submitted coordinates remain absolute chess squares.
 - The interface shows explicit player colors, turn, check, the checked king,
-  lost pieces, outcome, deadline, Magic Rules, move history, and read-only
-  replay.
+  every captured piece, outcome, deadline, Magic Rules, the currently viewed
+  move, and an expandable complete read-only move table.
 - When a threefold or fifty-move draw is available to the player on move, the interface offers an explicit claim.
-- Synthesized move, capture, check, result, and invalid-action sounds are on by default and can be muted.
+- Procedural skin-specific music and synthesized move, capture, check, castle,
+  queen-loss, promotion, result, and invalid-action sounds are on by default.
+  Music, effects, and master volume are controlled independently.
 - Initial loads, refreshes, repeated polling responses, and join-only version changes do not replay move sounds.
 
 ## Observability

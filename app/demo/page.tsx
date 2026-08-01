@@ -13,10 +13,6 @@ export default function DemoPage() {
     <main className="demo-shell">
       <header className="topbar demo-topbar">
         <Brand />
-        <nav className="public-nav" aria-label="ChessRiot">
-          <Link className="public-nav-link" href="/">HOME</Link>
-          <Link className="public-nav-link" href="/changelog">WHAT&apos;S NEW</Link>
-        </nav>
       </header>
       <section className="demo-page">
         <div className="demo-heading">

@@ -90,6 +90,7 @@ const opsGrant = (overrides = {}) => {
 };
 const persistRoot = await mkdtemp(join(tmpdir(), "chessriot-e2e-"));
 const serverRoot = resolve("dist/server");
+const runtimeConfig = JSON.parse(await readFile(resolve(".openai/runtime.json"), "utf8"));
 
 async function listJavaScript(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -109,7 +110,7 @@ function createRuntime() {
   return new Miniflare({
     modules: modulePaths.map((path) => ({ type: "ESModule", path })),
     modulesRoot: serverRoot,
-    compatibilityDate: "2026-05-22",
+    compatibilityDate: runtimeConfig.cloudflareCompatibilityDate,
     compatibilityFlags: ["nodejs_compat"],
     d1Databases: { DB: "chessriot-e2e" },
     bindings: {
@@ -137,8 +138,7 @@ function createRuntime() {
       });
       return new Response(null, { status: 201 });
     },
-    defaultPersistRoot: persistRoot,
-    d1Persist: true,
+    resourcePersistencePath: persistRoot,
   });
 }
 
@@ -147,10 +147,9 @@ async function verifyVariantMigration() {
   const migrationRuntime = new Miniflare({
     script: "export default { fetch() { return new Response('ok'); } };",
     modules: true,
-    compatibilityDate: "2026-05-22",
+    compatibilityDate: runtimeConfig.cloudflareCompatibilityDate,
     d1Databases: { DB: "chessriot-migration" },
-    defaultPersistRoot: migrationRoot,
-    d1Persist: true,
+    resourcePersistencePath: migrationRoot,
   });
   try {
     const database = await migrationRuntime.getD1Database("DB");
@@ -296,6 +295,66 @@ async function waitFor(predicate, timeoutMs = 1_000) {
   return true;
 }
 
+async function verifyFullMigrationChain() {
+  const migrationRoot = await mkdtemp(join(tmpdir(), "chessriot-full-migration-"));
+  const migrationRuntime = new Miniflare({
+    script: "export default { fetch() { return new Response('ok'); } };",
+    modules: true,
+    compatibilityDate: runtimeConfig.cloudflareCompatibilityDate,
+    d1Databases: { DB: "chessriot-full-migration" },
+    resourcePersistencePath: migrationRoot,
+  });
+  try {
+    const database = await migrationRuntime.getD1Database("DB");
+    const migrationFiles = (await readdir(resolve("drizzle"), { withFileTypes: true }))
+      .filter((entry) => entry.isFile() && /^\d{4}_.+\.sql$/.test(entry.name))
+      .map((entry) => entry.name)
+      .sort();
+    assert.equal(migrationFiles[0]?.startsWith("0000_"), true);
+    assert.equal(migrationFiles.at(-1)?.startsWith("0012_"), true);
+
+    for (const file of migrationFiles) {
+      const migration = await readFile(resolve("drizzle", file), "utf8");
+      for (const statement of migration
+        .split("--> statement-breakpoint")
+        .map((value) => value.trim())
+        .filter(Boolean)) {
+        await database.prepare(statement.replace(/;$/, "")).run();
+      }
+    }
+
+    const requiredTables = [
+      "accounts",
+      "bot_turn_leases",
+      "feedback",
+      "game_actions",
+      "game_memberships",
+      "game_reactions",
+      "game_settings",
+      "games",
+      "moves",
+      "observability_events",
+      "push_deliveries",
+      "push_subscriptions",
+      "rate_limit_windows",
+    ];
+    const tables = await database
+      .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (${requiredTables.map(() => "?").join(",")})`)
+      .bind(...requiredTables)
+      .all();
+    assert.deepEqual(
+      tables.results.map((row) => row.name).sort(),
+      [...requiredTables].sort(),
+    );
+    const settingsColumns = await database.prepare("PRAGMA table_info(game_settings)").all();
+    assert.equal(settingsColumns.results.some((column) => column.name === "variant_id"), true);
+  } finally {
+    await migrationRuntime.dispose();
+    await rm(migrationRoot, { recursive: true, force: true });
+  }
+}
+
+await verifyFullMigrationChain();
 await verifyVariantMigration();
 let runtime = createRuntime();
 try {
@@ -1079,6 +1138,33 @@ try {
   const magicInvite = secret();
   const magicCreateRequestId = randomUUID();
   const magicPrompt = "Knights move twice. Rooks move twice. Pawns never get promoted.";
+  const legacyBaseResponse = await request(runtime, "/api/games", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName: "Magic White",
+      mode: "multiplayer",
+      playerToken: magicWhite,
+      inviteToken: magicInvite,
+      requestId: magicCreateRequestId,
+    }),
+  });
+  assert.equal(legacyBaseResponse.status, 201);
+  const legacyBase = await body(legacyBaseResponse);
+  const magicRulesJson = JSON.stringify({
+    version: 2,
+    rules: [
+      { kind: "double_move", piece: "n" },
+      { kind: "double_move", piece: "r" },
+      { kind: "no_promotion" },
+    ],
+  });
+  const magicDatabase = await runtime.getD1Database("DB");
+  await magicDatabase.prepare(`UPDATE game_settings
+    SET magic_prompt = ?, magic_rules_json = ?
+    WHERE game_id = ?`)
+    .bind(magicPrompt, magicRulesJson, legacyBase.game.id)
+    .run();
+
   const magicCreateResponse = await request(runtime, "/api/games", {
     method: "POST",
     body: JSON.stringify({
@@ -1090,7 +1176,7 @@ try {
       magicPrompt,
     }),
   });
-  assert.equal(magicCreateResponse.status, 201);
+  assert.equal(magicCreateResponse.status, 200);
   const magicCreated = await body(magicCreateResponse);
   const magicGameId = magicCreated.game.id;
   assert.equal(magicCreated.game.magicRules.prompt, magicPrompt);
@@ -1141,7 +1227,7 @@ try {
     }),
   });
   assert.equal(unsupportedMagicResponse.status, 422);
-  assert.equal((await body(unsupportedMagicResponse)).error.code, "magic_rule_unsupported");
+  assert.equal((await body(unsupportedMagicResponse)).error.code, "magic_rules_unavailable");
 
   const magicPreviewResponse = await request(
     runtime,
@@ -1586,14 +1672,8 @@ try {
       magicPrompt: "No castling. No en passant.",
     }),
   });
-  assert.equal(magicSoloResponse.status, 201);
-  const magicSolo = await body(magicSoloResponse);
-  assert.equal(magicSolo.game.mode, "solo");
-  assert.equal(magicSolo.game.you.color, "w");
-  assert.deepEqual(magicSolo.game.magicRules.labels, [
-    "No castling",
-    "No en passant",
-  ]);
+  assert.equal(magicSoloResponse.status, 422);
+  assert.equal((await body(magicSoloResponse)).error.code, "magic_rules_unavailable");
 
   const soloToken = secret();
   const soloInvite = secret();

@@ -5,6 +5,7 @@ dist
 .sites-runtime
 coverage
 .env*
+!.env.example
 *.tsbuildinfo
 .DS_Store
 npm-debug.log*

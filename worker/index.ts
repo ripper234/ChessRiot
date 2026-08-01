@@ -17,6 +17,7 @@ interface Env {
   BUCKET: R2Bucket;
   DB: D1Database;
   CHESSRIOT_ENV?: string;
+  APP_ORIGIN?: string;
   CONTROL_ORIGIN?: string;
   OPENAI_API_KEY?: string;
   OBSERVABILITY_HASH_SECRET?: string;
@@ -40,10 +41,31 @@ interface ExecutionContext {
   passThroughOnException(): void;
 }
 
+function hardenResponse(response: Response, url: URL): Response {
+  const headers = new Headers(response.headers);
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("referrer-policy", "no-referrer");
+  headers.set(
+    "permissions-policy",
+    "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+  );
+  if (url.protocol === "https:" && (url.hostname === "chessriot.gg" || url.hostname.endsWith(".chessriot.gg"))) {
+    // Start conservatively while custom Dev and Control hostnames complete TLS
+    // activation. Extend the duration only after every subdomain is verified.
+    headers.set("strict-transport-security", "max-age=86400");
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     globalThis.__CHESSRIOT_DB__ = env.DB;
     globalThis.__CHESSRIOT_ENV__ = env.CHESSRIOT_ENV;
+    globalThis.__CHESSRIOT_APP_ORIGIN__ = env.APP_ORIGIN;
     globalThis.__CHESSRIOT_CONTROL_ORIGIN__ = env.CONTROL_ORIGIN;
     globalThis.__CHESSRIOT_DEMO_BUCKET__ = env.BUCKET;
     globalThis.__CHESSRIOT_OPENAI_API_KEY__ = env.OPENAI_API_KEY;
@@ -57,7 +79,7 @@ const worker = {
     const url = new URL(request.url);
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
-      return handleImageOptimization(
+      const imageResponse = await handleImageOptimization(
         request,
         {
           fetchAsset: (path) => env.ASSETS.fetch(new Request(new URL(path, request.url))),
@@ -70,6 +92,7 @@ const worker = {
         },
         allowedWidths,
       );
+      return hardenResponse(imageResponse, url);
     }
     const startedAt = performance.now();
     const observation = url.pathname.startsWith("/api/")
@@ -77,7 +100,7 @@ const worker = {
       ? prepareRequestObservation(request)
       : null;
     try {
-      const response = await handler.fetch(request, env, ctx);
+      const response = hardenResponse(await handler.fetch(request, env, ctx), url);
       if (response.headers.get("x-chessriot-turn-committed") === "1") {
         ctx.waitUntil(deliverCommittedTurnNotification(response.clone()));
       }

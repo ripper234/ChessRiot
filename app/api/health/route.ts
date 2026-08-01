@@ -1,5 +1,5 @@
 import { getDatabase } from "@/db";
-import { appEnvironment, controlOrigin } from "@/lib/runtime";
+import { appEnvironment, controlOrigin, runtimeReadiness } from "@/lib/runtime";
 import { APP_VERSION } from "@/lib/version";
 
 export const dynamic = "force-dynamic";
@@ -7,10 +7,26 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   let database = "ok";
   try {
-    await getDatabase().prepare("SELECT 1").first();
+    const requiredTables = [
+      "accounts",
+      "game_memberships",
+      "game_settings",
+      "games",
+      "moves",
+      "rate_limit_windows",
+    ];
+    const result = await getDatabase()
+      .prepare(`SELECT name FROM sqlite_master
+        WHERE type = 'table' AND name IN (${requiredTables.map(() => "?").join(",")})`)
+      .bind(...requiredTables)
+      .all<{ name: string }>();
+    const found = new Set(result.results.map((row) => row.name));
+    if (!requiredTables.every((table) => found.has(table))) database = "error";
   } catch {
     database = "error";
   }
+  const readiness = runtimeReadiness();
+  const healthy = database === "ok" && readiness.core;
   const origin = request.headers.get("origin");
   const headers = new Headers({
     "cache-control": "no-store",
@@ -25,14 +41,16 @@ export async function GET(request: Request) {
   }
   return Response.json(
     {
-      status: database === "ok" ? "ok" : "degraded",
+      status: healthy ? "ok" : "degraded",
       environment: appEnvironment(),
       version: APP_VERSION,
       database,
+      configuration: readiness.configuration,
+      capabilities: readiness.capabilities,
       checkedAt: new Date().toISOString(),
     },
     {
-      status: database === "ok" ? 200 : 503,
+      status: healthy ? 200 : 503,
       headers,
     },
   );
