@@ -32,8 +32,9 @@ test("renders the owner-facing video control without exposing secrets", async ()
   assert.match(html, /Direct deployment is not connected/);
   assert.match(html, /<dialog id="release-handoff"/);
   assert.match(html, /COPY WORK REQUEST/);
-  assert.match(html, /https:\/\/chessriot\.ripper234\.chatgpt\.site\/changelog/);
-  assert.doesNotMatch(html, /chessriot\.ripper234\.chatgpt\.site\/releases/);
+  assert.match(html, /https:\/\/chessriot\.gg\/changelog/);
+  assert.match(html, /https:\/\/dev\.chessriot\.gg\/demo/);
+  assert.doesNotMatch(html, /ripper234\.chatgpt\.site/);
   assert.doesNotMatch(html, /dev-edge-token|shared-video-secret/);
 });
 
@@ -97,7 +98,9 @@ test("keeps the Dev edge token server-side on status reads", async () => {
   };
   try {
     const response = await worker.fetch(
-      new Request("https://control.example/api/demo-video/status"),
+      new Request("https://control.example/api/demo-video/status", {
+        headers: ownerHeaders(),
+      }),
       env,
     );
     assert.equal(response.status, 200);

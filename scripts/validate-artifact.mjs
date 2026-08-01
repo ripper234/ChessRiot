@@ -89,14 +89,7 @@ assert.match(page, /Development \/ build waste/);
 assert.match(page, /Runtime waste by cause/);
 assert.match(page, /By game version/);
 assert.match(page, /NOT INSTRUMENTED/);
-assert.match(page, /Feature previews/);
-assert.match(page, /feature\/runtime-magic-rules/);
-assert.match(page, /v0\.11\.0-magic\.4/);
-assert.match(
-  page,
-  /https:\/\/chessriot-magic-preview\.ripper234\.chatgpt\.site/,
-);
-assert.match(page, /https:\/\/github\.com\/ripper234\/ChessRiot\/branches/);
+assert.doesNotMatch(page, /Feature previews|runtime-magic-rules|magic-preview/);
 assert.match(page, /Recent events/);
 assert.match(page, /id="feedback-launcher"/);
 assert.match(page, /aria-controls="feedback-inbox"/);
@@ -107,9 +100,10 @@ assert.match(page, /Direct deployment is not connected/);
 assert.match(page, /active controls prepare a manual ChatGPT Work request/);
 assert.match(
   page,
-  /https:\/\/chessriot\.ripper234\.chatgpt\.site\/changelog/,
+  /https:\/\/chessriot\.gg\/changelog/,
 );
-assert.doesNotMatch(page, /chessriot\.ripper234\.chatgpt\.site\/releases/);
+assert.match(page, /https:\/\/dev\.chessriot\.gg\/demo/);
+assert.doesNotMatch(page, /ripper234\.chatgpt\.site/);
 assert.doesNotMatch(page, /Version history|CONTROL \+ GAME|ADVANCED VERSIONS/);
 assert.doesNotMatch(page, /<details[^>]*\sopen(?:\s|>)/);
 assert.match(page, /<dialog id="release-handoff"/);
@@ -125,6 +119,7 @@ const scriptResponse = await workerModule.default.fetch(
   {},
 );
 const script = await scriptResponse.text();
+assert.doesNotMatch(script, /\bENVIRONMENTS\b/);
 assert.match(script, /\/api\/health/);
 assert.match(script, /\/api\/ops\/overview/);
 assert.match(script, /\/api\/financials\?window=/);
@@ -338,30 +333,33 @@ class FakeD1 {
   }
 }
 
-const statusResponse = await workerModule.default.fetch(
+function ownerRequest(url, options = {}) {
+  return new Request(url, {
+    ...options,
+    headers: {
+      "oai-authenticated-user-email": "owner@example.com",
+      ...options.headers,
+    },
+  });
+}
+
+const configuredEnv = {
+  CONTROL_OWNER_EMAIL: "owner@example.com",
+  PROD_URL: "https://chessriot.gg",
+  DEV_URL: "https://dev.chessriot.gg",
+  PROD_OPS_READ_SECRET: "prod-secret-with-at-least-32-characters",
+  DEV_OPS_READ_SECRET: "dev-secret-with-at-least-32-characters",
+};
+const unauthorizedStatus = await workerModule.default.fetch(
   new Request("https://control.test/api/status"),
-  {
-    PROD_URL: "https://prod.test",
-    DEV_URL: "https://dev.test",
-    PROD_OPS_READ_SECRET: "prod-secret-with-at-least-32-characters",
-    DEV_OPS_READ_SECRET: "dev-secret-with-at-least-32-characters",
-    PROD_DEPLOYED_VERSION: "0.2.2",
-    DEV_DEPLOYED_VERSION: "0.3.2",
-    DEPLOYMENT_STATE_JSON: JSON.stringify({
-      environments: {
-        development: {
-          version: "0.3.2",
-          deployedAt: "2026-07-24T14:00:00.000Z",
-          verifiedAt: "2026-07-24T14:01:00.000Z",
-        },
-        production: {
-          version: "0.2.2",
-          deployedAt: "2026-07-24T12:00:00.000Z",
-          verifiedAt: "2026-07-24T12:01:00.000Z",
-        },
-      },
-    }),
-  },
+  configuredEnv,
+  {},
+);
+assert.equal(unauthorizedStatus.status, 403);
+
+const statusResponse = await workerModule.default.fetch(
+  ownerRequest("https://control.test/api/status"),
+  configuredEnv,
   {},
 );
 const status = await statusResponse.json();
@@ -377,13 +375,13 @@ assert.deepEqual(
   [
     {
       key: "development",
-      url: "https://dev.test",
+      url: "https://dev.chessriot.gg",
       access: "Owner only",
       hasGrant: true,
     },
     {
       key: "production",
-      url: "https://prod.test",
+      url: "https://chessriot.gg",
       access: "Public",
       hasGrant: true,
     },
@@ -397,55 +395,47 @@ for (const environment of status.environments) {
 assert.equal("releases" in status, false);
 assert.equal("latestVersion" in status, false);
 
-const fallbackResponse = await workerModule.default.fetch(
-  new Request("https://control.test/api/status"),
-  {},
-  {},
-);
-const fallbackStatus = await fallbackResponse.json();
-assert.deepEqual(
-  fallbackStatus.environments.map(({ key }) => key),
-  [
-    "development",
-    "production",
-  ],
-);
-
 const database = new FakeD1();
 const persistentEnv = {
+  ...configuredEnv,
   DB: database,
-  PROD_DEPLOYED_VERSION: "0.3.2",
-  DEV_DEPLOYED_VERSION: "0.3.2",
-  DEPLOYMENT_STATE_JSON: JSON.stringify({
-    environments: {
-      development: {
-        version: "0.3.2",
-        deployedAt: "2026-07-24T14:20:00.000Z",
-        verifiedAt: "2026-07-24T14:20:00.000Z",
-      },
-      production: {
-        version: "0.3.2",
-        deployedAt: "2026-07-24T14:22:00.000Z",
-        verifiedAt: "2026-07-24T14:22:00.000Z",
-      },
-    },
-  }),
 };
 const seededResponse = await workerModule.default.fetch(
-  new Request("https://control.test/api/status"),
+  ownerRequest("https://control.test/api/status"),
   persistentEnv,
   {},
 );
 const seeded = await seededResponse.json();
 assert.equal(seeded.registryPersistence, "d1");
 assert.equal("deployedVersion" in seeded.environments[0], false);
-assert.equal(database.rows.get("development").deployed_version, "0.3.2");
+assert.equal(database.rows.get("development").deployed_version, "0.0.0");
 
-const successfulObservationResponse = await workerModule.default.fetch(
+const forgedObservationResponse = await workerModule.default.fetch(
   new Request("https://control.test/api/registry/observation", {
     method: "POST",
     headers: {
       "content-type": "application/json",
+      "x-control-observation": "browser-health-v1",
+    },
+    body: JSON.stringify({
+      environment: "production",
+      healthState: "fresh",
+      runtimeVersion: "9.9.9",
+    }),
+  }),
+  persistentEnv,
+  {},
+);
+assert.equal(forgedObservationResponse.status, 403);
+assert.equal(database.rows.get("production").deployed_version, "0.0.0");
+
+const successfulObservationResponse = await workerModule.default.fetch(
+  ownerRequest("https://control.test/api/registry/observation", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      origin: "https://control.test",
+      "sec-fetch-site": "same-origin",
       "x-control-observation": "browser-health-v1",
     },
     body: JSON.stringify({
@@ -465,10 +455,12 @@ assert.equal(successfulObservation.deployedVersion, "0.3.3");
 assert.ok(successfulObservation.lastHealthAt);
 
 const failedObservationResponse = await workerModule.default.fetch(
-  new Request("https://control.test/api/registry/observation", {
+  ownerRequest("https://control.test/api/registry/observation", {
     method: "POST",
     headers: {
       "content-type": "application/json",
+      origin: "https://control.test",
+      "sec-fetch-site": "same-origin",
       "x-control-observation": "browser-health-v1",
     },
     body: JSON.stringify({
@@ -488,7 +480,7 @@ assert.equal(failedObservation.deployedVersion, "0.3.3");
 assert.equal(failedObservation.lastHealthAt, successfulObservation.lastHealthAt);
 
 const persistedResponse = await workerModule.default.fetch(
-  new Request("https://control.test/api/status"),
+  ownerRequest("https://control.test/api/status"),
   persistentEnv,
   {},
 );
@@ -499,80 +491,5 @@ assert.equal(
   successfulObservation.lastHealthAt,
 );
 assert.equal("latestVersion" in persisted, false);
-
-const promotedEnv = {
-  ...persistentEnv,
-  DEV_DEPLOYED_VERSION: "0.3.4",
-  DEPLOYMENT_STATE_JSON: JSON.stringify({
-    environments: {
-      development: {
-        version: "0.3.4",
-        deployedAt: "2099-07-25T10:00:00.000Z",
-        verifiedAt: "2099-07-25T10:01:00.000Z",
-      },
-    },
-  }),
-};
-const promotedResponse = await workerModule.default.fetch(
-  new Request("https://control.test/api/status"),
-  promotedEnv,
-  {},
-);
-const promoted = await promotedResponse.json();
-assert.equal("deployedVersion" in promoted.environments[0], false);
-assert.equal(database.rows.get("development").deployed_version, "0.3.4");
-assert.equal(database.rows.get("development").runtime_version, null);
-assert.equal("latestVersion" in promoted, false);
-
-const reconciliationDb = new FakeD1();
-const oldRegistryEnv = {
-  DB: reconciliationDb,
-  PROD_DEPLOYED_VERSION: "0.3.2",
-  DEV_DEPLOYED_VERSION: "0.3.2",
-  DEPLOYMENT_STATE_JSON: JSON.stringify({
-    environments: Object.fromEntries(
-      ["development", "production"].map((environment) => [
-        environment,
-        {
-          version: "0.3.2",
-          deployedAt: "2026-07-24T14:20:00.000Z",
-          verifiedAt: "2026-07-24T14:20:00.000Z",
-        },
-      ]),
-    ),
-  }),
-};
-await workerModule.default.fetch(
-  new Request("https://control.test/api/status"),
-  oldRegistryEnv,
-  {},
-);
-const reconciledEnv = {
-  ...oldRegistryEnv,
-  PROD_DEPLOYED_VERSION: "0.3.3",
-  DEV_DEPLOYED_VERSION: "0.3.3",
-  DEPLOYMENT_STATE_JSON: JSON.stringify({
-    environments: Object.fromEntries(
-      ["development", "production"].map((environment) => [
-        environment,
-        {
-          version: "0.3.3",
-          deployedAt: "2026-07-24T15:00:00.000Z",
-          verifiedAt: "2026-07-24T15:01:00.000Z",
-        },
-      ]),
-    ),
-  }),
-};
-const reconciledResponse = await workerModule.default.fetch(
-  new Request("https://control.test/api/status"),
-  reconciledEnv,
-  {},
-);
-await reconciledResponse.json();
-assert.deepEqual(
-  [...reconciliationDb.rows.values()].map(({ deployed_version }) => deployed_version),
-  ["0.3.3", "0.3.3"],
-);
 
 console.log("Artifact is valid ESM and exports default.fetch");

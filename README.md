@@ -21,7 +21,7 @@ environment-scoped `feedback:manage` grant to mark one item done. Environments
 without the matching backend release remain explicitly unavailable. Health,
 telemetry, and events stay collapsed until they are needed. Release history
 lives on the public
-[Releases page](https://chessriot.ripper234.chatgpt.site/changelog).
+[Releases page](https://chessriot.gg/changelog).
 
 The release policy is intentionally asymmetric:
 
@@ -62,6 +62,12 @@ Usage sources write idempotent events to Control's append-only D1 ledger through
 
 ## Control changelog
 
+- `0.8.0`: Secured status grants and deployment observations with the exact
+  authenticated owner identity, blocked cross-site registry writes, validated
+  Dev and Prod origins and secret strength, derived CSP connections from those
+  origins, added a read-only Control health check, removed stale preview data,
+  fixed the browser startup crash and local POST forwarding, and moved Control
+  links to the `chessriot.gg` domains.
 - `0.7.0`: Retired Staging from the active pipeline and feedback aggregation.
   The notification badge now turns red only for concrete unresolved records
   that are actually present in the inbox.
@@ -113,17 +119,15 @@ Usage sources write idempotent events to Control's append-only D1 ledger through
 
 Required runtime variables:
 
-- `PROD_URL`
-- `DEV_URL`
-- `PROD_DEPLOYED_VERSION`
-- `DEV_DEPLOYED_VERSION`
-- `PROD_OPS_READ_SECRET`
-- `DEV_OPS_READ_SECRET`
+- `CONTROL_OWNER_EMAIL`, the exact email supplied by the Sites authenticated
+  identity header.
+- `PROD_URL=https://chessriot.gg`
+- `DEV_URL=https://dev.chessriot.gg`
+- `PROD_OPS_READ_SECRET`, at least 32 characters.
+- `DEV_OPS_READ_SECRET`, at least 32 characters.
 
 Optional runtime variable:
 
-- `DEPLOYMENT_STATE_JSON` for deployment and verification timestamps. Individual
-  `*_DEPLOYED_VERSION` values override the corresponding version in this JSON.
 - `FINANCIALS_INGEST_SECRET` for authenticated server-to-server token-event
   ingestion. Each event must include an idempotent `source` + `sourceEventId`,
   `scope` (`development` or `runtime`), timestamp, purpose, input and output
