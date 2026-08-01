@@ -3,7 +3,6 @@
 import { Chess, type Move, type Square } from "chess.js";
 import Link from "next/link";
 import {
-  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
@@ -11,7 +10,11 @@ import {
   useRef,
   useState,
 } from "react";
-import { boardEffects, type BoardEffect } from "@/lib/game-effects";
+import {
+  boardEffects,
+  moveBoardEffects,
+  type BoardEffect,
+} from "@/lib/game-effects";
 import { apiErrorMessage, requestHeaders } from "@/lib/client-http";
 import {
   generateUuid,
@@ -75,6 +78,10 @@ import {
 import type { DrawClaim, GameSnapshot, Promotion } from "@/lib/game-types";
 import { gameVariant } from "@/lib/game-variants";
 import { APP_VERSION } from "@/lib/version";
+import {
+  boardActionDuration,
+  BoardActionAnimation,
+} from "./BoardActionAnimation";
 import { Brand } from "./Brand";
 import { ChessPiece } from "./ChessPiece";
 import { CheckmateFinisher } from "./CheckmateFinisher";
@@ -123,7 +130,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [openingIntro, setOpeningIntro] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
   const [drag, setDrag] = useState<DragState | null>(null);
-  const [effects, setEffects] = useState<BoardEffect[]>([]);
+  const [effectQueue, setEffectQueue] = useState<BoardEffect[]>([]);
+  const [reducedMotion, setReducedMotion] = useState(false);
   const [historyPly, setHistoryPly] = useState<HistoryCursor>(null);
   const [confirmEveryMove, setConfirmEveryMove] = useState(false);
   const [pendingMove, setPendingMove] = useState<MoveIntent | null>(null);
@@ -153,6 +161,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const moveConfirmReturnFocus = useRef<HTMLElement | null>(null);
   const moveConfirmFallback = useRef<HTMLDivElement | null>(null);
   const moveCommitInFlight = useRef(false);
+  const activeEffect = effectQueue[0] ?? null;
+  const activeEffectFinalSquare = activeEffect
+    ? effectQueue.filter((effect) => effect.ply === activeEffect.ply).at(-1)?.to
+      ?? activeEffect.to
+    : null;
   const postGameReactionsOpen = Boolean(
     game?.status === "completed"
     && postGameReactionWindowOpen(game.updatedAt),
@@ -191,17 +204,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
     openingIntroTimer.current = window.setTimeout(() => {
       openingIntroTimer.current = null;
       setOpeningIntro(false);
-      if (effectTimer.current !== null) window.clearTimeout(effectTimer.current);
-      setEffects([{
-        ply: openingMove.ply,
-        from: openingMove.from,
-        to: openingMove.to,
-        capture: openingMove.san.includes("x"),
-      }]);
-      effectTimer.current = window.setTimeout(() => {
-        effectTimer.current = null;
-        setEffects([]);
-      }, 240);
+      if (document.visibilityState !== "visible") return;
+      setEffectQueue(moveBoardEffects(openingMove, nextGame.initialFen));
     }, OPENING_INTRO_DURATION_MS);
   }, [gameId]);
 
@@ -275,7 +279,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
         previousEffectGame.current = null;
         setSelected(null);
         setPromotionMove(null);
-        setEffects([]);
+        setEffectQueue([]);
         setReactions([]);
         setReactionQueue([]);
         setReactionBurst(null);
@@ -449,21 +453,73 @@ export function GameRoom({ gameId }: { gameId: string }) {
     const previous = previousEffectGame.current;
     const nextEffects = boardEffects(previous, game);
     previousEffectGame.current = game;
+    if (historyPly !== null) {
+      if (effectTimer.current !== null) window.clearTimeout(effectTimer.current);
+      effectTimer.current = null;
+      setEffectQueue([]);
+      return;
+    }
+    if (reducedMotion) return;
     if (!nextEffects.length) {
       if (previous && game.plyCount < previous.plyCount) {
         if (effectTimer.current !== null) window.clearTimeout(effectTimer.current);
         effectTimer.current = null;
-        setEffects([]);
+        setEffectQueue([]);
       }
       return;
     }
+    if (document.visibilityState !== "visible") return;
+    setEffectQueue((current) => {
+      const queued = new Set(current.map((effect) => effect.id));
+      const unseen = nextEffects.filter((effect) => !queued.has(effect.id));
+      return [...current, ...unseen].slice(-12);
+    });
+  }, [game, historyPly, reducedMotion]);
+
+  const finishBoardEffect = useCallback((effectId: string) => {
+    setEffectQueue((current) => current[0]?.id === effectId
+      ? current.slice(1)
+      : current);
+  }, []);
+
+  const dismissBoardEffects = useCallback(() => {
     if (effectTimer.current !== null) window.clearTimeout(effectTimer.current);
-    setEffects(nextEffects);
+    effectTimer.current = null;
+    setEffectQueue([]);
+  }, []);
+
+  useEffect(() => {
+    if (reducedMotion) dismissBoardEffects();
+  }, [dismissBoardEffects, reducedMotion]);
+
+  useEffect(() => {
+    if (!activeEffect) return;
+    if (effectTimer.current !== null) window.clearTimeout(effectTimer.current);
     effectTimer.current = window.setTimeout(() => {
       effectTimer.current = null;
-      setEffects([]);
-    }, 240);
-  }, [game]);
+      finishBoardEffect(activeEffect.id);
+    }, boardActionDuration(activeEffect, reducedMotion) + 120);
+    return () => {
+      if (effectTimer.current !== null) window.clearTimeout(effectTimer.current);
+      effectTimer.current = null;
+    };
+  }, [activeEffect, finishBoardEffect, reducedMotion]);
+
+  useEffect(() => {
+    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const updatePreference = () => setReducedMotion(preference.matches);
+    updatePreference();
+    preference.addEventListener("change", updatePreference);
+    return () => preference.removeEventListener("change", updatePreference);
+  }, []);
+
+  useEffect(() => {
+    const stopHiddenAnimation = () => {
+      if (document.visibilityState === "hidden") dismissBoardEffects();
+    };
+    document.addEventListener("visibilitychange", stopHiddenAnimation);
+    return () => document.removeEventListener("visibilitychange", stopHiddenAnimation);
+  }, [dismissBoardEffects]);
 
   useEffect(() => () => {
     if (effectTimer.current !== null) window.clearTimeout(effectTimer.current);
@@ -634,18 +690,6 @@ export function GameRoom({ gameId }: { gameId: string }) {
     ? actionEndpointSquares(lastMove)
     : [];
 
-  function effectStyle(effect: BoardEffect): CSSProperties {
-    const fromIndex = squares.indexOf(effect.from as Square);
-    const toIndex = squares.indexOf(effect.to as Square);
-    if (fromIndex < 0 || toIndex < 0) return {};
-    const x = fromIndex % 8 - toIndex % 8;
-    const y = Math.floor(fromIndex / 8) - Math.floor(toIndex / 8);
-    return {
-      "--move-x": `${x * 100}%`,
-      "--move-y": `${y * 100}%`,
-    } as CSSProperties;
-  }
-
   function playInvalidSound() {
     if (!soundOn) return;
     void unlockGameSounds().then((unlocked) => {
@@ -660,6 +704,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     second?: { from: Square; to: Square },
   ): void {
     if (!game || !canMove || moveCommitInFlight.current) return;
+    dismissBoardEffects();
     const piece = new Chess(game.fen).get(from)?.type ?? null;
     const intent: MoveIntent = {
       from,
@@ -1036,7 +1081,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     setPendingMove(null);
     dragRef.current = null;
     setDrag(null);
-    setEffects([]);
+    setEffectQueue([]);
     setMessage("");
     setHistoryPly(next);
   }
@@ -1381,10 +1426,18 @@ export function GameRoom({ gameId }: { gameId: string }) {
             data-interactive={canMove ? "true" : "false"}
             data-history={viewingHistory ? "true" : "false"}
           >
-            {finisher && !viewingHistory ? <CheckmateFinisher finisher={finisher} /> : null}
+            {finisher && !viewingHistory && !activeEffect
+              ? <CheckmateFinisher finisher={finisher} />
+              : null}
             <div
               className="chessboard"
               role="grid"
+              onPointerDownCapture={() => {
+                if (canMove && activeEffect) dismissBoardEffects();
+              }}
+              onKeyDownCapture={() => {
+                if (canMove && activeEffect) dismissBoardEffects();
+              }}
               aria-label={viewingHistory
                 ? `Historical chess board, ${replayFrameLabel(historyFrame)}`
                 : "Chess board"}
@@ -1397,9 +1450,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 const isLast = lastMoveEndpoints.includes(square);
                 const isCheckedKing = checkedKingSquare === square;
                 const isDragOver = drag?.moved && drag.over === square && legal;
-                const effect = viewingHistory
-                  ? undefined
-                  : effects.find((candidate) => candidate.to === square);
+                const combatPieceHidden = Boolean(
+                  !viewingHistory
+                  && activeEffect
+                  && activeEffectFinalSquare === square,
+                );
                 const file = square[0];
                 const rank = square[1];
                 const showRank = index % 8 === 0;
@@ -1412,7 +1467,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                     aria-disabled={!canMove}
                     aria-selected={isSelected}
                     data-square={square}
-                    className={`square ${isDarkSquare(square) ? "dark-square" : "light-square"}${isSelected ? " selected" : ""}${isLast ? " last-move" : ""}${isCheckedKing ? " king-in-check" : ""}${legal ? capture ? " capture-target" : " legal-target" : ""}${isDragOver ? " drag-over" : ""}${effect?.capture ? " capture-impact" : ""}`}
+                    className={`square ${isDarkSquare(square) ? "dark-square" : "light-square"}${isSelected ? " selected" : ""}${isLast ? " last-move" : ""}${isCheckedKing ? " king-in-check" : ""}${legal ? capture ? " capture-target" : " legal-target" : ""}${isDragOver ? " drag-over" : ""}`}
                     key={square}
                     onClick={() => tapSquare(square)}
                     disabled={busy || botThinking || viewingHistory}
@@ -1421,8 +1476,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                     {showFile ? <span className="file-label">{file}</span> : null}
                     {piece ? (
                       <span
-                        className={`piece piece-${piece.color}${drag?.from === square && drag.moved ? " dragging" : ""}${effect ? " piece-arriving" : ""}`}
-                        style={effect ? effectStyle(effect) : undefined}
+                        className={`piece piece-${piece.color}${drag?.from === square && drag.moved ? " dragging" : ""}${combatPieceHidden ? " combat-piece-hidden" : ""}`}
                         draggable={false}
                         onPointerDown={(event) => startPieceDrag(event, square)}
                         onPointerMove={movePieceDrag}
@@ -1435,6 +1489,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
                   </button>
                 );
               })}
+              {activeEffect && !viewingHistory ? (
+                <BoardActionAnimation
+                  effect={activeEffect}
+                  squares={squares}
+                  reducedMotion={reducedMotion}
+                  onComplete={() => finishBoardEffect(activeEffect.id)}
+                />
+              ) : null}
             </div>
           </div>
           {message ? <p className="board-message" role="status">{message}</p> : null}

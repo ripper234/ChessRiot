@@ -2,6 +2,11 @@
 
 import { FormEvent, useRef, useState } from "react";
 import { generateUuid, guestIdentityToken } from "@/lib/client-storage";
+import {
+  clearRequiredTextError,
+  requiredTextError,
+} from "@/lib/form-validation";
+import { RequiredTextInput } from "./RequiredTextInput";
 
 export function FeedbackButton() {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -9,9 +14,12 @@ export function FeedbackButton() {
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [titleError, setTitleError] = useState("");
+  const titleInput = useRef<HTMLInputElement>(null);
 
   function open() {
     setMessage("");
+    setTitleError("");
     dialog.current?.showModal();
   }
 
@@ -22,7 +30,16 @@ export function FeedbackButton() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     const cleanTitle = title.trim();
-    if (!cleanTitle) return;
+    const missingTitle = requiredTextError(
+      title,
+      "Add a short title before submitting feedback.",
+    );
+    if (missingTitle) {
+      setMessage("");
+      setTitleError(missingTitle);
+      window.requestAnimationFrame(() => titleInput.current?.focus());
+      return;
+    }
     setBusy(true);
     setMessage("");
     try {
@@ -40,6 +57,7 @@ export function FeedbackButton() {
       if (!response.ok) throw new Error("submit_failed");
       setTitle("");
       setComment("");
+      setTitleError("");
       setMessage("Thanks. Your feedback is in the pool.");
     } catch {
       setMessage("Could not submit yet. Please try again.");
@@ -64,19 +82,24 @@ export function FeedbackButton() {
           if (busy) event.preventDefault();
         }}
       >
-        <form onSubmit={submit}>
+        <form onSubmit={submit} noValidate>
           <span className="card-kicker">HELP SHAPE CHESSRIOT</span>
           <h2 id="feedback-title">Send feedback</h2>
-          <label htmlFor="feedback-summary">Title</label>
-          <input
+          <RequiredTextInput
+            ref={titleInput}
             id="feedback-summary"
+            label="Title"
             value={title}
+            error={titleError}
             maxLength={120}
-            required
             autoFocus
             placeholder="What should change?"
             disabled={busy}
-            onChange={(event) => setTitle(event.target.value)}
+            onChange={(event) => {
+              const nextTitle = event.target.value;
+              setTitle(nextTitle);
+              setTitleError((current) => clearRequiredTextError(nextTitle, current));
+            }}
           />
           <label htmlFor="feedback-comment">Comment <span>optional</span></label>
           <textarea
@@ -91,7 +114,7 @@ export function FeedbackButton() {
           {message ? <p className="feedback-message" role="status">{message}</p> : null}
           <div className="feedback-actions">
             <button type="button" className="feedback-cancel" onClick={close} disabled={busy}>CLOSE</button>
-            <button className="primary-button" disabled={busy || !title.trim()}>
+            <button className="primary-button" type="submit" disabled={busy}>
               {busy ? "SENDING…" : "SUBMIT"}
             </button>
           </div>

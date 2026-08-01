@@ -1,4 +1,24 @@
-# ChessRiot v0.15.0 specification
+# ChessRiot v0.16.0 specification
+
+## v0.16.0 release additions
+
+- Pawn, knight, bishop, rook, queen, and king captures each use a distinct
+  physical action. The captured piece reacts before the impact layer clears.
+- The combat layer is presentation-only and pointer-transparent. The same
+  immediate optimistic board remains underneath for Multiplayer, Solo, and
+  Riot Bot actions; animation never disables squares, changes `aria-busy`, or
+  delays a legal next interaction.
+- Effects are reconstructed from immutable FEN history, including en passant,
+  capture promotion, and both legs of an atomic Magic move. Initial load,
+  refresh, unchanged polling, rollback, history, reduced motion, and a hidden
+  tab never replay stale combat.
+- `/capture-lab` renders the production combat component for all six attackers
+  and its reduced-motion state.
+- Create Game, Join Game, and Feedback share one required-text presentation
+  pattern. A blank or whitespace-only submission keeps the action available,
+  turns the exact field red, announces a specific inline message, connects it
+  through ARIA, and focuses the first invalid field. The error clears as soon
+  as the value becomes valid.
 
 ## v0.15.0 release additions
 

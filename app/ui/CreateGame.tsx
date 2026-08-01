@@ -25,6 +25,10 @@ import {
   gameCreatePayload,
   type PendingGameCreate,
 } from "@/lib/game-creation";
+import {
+  clearRequiredTextError,
+  requiredTextError,
+} from "@/lib/form-validation";
 import { DIFFICULTY_LABELS } from "@/lib/game-presentation";
 import {
   gameVariant,
@@ -34,6 +38,7 @@ import { APP_VERSION } from "@/lib/version";
 import { Brand } from "./Brand";
 import { ChessPiece } from "./ChessPiece";
 import { GameVariantPicker } from "./GameVariantPicker";
+import { RequiredTextInput } from "./RequiredTextInput";
 
 export function CreateGame() {
   const router = useRouter();
@@ -45,6 +50,8 @@ export function CreateGame() {
   const [recent, setRecent] = useState<RecentGame[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [nameError, setNameError] = useState("");
+  const nameInput = useRef<HTMLInputElement>(null);
   const pending = useRef<PendingGameCreate | null>(null);
   const selectedVariant = gameVariant(variantId);
 
@@ -60,7 +67,16 @@ export function CreateGame() {
   async function createGame(event: FormEvent) {
     event.preventDefault();
     const cleanName = name.trim();
-    if (!cleanName) return;
+    const missingName = requiredTextError(
+      name,
+      "Enter your display name to start a game.",
+    );
+    if (missingName) {
+      setError("");
+      setNameError(missingName);
+      window.requestAnimationFrame(() => nameInput.current?.focus());
+      return;
+    }
     if (!canUseGameStorage()) {
       setError("Allow browser storage so the opening animation and invitation can be restored.");
       return;
@@ -120,15 +136,19 @@ export function CreateGame() {
         <Link className="home-link" href="/changelog">WHAT&apos;S NEW</Link>
       </header>
       <section className="start-stage">
-        <form className="voxel-card create-card" onSubmit={createGame}>
+        <form className="voxel-card create-card" onSubmit={createGame} noValidate>
           <span className="card-kicker">NEW GAME</span>
           <h1>Play chess</h1>
-          <label htmlFor="display-name">Your display name</label>
-          <input
+          <RequiredTextInput
+            ref={nameInput}
             id="display-name"
+            label="Your display name"
             value={name}
+            error={nameError}
             onChange={(event) => {
-              setName(event.target.value);
+              const nextName = event.target.value;
+              setName(nextName);
+              setNameError((current) => clearRequiredTextError(nextName, current));
               pending.current = null;
             }}
             maxLength={24}
@@ -255,7 +275,7 @@ export function CreateGame() {
             </fieldset>
           )}
           {error ? <p className="form-error" role="alert">{error}</p> : null}
-          <button className="primary-button" disabled={busy || !name.trim()}>
+          <button className="primary-button" type="submit" disabled={busy}>
             {busy
               ? "STARTING…"
               : mode === "solo" ? "PLAY RIOT BOT  →" : "CREATE GAME  →"}
