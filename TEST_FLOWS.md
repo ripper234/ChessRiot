@@ -17,6 +17,30 @@
 6. Open an old `/verify?failed=1&return_to=%2F` link and verify it redirects
    safely to `/app` without showing a retired check.
 
+## Required fields and combat
+
+1. On `/app`, submit with an empty or whitespace-only display name by button
+   and Enter. Verify the enabled action sends no request, the input turns red,
+   receives focus, exposes `aria-invalid=true`, and references its visible
+   error. Type a valid name and verify the error clears immediately.
+2. Repeat the same checks for the invitation display name and Feedback title at
+   1366×768 and 390×844. Keep storage/network errors separate, and verify a
+   successful Feedback submission resets its validation state.
+3. Capture with every piece as a human and as Riot Bot. Verify each attacker
+   keeps its own action, the victim reacts, and the committed or optimistic
+   board is already current underneath the pointer-transparent overlay.
+4. Start the next legal interaction before combat ends and verify the
+   decoration clears immediately without disabling the board or duplicating a
+   request. No interface may show `LOCKING MOVE`.
+5. Verify captures from both orientations, en passant's real victim square,
+   capture promotion as a pawn, both legs of an atomic Magic capture, and a
+   Mini Game or Mating Set position with a nonstandard initial FEN.
+6. Refresh, repeat an unchanged poll, reject an optimistic move, open history,
+   background the page, and enable reduced motion. None may replay stale combat
+   or replace the final authoritative position.
+7. Open `/capture-lab`, replay all six actions, and verify the production
+   animation component and reduced-motion marker at desktop and mobile widths.
+
 ## Solo happy path
 
 1. Enter a name, choose Solo, and verify Bot level starts at Level 3, Medium.

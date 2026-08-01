@@ -1,0 +1,506 @@
+/* Decorative combat overlays. The live board remains authoritative and interactive. */
+.game-shell .chessboard,
+.capture-lab-board {
+  position: relative;
+}
+
+.game-shell .piece.combat-piece-hidden {
+  opacity: 0 !important;
+}
+
+.board-action-animation {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  overflow: hidden;
+  pointer-events: none;
+  animation: combat-lifetime var(--action-duration) linear both;
+}
+
+.board-action-animation .action-unit {
+  position: absolute;
+  z-index: 2;
+  width: 12.5%;
+  height: 12.5%;
+  display: grid;
+  place-items: center;
+  transform-origin: 50% 78%;
+  will-change: transform, opacity;
+}
+
+.board-action-animation .action-piece-body {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+}
+
+.board-action-animation .action-unit .chess-piece-svg {
+  width: 84%;
+  height: 84%;
+  filter: drop-shadow(0 .1em .08em rgba(3, 11, 14, .34));
+}
+
+.board-action-animation .action-attacker {
+  top: var(--action-from-y);
+  left: var(--action-from-x);
+  z-index: 4;
+}
+
+.board-action-animation.is-move .action-attacker {
+  animation: combat-glide var(--action-duration) cubic-bezier(.2, .78, .24, 1) both;
+}
+
+.board-action-animation.is-capture[data-attacker="p"] .action-attacker {
+  animation: combat-pawn-strike var(--action-duration) cubic-bezier(.2, .72, .18, 1) both;
+}
+
+.board-action-animation.is-capture[data-attacker="n"] .action-attacker {
+  animation: combat-knight-pounce var(--action-duration) cubic-bezier(.2, .76, .18, 1) both;
+}
+
+.board-action-animation.is-capture[data-attacker="b"] .action-attacker {
+  animation: combat-bishop-thrust var(--action-duration) cubic-bezier(.18, .74, .2, 1) both;
+}
+
+.board-action-animation.is-capture[data-attacker="r"] .action-attacker {
+  animation: combat-rook-charge var(--action-duration) cubic-bezier(.13, .8, .2, 1) both;
+}
+
+.board-action-animation.is-capture[data-attacker="q"] .action-attacker {
+  animation: combat-queen-sweep var(--action-duration) cubic-bezier(.18, .74, .16, 1) both;
+}
+
+.board-action-animation.is-capture[data-attacker="k"] .action-attacker {
+  animation: combat-king-chop var(--action-duration) cubic-bezier(.18, .72, .18, 1) both;
+}
+
+.board-action-animation .action-victim {
+  top: var(--victim-y);
+  left: var(--victim-x);
+  z-index: 3;
+  animation: combat-victim-fall var(--action-duration) cubic-bezier(.2, .7, .2, 1) both;
+}
+
+.board-action-animation[data-attacker="n"] .action-victim {
+  animation-name: combat-victim-stomp;
+}
+
+.board-action-animation[data-attacker="r"] .action-victim {
+  animation-name: combat-victim-shove;
+}
+
+.board-action-animation[data-attacker="q"] .action-victim {
+  animation-name: combat-victim-spin;
+}
+
+.board-action-animation[data-attacker="k"] .action-victim {
+  animation-name: combat-victim-crush;
+}
+
+.board-action-animation .action-weapon {
+  position: absolute;
+  top: 0;
+  right: 3%;
+  z-index: 5;
+  width: 10%;
+  height: 70%;
+  border: max(1px, .14cqw) solid #2b2718;
+  border-radius: 999px 999px 3px 3px;
+  opacity: 0;
+  background: linear-gradient(to right, #fff7cd 0 31%, var(--chess-gold) 32% 69%, #8f5d1f 70% 100%);
+  box-shadow: 0 0 .16em color-mix(in srgb, var(--chess-gold) 74%, transparent);
+  transform-origin: 50% 88%;
+}
+
+.board-action-animation .action-weapon::after {
+  position: absolute;
+  right: -105%;
+  bottom: 6%;
+  width: 310%;
+  height: 10%;
+  border-radius: 999px;
+  content: "";
+  background: #3a2a1d;
+}
+
+.board-action-animation[data-attacker="p"] .action-weapon {
+  animation: combat-pawn-sword var(--action-duration) ease-out both;
+}
+
+.board-action-animation[data-attacker="b"] .action-weapon {
+  top: 9%;
+  right: -9%;
+  width: 7%;
+  height: 98%;
+  transform-origin: 50% 92%;
+  animation: combat-bishop-lance var(--action-duration) ease-out both;
+}
+
+.board-action-animation[data-attacker="q"] .action-weapon {
+  top: -2%;
+  height: 76%;
+  animation: combat-queen-blade var(--action-duration) ease-out both;
+}
+
+.board-action-animation[data-attacker="k"] .action-weapon {
+  top: -8%;
+  width: 13%;
+  height: 84%;
+  animation: combat-king-blade var(--action-duration) ease-out both;
+}
+
+.board-action-animation[data-attacker="n"] .action-weapon,
+.board-action-animation[data-attacker="r"] .action-weapon {
+  display: none;
+}
+
+.board-action-animation .action-trail {
+  position: absolute;
+  top: 50%;
+  right: 62%;
+  width: 72%;
+  height: 18%;
+  border-radius: 999px;
+  opacity: 0;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--electric-blue) 72%, transparent));
+}
+
+.board-action-animation[data-attacker="n"] .action-trail,
+.board-action-animation[data-attacker="r"] .action-trail {
+  animation: combat-charge-trail var(--action-duration) ease-out both;
+}
+
+.board-action-animation .action-impact {
+  position: absolute;
+  top: var(--victim-y);
+  left: var(--victim-x);
+  z-index: 6;
+  width: 12.5%;
+  height: 12.5%;
+  display: grid;
+  place-items: center;
+  color: var(--chess-gold);
+}
+
+.board-action-animation .action-impact > b {
+  position: relative;
+  z-index: 2;
+  font: 900 clamp(18px, 6cqw, 50px)/1 var(--display);
+  text-shadow: 0 0 .2em var(--chess-gold), 0 0 .42em var(--riot-pink);
+  animation: combat-impact-star var(--action-duration) ease-out both;
+}
+
+.board-action-animation .action-impact-ring,
+.board-action-animation .action-impact-sweep {
+  position: absolute;
+  inset: 12%;
+  border: max(2px, .42cqw) solid var(--electric-blue);
+  border-radius: 50%;
+  animation: combat-impact-ring var(--action-duration) ease-out both;
+}
+
+.board-action-animation .action-impact-sweep {
+  inset: 24% -18%;
+  border-color: var(--chess-gold);
+  border-right-color: transparent;
+  border-left-color: transparent;
+  animation-name: combat-impact-sweep;
+}
+
+.board-action-animation[data-attacker="r"] .action-impact-ring {
+  border-radius: 16%;
+  transform: rotate(var(--action-angle));
+}
+
+.board-action-animation[data-attacker="q"] .action-impact-sweep {
+  inset: -18%;
+  border-width: max(3px, .65cqw);
+}
+
+.board-action-animation .action-chip {
+  position: absolute;
+  top: 45%;
+  left: 47%;
+  width: 10%;
+  height: 10%;
+  border-radius: 2px;
+  background: var(--chess-gold);
+  transform-origin: 50% 50%;
+  animation: combat-impact-chip var(--action-duration) ease-out both;
+}
+
+.board-action-animation .action-chip:nth-of-type(even) {
+  background: var(--riot-pink);
+}
+
+.board-action-animation .action-reduced-marker {
+  position: absolute;
+  top: var(--victim-y);
+  left: var(--victim-x);
+  z-index: 7;
+  width: 12.5%;
+  height: 12.5%;
+  display: none;
+  place-items: center;
+  border: max(2px, .4cqw) solid var(--riot-pink);
+  border-radius: 50%;
+  color: var(--chess-gold);
+  font: 900 clamp(14px, 4cqw, 34px)/1 var(--display);
+}
+
+@keyframes combat-lifetime { from, to { opacity: 1; } }
+
+@keyframes combat-glide {
+  0% { opacity: .76; transform: translate(0, 0) scaleX(var(--action-facing)) scale(.92); }
+  72% { opacity: 1; transform: translate(var(--action-x), var(--action-y)) scaleX(var(--action-facing)) scale(1.07); }
+  100% { opacity: 1; transform: translate(var(--action-x), var(--action-y)) scaleX(var(--action-facing)); }
+}
+
+@keyframes combat-pawn-strike {
+  0%, 12% { transform: translate(0, 0) scaleX(var(--action-facing)) scale(.92, .98); }
+  30% { transform: translate(var(--action-half-x), var(--action-half-y)) scaleX(var(--action-facing)) rotate(-8deg) scale(1.04, .94); }
+  51%, 72% { transform: translate(var(--action-x), var(--action-y)) scaleX(var(--action-facing)) rotate(7deg) scale(1.1); }
+  86%, 100% { transform: translate(var(--action-x), var(--action-y)) scaleX(var(--action-facing)); }
+}
+
+@keyframes combat-knight-pounce {
+  0%, 10% { transform: translate(0, 0) scaleX(var(--action-facing)) scale(1, .82); }
+  42% { transform: translate(var(--action-half-x), calc(var(--action-half-y) + var(--action-arc-y))) scaleX(var(--action-facing)) rotate(-12deg) scale(1.17); }
+  64%, 76% { transform: translate(var(--action-x), var(--action-y)) scaleX(var(--action-facing)) rotate(9deg) scale(1.16, .84); }
+  88%, 100% { transform: translate(var(--action-x), var(--action-y)) scaleX(var(--action-facing)); }
+}
+
+@keyframes combat-bishop-thrust {
+  0%, 15% { transform: translate(0, 0) scaleX(var(--action-facing)) rotate(-6deg) scale(.94); }
+  38% { transform: translate(var(--action-half-x), var(--action-half-y)) scaleX(var(--action-facing)) rotate(7deg) scale(1.05); }
+  55%, 72% { transform: translate(var(--action-x), var(--action-y)) scaleX(var(--action-facing)) rotate(-5deg) scale(1.14, .94); }
+  86%, 100% { transform: translate(var(--action-x), var(--action-y)) scaleX(var(--action-facing)); }
+}
+
+@keyframes combat-rook-charge {
+  0%, 14% { transform: translate(0, 0) scaleX(var(--action-facing)) scale(1.12, .78); }
+  50% { transform: translate(var(--action-x), var(--action-y)) scaleX(var(--action-facing)) scale(1.2, .9); }
+  67% { transform: translate(var(--action-x), var(--action-y)) scaleX(var(--action-facing)) scale(.9, 1.13); }
+  84%, 100% { transform: translate(var(--action-x), var(--action-y)) scaleX(var(--action-facing)); }
+}
+
+@keyframes combat-queen-sweep {
+  0%, 12% { transform: translate(0, 0) scaleX(var(--action-facing)) rotate(-16deg) scale(.94); }
+  38% { transform: translate(var(--action-half-x), var(--action-half-y)) scaleX(var(--action-facing)) rotate(24deg) scale(1.1); }
+  57%, 73% { transform: translate(var(--action-x), var(--action-y)) scaleX(var(--action-facing)) rotate(-18deg) scale(1.16); }
+  88%, 100% { transform: translate(var(--action-x), var(--action-y)) scaleX(var(--action-facing)); }
+}
+
+@keyframes combat-king-chop {
+  0%, 13% { transform: translate(0, 0) scaleX(var(--action-facing)) rotate(-10deg) scale(.96); }
+  36% { transform: translate(var(--action-half-x), var(--action-half-y)) scaleX(var(--action-facing)) rotate(-18deg) scale(1.06); }
+  61%, 75% { transform: translate(var(--action-x), var(--action-y)) scaleX(var(--action-facing)) rotate(9deg) scale(1.17, .92); }
+  89%, 100% { transform: translate(var(--action-x), var(--action-y)) scaleX(var(--action-facing)); }
+}
+
+@keyframes combat-victim-fall {
+  0%, 48% { opacity: 1; transform: translate(0, 0) rotate(0) scale(1); }
+  61% { opacity: 1; transform: translate(var(--victim-kick-x), var(--victim-kick-y)) rotate(12deg) scale(1.07, .88); }
+  86%, 100% { opacity: 0; transform: translate(var(--victim-kick-x), calc(var(--victim-kick-y) + 28%)) rotate(var(--victim-spin)) scale(.34); }
+}
+
+@keyframes combat-victim-stomp {
+  0%, 53% { opacity: 1; transform: translate(0, 0) scale(1); }
+  66% { opacity: 1; transform: translate(0, 28%) scale(1.18, .48); }
+  86%, 100% { opacity: 0; transform: translate(0, 44%) scale(.5, .16); }
+}
+
+@keyframes combat-victim-shove {
+  0%, 45% { opacity: 1; transform: translate(0, 0) rotate(0) scale(1); }
+  62% { opacity: 1; transform: translate(var(--victim-kick-x), var(--victim-kick-y)) rotate(12deg) scale(1.08, .82); }
+  86%, 100% { opacity: 0; transform: translate(var(--victim-kick-x), var(--victim-kick-y)) rotate(var(--victim-spin)) scale(.42); }
+}
+
+@keyframes combat-victim-spin {
+  0%, 44% { opacity: 1; transform: rotate(0) scale(1); }
+  64% { opacity: 1; transform: translate(var(--victim-kick-x), var(--victim-kick-y)) rotate(58deg) scale(.88); }
+  88%, 100% { opacity: 0; transform: translate(var(--victim-kick-x), var(--victim-kick-y)) rotate(var(--victim-spin)) scale(.24); }
+}
+
+@keyframes combat-victim-crush {
+  0%, 52% { opacity: 1; transform: translateY(0) scale(1); }
+  66% { opacity: 1; transform: translateY(28%) scale(1.08, .42); }
+  88%, 100% { opacity: 0; transform: translateY(42%) scale(.72, .1); }
+}
+
+@keyframes combat-pawn-sword {
+  0%, 12% { opacity: 0; transform: rotate(-92deg) scale(.55); }
+  20%, 36% { opacity: 1; transform: rotate(-48deg) scale(1); }
+  53%, 67% { opacity: 1; transform: rotate(53deg) scale(1.1); }
+  80%, 100% { opacity: 0; transform: rotate(68deg) scale(.82); }
+}
+
+@keyframes combat-bishop-lance {
+  0%, 17% { opacity: 0; transform: rotate(calc(var(--action-angle) + 90deg)) scaleY(.35); }
+  34%, 64% { opacity: 1; transform: rotate(calc(var(--action-angle) + 90deg)) scaleY(1.28); }
+  78%, 100% { opacity: 0; transform: rotate(calc(var(--action-angle) + 90deg)) scaleY(.86); }
+}
+
+@keyframes combat-queen-blade {
+  0%, 14% { opacity: 0; transform: rotate(-102deg) scale(.66); }
+  30% { opacity: 1; transform: rotate(-42deg) scale(1); }
+  58%, 69% { opacity: 1; transform: rotate(116deg) scale(1.12); }
+  82%, 100% { opacity: 0; transform: rotate(132deg) scale(.8); }
+}
+
+@keyframes combat-king-blade {
+  0%, 13% { opacity: 0; transform: rotate(-120deg) scale(.68); }
+  31%, 44% { opacity: 1; transform: rotate(-76deg) scale(1.14); }
+  61%, 74% { opacity: 1; transform: rotate(48deg) scale(1.1); }
+  86%, 100% { opacity: 0; transform: rotate(62deg) scale(.84); }
+}
+
+@keyframes combat-charge-trail {
+  0%, 14% { opacity: 0; transform: scaleX(.2); }
+  34%, 62% { opacity: .9; transform: scaleX(1); }
+  80%, 100% { opacity: 0; transform: scaleX(1.35); }
+}
+
+@keyframes combat-impact-star {
+  0%, 46% { opacity: 0; transform: scale(.1) rotate(-28deg); }
+  56% { opacity: 1; transform: scale(1.4) rotate(8deg); }
+  79%, 100% { opacity: 0; transform: scale(2.1) rotate(38deg); }
+}
+
+@keyframes combat-impact-ring {
+  0%, 47% { opacity: 0; transform: scale(.3); }
+  57% { opacity: 1; transform: scale(.82); }
+  82%, 100% { opacity: 0; transform: scale(1.9); }
+}
+
+@keyframes combat-impact-sweep {
+  0%, 46% { opacity: 0; transform: rotate(-32deg) scale(.3); }
+  57% { opacity: .9; transform: rotate(18deg) scale(1); }
+  82%, 100% { opacity: 0; transform: rotate(92deg) scale(1.65); }
+}
+
+@keyframes combat-impact-chip {
+  0%, 48% { opacity: 0; transform: rotate(var(--chip-angle)) translateY(0) scale(.2); }
+  57% { opacity: 1; }
+  86%, 100% { opacity: 0; transform: rotate(var(--chip-angle)) translateY(-245%) scale(.78); }
+}
+
+.board-action-animation.is-reduced .action-attacker,
+.board-action-animation.is-reduced .action-victim,
+.board-action-animation.is-reduced .action-impact {
+  display: none;
+}
+
+.board-action-animation.is-reduced .action-reduced-marker {
+  display: grid;
+}
+
+/* The same production component doubles as a visual-regression lab. */
+.capture-lab-shell {
+  min-height: 100vh;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 12% 12%, rgba(99, 200, 221, .18), transparent 30rem),
+    radial-gradient(circle at 88% 85%, rgba(255, 214, 90, .12), transparent 34rem),
+    linear-gradient(145deg, #172f38, #0d1a1e 68%, #142923);
+}
+
+.capture-lab-layout {
+  width: min(1180px, 100%);
+  display: grid;
+  grid-template-columns: minmax(250px, .72fr) minmax(420px, 1.2fr);
+  align-items: center;
+  gap: clamp(28px, 6vw, 76px);
+  margin: 0 auto;
+  padding: clamp(52px, 7vw, 90px) clamp(16px, 4vw, 42px) 80px;
+}
+
+.capture-lab-copy h1 {
+  margin: 18px 0;
+  font: 900 clamp(48px, 7vw, 88px)/.82 var(--display);
+  letter-spacing: -2px;
+}
+
+.capture-lab-copy h1 em { color: var(--chess-gold); font-style: normal; }
+.capture-lab-copy > p { max-width: 480px; color: var(--muted); font: 650 15px/1.5 var(--ui); }
+
+.capture-lab-stage {
+  min-width: 0;
+  padding: clamp(14px, 2.4vw, 24px);
+  border: 1px solid color-mix(in srgb, var(--theme-card-border, #45636a) 76%, transparent);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--surface, #314a50) 91%, transparent);
+  box-shadow: 0 24px 70px rgba(2, 12, 15, .38);
+}
+
+.capture-lab-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 13px; }
+.capture-lab-heading small, .capture-lab-heading strong { display: block; }
+.capture-lab-heading small { color: var(--electric-blue); font: 900 9px/1 var(--mono); }
+.capture-lab-heading strong { margin-top: 5px; font: 900 22px/1 var(--display); }
+.capture-lab-heading button { min-height: 40px; padding: 0 14px; border: 2px solid #102126; border-radius: 8px; color: #172515; background: var(--chess-gold); cursor: pointer; font: 900 9px/1 var(--mono); }
+
+.capture-lab-board {
+  width: min(100%, 620px);
+  aspect-ratio: 1;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  overflow: hidden;
+  margin: 0 auto;
+  border: 7px solid var(--theme-frame, #1b343a);
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px rgba(6, 20, 24, .32), 0 16px 38px rgba(2, 12, 15, .28);
+  container-type: inline-size;
+}
+
+.capture-lab-square { min-width: 0; aspect-ratio: 1; display: grid; place-items: center; }
+.capture-lab-square.light-square { background: var(--board-light); }
+.capture-lab-square.dark-square { background: var(--board-dark); }
+.capture-lab-piece { width: 84%; height: 84%; display: grid; place-items: center; }
+.capture-lab-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.capture-lab-controls { display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px; margin-top: 14px; }
+.capture-lab-controls button { min-width: 0; min-height: 72px; display: grid; grid-template-rows: 46px auto; place-items: center; padding: 5px 3px; border: 2px solid color-mix(in srgb, var(--theme-card-border, #45636a) 75%, transparent); border-radius: 9px; color: var(--text); background: color-mix(in srgb, var(--surface-raised, #456168) 88%, transparent); cursor: pointer; }
+.capture-lab-controls button.selected { border-color: var(--chess-gold); background: color-mix(in srgb, var(--chess-gold) 14%, var(--surface-raised, #456168)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--chess-gold) 25%, transparent); }
+.capture-lab-controls .chess-piece-svg { width: 44px; height: 44px; }
+.capture-lab-controls span { font: 900 7px/1 var(--mono); text-transform: uppercase; }
+.capture-lab-controls button:focus-visible { outline: 3px solid var(--electric-blue); outline-offset: 2px; }
+
+.capture-lab-motion { min-height: 54px; display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: center; gap: 10px; margin: 13px 0 0; padding: 9px 11px; border: 1px solid color-mix(in srgb, var(--theme-card-border, #45636a) 72%, transparent); border-radius: 9px; color: var(--text); background: color-mix(in srgb, var(--surface-raised, #456168) 62%, transparent); cursor: pointer; text-shadow: none; }
+.capture-lab-motion input { width: 19px; min-height: 19px; margin: 0; accent-color: var(--teal-spark); }
+.capture-lab-motion strong, .capture-lab-motion small { display: block; }
+.capture-lab-motion strong { font: 900 8px/1 var(--mono); }
+.capture-lab-motion small { margin-top: 4px; color: var(--muted); font: 650 9px/1.3 var(--ui); }
+
+@media (max-width: 800px) {
+  .capture-lab-layout { grid-template-columns: 1fr; padding-top: 38px; }
+  .capture-lab-copy { text-align: center; }
+  .capture-lab-copy > p { margin-right: auto; margin-left: auto; }
+}
+
+@media (max-width: 620px) {
+  .board-action-animation .action-unit .chess-piece-svg { filter: none; }
+  .capture-lab-topbar .home-link { font-size: 8px; }
+  .capture-lab-layout { padding: 52px 7px 70px; }
+  .capture-lab-copy h1 { font-size: clamp(48px, 16vw, 72px); }
+  .capture-lab-stage { padding: 9px; border-radius: 13px; }
+  .capture-lab-heading { padding: 3px 3px 0; }
+  .capture-lab-heading strong { font-size: 18px; }
+  .capture-lab-controls { grid-template-columns: repeat(3, 1fr); }
+  .capture-lab-controls button { min-height: 64px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-action-animation .action-attacker,
+  .board-action-animation .action-victim,
+  .board-action-animation .action-impact {
+    display: none;
+    animation: none !important;
+  }
+  .board-action-animation .action-reduced-marker { display: grid; }
+}
+
+@media (forced-colors: active) {
+  .board-action-animation .action-reduced-marker { border-color: Highlight; }
+}

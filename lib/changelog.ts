@@ -11,6 +11,20 @@ const REPOSITORY_URL = "https://github.com/ripper234/ChessRiot";
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.16.0",
+    date: "2026-08-01",
+    title: "Every piece fights different",
+    summary: "Captures now become short piece-specific combat, while missing required fields explain exactly what needs attention.",
+    changes: [
+      "Added distinct pawn, knight, bishop, rook, queen, and king capture actions with a visible victim reaction and impact.",
+      "Kept combat pointer-transparent and non-blocking on top of the immediate optimistic board for both human and Riot Bot moves.",
+      "Reconstructed en passant, capture promotion, and atomic two-leg effects from immutable move history without replaying them on refresh or history views.",
+      "Added red inline errors, accessible descriptions, and first-invalid-field focus to Create Game, Join Game, and Feedback.",
+      "Published /capture-lab as the visual regression surface for all six combat actions and reduced motion.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.16.0`,
+  },
+  {
     version: "0.15.0",
     date: "2026-07-30",
     title: "Instant moves and classic finishes",

@@ -4,7 +4,7 @@ Play the current game at [chessriot.ripper234.chatgpt.site](https://chessriot.ri
 **[View the official ChessRiot release history](https://chessriot.ripper234.chatgpt.site/changelog).**
 [Join for updates on WhatsApp](https://chat.whatsapp.com/FaBgiUgl73vLdeqzcqx0vX).
 
-ChessRiot v0.15.0 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
+ChessRiot v0.16.0 is a mobile-first chess game for solo play against Riot Bot or asynchronous play with someone you know.
 
 Found something confusing or have a cool rule request? Use **Feedback** inside
 the game or [open a GitHub issue](https://github.com/ripper234/ChessRiot/issues).
@@ -44,8 +44,8 @@ progression work, and features that still need explicit rule design.
 - Choose from 11 original visual themes during a game, including six original illustrated backgrounds and the flat Riot default, with optional synthesized move, capture, check, and game-ending sounds.
 - Drag and drop crisp original 2D vector pieces with mouse or touch, while tap,
   click, and keyboard input still work. Your legal move appears immediately in
-  Solo and Multiplayer while the server validates it, and short move and
-  capture animations make both plies visible.
+  Solo and Multiplayer while the server validates it. Every piece now has a
+  distinct, non-blocking capture action; `/capture-lab` replays all six.
 - See explicit White and Black player cards, captured pieces, a highlighted checked king, and check-specific move guidance.
 - Step backward and forward through committed positions directly on the live
   board, or open the full read-only, keyboard-accessible replay viewer.
@@ -60,6 +60,8 @@ progression work, and features that still need explicit rule design.
 - Send a titled feedback item without leaving the current flow; each environment
   stores its own owner-review pool with an exact unresolved count and a scoped,
   idempotent owner action for marking an item done.
+- Missing required names or feedback titles produce a red inline explanation
+  and move focus to the exact field instead of making the action appear broken.
 - Send one-tap preset cheers during two-player games, plus Good Game or Thanks for 15 minutes after play, without opening unrestricted chat.
 - Install the online game as a desktop-style PWA and see a subtle dot for
   unseen releases.

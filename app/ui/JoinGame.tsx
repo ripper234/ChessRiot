@@ -17,7 +17,12 @@ import {
   type GameVariantId,
 } from "@/lib/game-variants";
 import type { PublicMagicRules } from "@/lib/magic-rules";
+import {
+  clearRequiredTextError,
+  requiredTextError,
+} from "@/lib/form-validation";
 import { Brand } from "./Brand";
+import { RequiredTextInput } from "./RequiredTextInput";
 
 type InviteState =
   | { kind: "loading" }
@@ -43,6 +48,8 @@ export function JoinGame({
   const [invite, setInvite] = useState<InviteState>({ kind: "loading" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [nameError, setNameError] = useState("");
+  const nameInput = useRef<HTMLInputElement>(null);
   const playerToken = useRef<string | null>(null);
 
   const loadInvite = useCallback(async (cancelled: () => boolean = () => false) => {
@@ -100,7 +107,16 @@ export function JoinGame({
     event.preventDefault();
     if (invite.kind !== "waiting") return;
     const cleanName = name.trim();
-    if (!cleanName) return;
+    const missingName = requiredTextError(
+      name,
+      "Enter your display name to join this game.",
+    );
+    if (missingName) {
+      setError("");
+      setNameError(missingName);
+      window.requestAnimationFrame(() => nameInput.current?.focus());
+      return;
+    }
     if (!canUseGameStorage()) {
       setError("Allow browser storage so this invitation can be restored.");
       return;
@@ -149,7 +165,7 @@ export function JoinGame({
         <div className="challenge-mark" aria-hidden="true"><span>♜</span><b>VS</b><span>♞</span></div>
         {invite.kind === "loading" ? <div className="voxel-card state-card"><h1>OPENING THE ARENA…</h1></div> : null}
         {invite.kind === "waiting" ? (
-          <form className="voxel-card join-card" onSubmit={join}>
+          <form className="voxel-card join-card" onSubmit={join} noValidate>
             <p className="eyebrow"><span /> PRIVATE CHALLENGE</p>
             <h1><em>{invite.creatorName}</em><br />wants a match.</h1>
             <div className="variant-invite">
@@ -163,22 +179,26 @@ export function JoinGame({
                 <span>{invite.magicRules.labels.join(" · ")}</span>
               </div>
             ) : null}
-            <label htmlFor="join-display-name">Your display name</label>
-            <input
+            <RequiredTextInput
+              ref={nameInput}
               id="join-display-name"
+              label="Your display name"
               value={name}
+              error={nameError}
               maxLength={24}
               autoComplete="nickname"
               placeholder="Omri"
               disabled={busy}
               onChange={(event) => {
-                setName(event.target.value);
+                const nextName = event.target.value;
+                setName(nextName);
+                setNameError((current) => clearRequiredTextError(nextName, current));
                 setError("");
                 playerToken.current = null;
               }}
             />
             {error ? <p className="form-error" role="alert">{error}</p> : null}
-            <button className="primary-button" disabled={busy || !name.trim()}>
+            <button className="primary-button" type="submit" disabled={busy}>
               {busy ? "CLAIMING SEAT…" : "JOIN AS BLACK  →"}
             </button>
             <p className="fine-print">Keep this private link to return to your seat.</p>

@@ -84,6 +84,10 @@ test("renders an identity-independent public homepage and guest play route", asy
   assert.match(html, /ChessRiot/);
   assert.match(html, /Play chess/);
   assert.match(html, /Your display name/);
+  assert.match(
+    html,
+    /<input(?=[^>]*id="display-name")(?=[^>]*required)(?=[^>]*aria-invalid="false")[^>]*>/,
+  );
   assert.doesNotMatch(html, /MOVE BOLDLY/);
   assert.doesNotMatch(html, /LEGAL CHESS|DRAG TO MOVE|SAVES EVERY MOVE/);
   assert.match(html, /WHAT&#x27;S NEW|WHAT'S NEW/);
@@ -142,6 +146,39 @@ test("renders an identity-independent public homepage and guest play route", asy
     /<a(?=[^>]*href="https:\/\/chat\.whatsapp\.com\/FaBgiUgl73vLdeqzcqx0vX")(?=[^>]*target="_blank")(?=[^>]*rel="noopener noreferrer")[^>]*>/,
   );
   assert.match(gameHtml, /JOIN WHATSAPP COMMUNITY/);
+});
+
+test("renders the production capture lab and keeps combat non-blocking", async () => {
+  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
+  workerUrl.searchParams.set("test", `capture-lab-${process.pid}-${Date.now()}`);
+  const { default: worker } = await import(workerUrl.href);
+  const response = await worker.fetch(
+    new Request("http://localhost/capture-lab", { headers: { accept: "text/html" } }),
+    renderEnv(),
+    { waitUntil() {}, passThroughOnException() {} },
+  );
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /EVERY PIECE/);
+  assert.match(html, /FIGHTS DIFFERENT/);
+  assert.match(html, /Sword slash/);
+  assert.match(html, /SIMULATE REDUCED MOTION/);
+
+  const gameRoomSource = readFileSync(
+    new URL("../app/ui/GameRoom.tsx", import.meta.url),
+    "utf8",
+  );
+  const combatStyles = readFileSync(
+    new URL("../app/combat.css", import.meta.url),
+    "utf8",
+  );
+  assert.match(gameRoomSource, /<BoardActionAnimation/);
+  assert.match(gameRoomSource, /dismissBoardEffects/);
+  assert.doesNotMatch(gameRoomSource, /aria-busy=.*activeEffect/);
+  assert.doesNotMatch(gameRoomSource, /disabled=.*activeEffect/);
+  for (const piece of ["p", "n", "b", "r", "q", "k"]) {
+    assert.match(combatStyles, new RegExp(`data-attacker=\\"${piece}\\"`));
+  }
 });
 
 test("keeps one mobile-visible game version and no locking label", () => {
