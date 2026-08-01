@@ -6,6 +6,16 @@ import worker, {
   summarizeAiUsage,
 } from "../worker/index.js";
 
+function ownerRequest(url, options = {}) {
+  return new Request(url, {
+    ...options,
+    headers: {
+      "oai-authenticated-user-email": "owner@example.com",
+      ...options.headers,
+    },
+  });
+}
+
 function usageRow(overrides = {}) {
   return {
     occurred_at: "2026-07-29T08:00:00.000Z",
@@ -234,6 +244,7 @@ test("renders the dashboard and serves an idempotent usage ledger", async () => 
   const environment = {
     DB: database,
     FINANCIALS_INGEST_SECRET: "financial-test-secret",
+    CONTROL_OWNER_EMAIL: "owner@example.com",
   };
   const event = {
     occurredAt: new Date().toISOString(),
@@ -269,7 +280,7 @@ test("renders the dashboard and serves an idempotent usage ledger", async () => 
   assert.equal(database.rows.length, 1);
 
   const dashboard = await worker.fetch(
-    new Request("https://control.test/api/financials?window=30"),
+    ownerRequest("https://control.test/api/financials?window=30"),
     environment,
   );
   assert.equal(dashboard.status, 200);
@@ -280,7 +291,7 @@ test("renders the dashboard and serves an idempotent usage ledger", async () => 
   assert.equal(payload.summary.scopes.development.trackedTokens, 240);
   assert.equal(payload.summary.scopes.development.avoidableTokens, 240);
   assert.equal(payload.expectations.stableGameplay.expectedLlmCallsPerMove, 0);
-  assert.equal(payload.expectations.magicRules.expectedLlmCallsPerMove, 0);
+  assert.equal(payload.expectations.runtimeAi.expectedLlmCallsPerMove, 0);
 });
 
 test("rejects unauthorized ingestion and invalid windows", async () => {
@@ -295,8 +306,8 @@ test("rejects unauthorized ingestion and invalid windows", async () => {
   assert.equal(unauthorized.status, 403);
 
   const invalidWindow = await worker.fetch(
-    new Request("https://control.test/api/financials?window=365"),
-    {},
+    ownerRequest("https://control.test/api/financials?window=365"),
+    { CONTROL_OWNER_EMAIL: "owner@example.com" },
   );
   assert.equal(invalidWindow.status, 400);
 });

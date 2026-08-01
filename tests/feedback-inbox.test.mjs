@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import vm from "node:vm";
 import worker, {
   concreteUnresolvedFeedbackCount,
   normalizeFeedbackOverview,
@@ -7,11 +8,22 @@ import worker, {
 } from "../worker/index.js";
 
 const environment = {
-  DEV_URL: "https://chessriot-dev.ripper234.chatgpt.site",
-  PROD_URL: "https://chessriot.ripper234.chatgpt.site",
-  DEV_OPS_READ_SECRET: "dev-feedback-test-secret",
-  PROD_OPS_READ_SECRET: "prod-feedback-test-secret",
+  DEV_URL: "https://dev.chessriot.gg",
+  PROD_URL: "https://chessriot.gg",
+  DEV_OPS_READ_SECRET: "dev-feedback-test-secret-32-bytes-minimum",
+  PROD_OPS_READ_SECRET: "prod-feedback-test-secret-32-bytes-minimum",
+  CONTROL_OWNER_EMAIL: "owner@example.com",
 };
+
+function ownerRequest(url, options = {}) {
+  return new Request(url, {
+    ...options,
+    headers: {
+      "oai-authenticated-user-email": "owner@example.com",
+      ...options.headers,
+    },
+  });
+}
 
 function grantPayload(grant) {
   return JSON.parse(Buffer.from(grant.split(".", 1)[0], "base64url").toString("utf8"));
@@ -38,6 +50,17 @@ test("summarizes exact, quiet, and partially available feedback counts", () => {
     { fresh: true, exact: false, unresolved: 1 },
     { fresh: true, exact: true, unresolved: 0 },
   ]), { known: 1, complete: false, display: "1+" });
+});
+
+test("the browser-serialized feedback summary has no server-only globals", () => {
+  const serialized = `(${summarizeFeedbackEnvironments.toString()})([
+    { fresh: true, exact: true, unresolved: 1 },
+    { fresh: true, exact: true, unresolved: 0 }
+  ])`;
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(vm.runInNewContext(serialized))),
+    { known: 1, complete: true, display: "1" },
+  );
 });
 
 test("never trusts an exact count below visible unresolved feedback", () => {
@@ -96,12 +119,12 @@ test("red badge count comes only from concrete unresolved records", () => {
 
 test("mints separate short-lived read and feedback grants", async () => {
   const response = await worker.fetch(
-    new Request("https://control.example/api/status"),
+    ownerRequest("https://control.example/api/status"),
     environment,
   );
   assert.equal(response.status, 200);
   const status = await response.json();
-  assert.equal(status.controlVersion, "0.7.0");
+  assert.equal(status.controlVersion, "0.8.0");
   assert.equal(status.environments.length, 2);
   for (const item of status.environments) {
     const read = grantPayload(item.grant);
@@ -121,12 +144,120 @@ test("mints separate short-lived read and feedback grants", async () => {
   );
 });
 
+test("protects status grants with the authenticated owner identity", async () => {
+  const denied = await worker.fetch(
+    new Request("https://control.example/api/status"),
+    environment,
+  );
+  assert.equal(denied.status, 403);
+
+  const weakConfiguration = {
+    ...environment,
+    DEV_URL: "http://dev.chessriot.gg/path",
+    DEV_OPS_READ_SECRET: "too-short",
+  };
+  const response = await worker.fetch(
+    ownerRequest("https://control.example/api/status"),
+    weakConfiguration,
+  );
+  const status = await response.json();
+  const development = status.environments.find((item) => item.key === "development");
+  assert.equal(development.url, null);
+  assert.equal(development.configured, false);
+  assert.equal(development.grant, null);
+  assert.equal(development.feedbackGrant, null);
+});
+
+test("rejects forged browser observations before touching persistence", async () => {
+  const body = JSON.stringify({
+    environment: "production",
+    healthState: "fresh",
+    runtimeVersion: "9.9.9",
+  });
+  const forged = await worker.fetch(
+    new Request("https://control.example/api/registry/observation", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-control-observation": "browser-health-v1",
+      },
+      body,
+    }),
+    environment,
+  );
+  assert.equal(forged.status, 403);
+
+  const crossSite = await worker.fetch(
+    ownerRequest("https://control.example/api/registry/observation", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://control.example",
+        "sec-fetch-site": "cross-site",
+        "x-control-observation": "browser-health-v1",
+      },
+      body,
+    }),
+    environment,
+  );
+  assert.equal(crossSite.status, 403);
+
+  const authorized = await worker.fetch(
+    ownerRequest("https://control.example/api/registry/observation", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://control.example",
+        "sec-fetch-site": "same-origin",
+        "x-control-observation": "browser-health-v1",
+      },
+      body,
+    }),
+    environment,
+  );
+  assert.equal(authorized.status, 503);
+});
+
+test("reports a read-only Control health check", async () => {
+  const healthy = await worker.fetch(
+    new Request("https://control.example/api/health"),
+    {
+      ...environment,
+      DB: {
+        prepare() {
+          return { first: async () => ({ ok: 1 }) };
+        },
+      },
+    },
+  );
+  assert.equal(healthy.status, 200);
+  assert.deepEqual(await healthy.json(), {
+    status: "ok",
+    version: "0.8.0",
+    database: "ok",
+    ownerConfigured: true,
+    environments: {
+      development: {
+        urlConfigured: true,
+        secretConfigured: true,
+        configured: true,
+      },
+      production: {
+        urlConfigured: true,
+        secretConfigured: true,
+        configured: true,
+      },
+    },
+  });
+});
+
 test("renders a compact top-right launcher and right-side inbox", async () => {
   const response = await worker.fetch(
     new Request("https://control.example/"),
     environment,
   );
   const html = await response.text();
+  const csp = response.headers.get("content-security-policy");
   assert.match(html, /id="feedback-launcher"/);
   assert.match(html, /aria-controls="feedback-inbox"/);
   assert.match(html, /id="feedback-badge" hidden/);
@@ -134,6 +265,10 @@ test("renders a compact top-right launcher and right-side inbox", async () => {
   assert.match(html, /id="feedback-unresolved"/);
   assert.match(html, /id="feedback-completed"/);
   assert.doesNotMatch(html, /id="feedback-count"|<details class="drawer feedback"/);
+  assert.match(html, /https:\/\/chessriot\.gg\/changelog/);
+  assert.match(html, /https:\/\/dev\.chessriot\.gg\/demo/);
+  assert.match(csp, /connect-src 'self' https:\/\/dev\.chessriot\.gg https:\/\/chessriot\.gg/);
+  assert.doesNotMatch(csp, /ripper234\.chatgpt\.site/);
 });
 
 test("refreshes grants before closing feedback and preserves environment credentials", async () => {

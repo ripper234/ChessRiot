@@ -2,7 +2,6 @@ const ENVIRONMENTS = [
   {
     key: "development",
     name: "Dev",
-    deployedVersionKey: "DEV_DEPLOYED_VERSION",
     urlKey: "DEV_URL",
     secretKey: "DEV_OPS_READ_SECRET",
     access: "Owner only",
@@ -11,7 +10,6 @@ const ENVIRONMENTS = [
   {
     key: "production",
     name: "Prod",
-    deployedVersionKey: "PROD_DEPLOYED_VERSION",
     urlKey: "PROD_URL",
     secretKey: "PROD_OPS_READ_SECRET",
     access: "Public",
@@ -19,7 +17,7 @@ const ENVIRONMENTS = [
   },
 ];
 
-const CONTROL_VERSION = "0.7.0";
+const CONTROL_VERSION = "0.8.0";
 const STATUS_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const DEMO_VIDEO_MAX_BYTES = 45 * 1024 * 1024;
 const DEMO_VIDEO_STORY_VERSION = 2;
@@ -110,8 +108,28 @@ function base64Url(bytes) {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
+export function configuredHttpsOrigin(value) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    const url = new URL(value.trim());
+    if (
+      url.protocol !== "https:"
+      || url.username
+      || url.password
+      || url.pathname !== "/"
+      || url.search
+      || url.hash
+    ) {
+      return null;
+    }
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
 async function mintGrant(secret, audience, scope) {
-  if (!secret) return null;
+  if (typeof secret !== "string" || secret.length < 32) return null;
   const now = Math.floor(Date.now() / 1000);
   const payload = {
     v: 1,
@@ -139,9 +157,9 @@ async function mintGrant(secret, audience, scope) {
   return encodedPayload + "." + base64Url(new Uint8Array(signature));
 }
 
-export function summarizeFeedbackEnvironments(states) {
+export function summarizeFeedbackEnvironments(states, expectedCount = 2) {
   let known = 0;
-  let complete = Array.isArray(states) && states.length === ENVIRONMENTS.length;
+  let complete = Array.isArray(states) && states.length === expectedCount;
   for (const state of states || []) {
     if (!state || !state.fresh || !state.exact) {
       complete = false;
@@ -199,8 +217,8 @@ export function concreteUnresolvedFeedbackCount(overviews) {
   return count;
 }
 
-function bootstrapRegistry(env) {
-  const fallback = Object.fromEntries(
+function bootstrapRegistry() {
+  return Object.fromEntries(
     ENVIRONMENTS.map((config) => [
       config.key,
       {
@@ -216,34 +234,6 @@ function bootstrapRegistry(env) {
       },
     ]),
   );
-  if (env.DEPLOYMENT_STATE_JSON) {
-    try {
-      const parsed = JSON.parse(env.DEPLOYMENT_STATE_JSON);
-      for (const config of ENVIRONMENTS) {
-        const candidate = parsed?.environments?.[config.key];
-        if (!candidate || !SEMVER_PATTERN.test(candidate.version)) continue;
-        fallback[config.key] = {
-          ...fallback[config.key],
-          version: candidate.version,
-          deployedAt: typeof candidate.deployedAt === "string" ? candidate.deployedAt : null,
-          verifiedAt: typeof candidate.verifiedAt === "string" ? candidate.verifiedAt : null,
-        };
-      }
-    } catch {
-      // Individual version variables and safe fallbacks remain authoritative.
-    }
-  }
-  for (const config of ENVIRONMENTS) {
-    const configuredVersion = env[config.deployedVersionKey];
-    if (SEMVER_PATTERN.test(configuredVersion || "")) {
-      if (fallback[config.key].version !== configuredVersion) {
-        fallback[config.key].deployedAt = null;
-        fallback[config.key].verifiedAt = null;
-      }
-      fallback[config.key].version = configuredVersion;
-    }
-  }
-  return fallback;
 }
 
 function registryValue(row, fallback) {
@@ -325,7 +315,7 @@ async function ensureDeploymentRegistry(env, fallback) {
 }
 
 async function deploymentRegistry(env) {
-  const fallback = bootstrapRegistry(env);
+  const fallback = bootstrapRegistry();
   try {
     if (!await ensureDeploymentRegistry(env, fallback)) {
       return { environments: fallback, persistence: "fallback" };
@@ -647,16 +637,43 @@ async function ensureAiUsageSchema(env) {
   return true;
 }
 
-async function readObservationBody(request) {
-  const contentLength = Number(request.headers.get("content-length") || 0);
-  if (contentLength > 4096) throw new Error("body_too_large");
-  const text = await request.text();
-  if (text.length > 4096) throw new Error("body_too_large");
+async function readBoundedJson(request, maximumBytes) {
+  const rawLength = request.headers.get("content-length");
+  const contentLength = rawLength === null ? null : Number(rawLength);
+  if (
+    contentLength !== null
+    && (!Number.isFinite(contentLength) || contentLength < 0 || contentLength > maximumBytes)
+  ) {
+    throw new Error("body_too_large");
+  }
+  if (!request.body) throw new Error("invalid_json");
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let total = 0;
+  let text = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maximumBytes) {
+      await reader.cancel();
+      throw new Error("body_too_large");
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  text += decoder.decode();
   return JSON.parse(text);
 }
 
+async function readObservationBody(request) {
+  return readBoundedJson(request, 4096);
+}
+
 async function observationResponse(request, env) {
-  if (request.headers.get("x-control-observation") !== "browser-health-v1") {
+  if (
+    request.headers.get("x-control-observation") !== "browser-health-v1"
+    || !controlMutationAuthorized(request, env)
+  ) {
     return registryJson({ error: "not_authorized" }, 403);
   }
   if (!env.DB || typeof env.DB.prepare !== "function") {
@@ -681,7 +698,7 @@ async function observationResponse(request, env) {
   if ((state === "fresh" || state === "degraded") && !runtimeVersion) {
     return registryJson({ error: "invalid_runtime_version" }, 400);
   }
-  const fallback = bootstrapRegistry(env);
+  const fallback = bootstrapRegistry();
   await ensureDeploymentRegistry(env, fallback);
   const current = await env.DB.prepare(`
     SELECT
@@ -753,26 +770,33 @@ async function observationResponse(request, env) {
   });
 }
 
-async function statusResponse(env) {
+async function statusResponse(request, env) {
+  if (!controlOwnerAuthorized(request, env)) {
+    return registryJson({ error: "not_authorized" }, 403);
+  }
   const registry = await deploymentRegistry(env);
   const environments = await Promise.all(
-    ENVIRONMENTS.map(async (config) => ({
-      key: config.key,
-      name: config.name,
-      access: config.access,
-      accent: config.accent,
-      url: env[config.urlKey] ?? null,
-      grant: await mintGrant(
-        env[config.secretKey],
-        config.key,
-        "observability:read",
-      ),
-      feedbackGrant: await mintGrant(
-        env[config.secretKey],
-        config.key,
-        "feedback:manage",
-      ),
-    })),
+    ENVIRONMENTS.map(async (config) => {
+      const url = configuredHttpsOrigin(env[config.urlKey]);
+      const secret = typeof env[config.secretKey] === "string"
+        ? env[config.secretKey]
+        : "";
+      const configured = Boolean(url && secret.length >= 32);
+      return {
+        key: config.key,
+        name: config.name,
+        access: config.access,
+        accent: config.accent,
+        url,
+        configured,
+        grant: configured
+          ? await mintGrant(secret, config.key, "observability:read")
+          : null,
+        feedbackGrant: configured
+          ? await mintGrant(secret, config.key, "feedback:manage")
+          : null,
+      };
+    }),
   );
   return Response.json(
     {
@@ -792,18 +816,60 @@ async function statusResponse(env) {
   );
 }
 
-function controlMutationAuthorized(request, env) {
-  const expectedEmail = String(env.VIDEO_REGEN_ALLOWED_EMAIL || "")
+async function controlHealthResponse(env) {
+  const environments = Object.fromEntries(ENVIRONMENTS.map((config) => {
+    const urlConfigured = Boolean(configuredHttpsOrigin(env[config.urlKey]));
+    const secretConfigured = typeof env[config.secretKey] === "string"
+      && env[config.secretKey].length >= 32;
+    return [config.key, {
+      urlConfigured,
+      secretConfigured,
+      configured: urlConfigured && secretConfigured,
+    }];
+  }));
+  let database = "unavailable";
+  if (env.DB && typeof env.DB.prepare === "function") {
+    try {
+      await env.DB.prepare("SELECT 1 AS ok").first();
+      database = "ok";
+    } catch {
+      database = "error";
+    }
+  }
+  const ownerConfigured = Boolean(controlOwnerEmail(env));
+  const healthy = ownerConfigured
+    && database === "ok"
+    && Object.values(environments).every((item) => item.configured);
+  return registryJson({
+    status: healthy ? "ok" : "degraded",
+    version: CONTROL_VERSION,
+    database,
+    ownerConfigured,
+    environments,
+  }, healthy ? 200 : 503);
+}
+
+function controlOwnerEmail(env) {
+  return String(
+    env.CONTROL_OWNER_EMAIL || env.VIDEO_REGEN_ALLOWED_EMAIL || "",
+  )
     .trim()
     .toLowerCase();
+}
+
+function controlOwnerAuthorized(request, env) {
+  const expectedEmail = controlOwnerEmail(env);
   const actualEmail = String(
     request.headers.get("oai-authenticated-user-email") || "",
   ).trim().toLowerCase();
+  return Boolean(expectedEmail && actualEmail === expectedEmail);
+}
+
+function controlMutationAuthorized(request, env) {
   const origin = request.headers.get("origin");
   const fetchSite = request.headers.get("sec-fetch-site");
   return Boolean(
-    expectedEmail
-    && actualEmail === expectedEmail
+    controlOwnerAuthorized(request, env)
     && origin === new URL(request.url).origin
     && fetchSite === "same-origin",
   );
@@ -840,6 +906,9 @@ async function aiUsageInstrumentation(env) {
 }
 
 async function financialsResponse(request, env) {
+  if (!controlOwnerAuthorized(request, env)) {
+    return registryJson({ error: "not_authorized" }, 403);
+  }
   const url = new URL(request.url);
   const windowKey = url.searchParams.get("window") || "30";
   if (!AI_USAGE_WINDOWS.has(windowKey)) {
@@ -897,11 +966,10 @@ async function financialsResponse(request, env) {
           expectedLlmCallsPerMove: 0,
           metered: false,
         },
-        magicRules: {
-          phase: "before_game_creation",
-          expectedLlmCallsPerCompile: 1,
+        runtimeAi: {
+          phase: "feature_specific",
           expectedLlmCallsPerMove: 0,
-          sharedPromptCache: false,
+          instrumentationRequired: true,
         },
       },
     });
@@ -921,11 +989,7 @@ async function financialsResponse(request, env) {
 }
 
 async function readAiUsageBody(request) {
-  const contentLength = Number(request.headers.get("content-length") || 0);
-  if (contentLength > 96 * 1024) throw new Error("body_too_large");
-  const text = await request.text();
-  if (text.length > 96 * 1024) throw new Error("body_too_large");
-  return JSON.parse(text);
+  return readBoundedJson(request, 96 * 1024);
 }
 
 async function aiUsageIngestResponse(request, env) {
@@ -1083,7 +1147,7 @@ async function demoNarrationResponse(request, env) {
   if (!controlMutationAuthorized(request, env)) {
     return demoProxyJson({ error: "not_authorized" }, 403);
   }
-  const devUrl = String(env.DEV_URL || "");
+  const devUrl = configuredHttpsOrigin(env.DEV_URL) || "";
   const jobId = crypto.randomUUID();
   const storyVersion = String(DEMO_VIDEO_STORY_VERSION);
   const signed = await signDemoRequest(
@@ -1169,7 +1233,7 @@ async function demoPublishResponse(request, env) {
     sha256,
   ].join("\n");
   const signed = await signDemoRequest(env, "publish", jobId, details);
-  const devUrl = String(env.DEV_URL || "");
+  const devUrl = configuredHttpsOrigin(env.DEV_URL) || "";
   const upstreamHeaders = signed ? devRequestHeaders(env, {
     ...signed,
     "content-type": mimeType,
@@ -1226,7 +1290,7 @@ async function demoFailResponse(request, env) {
     return demoProxyJson({ error: "invalid_failure" }, 400);
   }
   const signed = await signDemoRequest(env, "fail", jobId, errorCode);
-  const devUrl = String(env.DEV_URL || "");
+  const devUrl = configuredHttpsOrigin(env.DEV_URL) || "";
   const upstreamHeaders = signed ? devRequestHeaders(env, {
     ...signed,
     "x-demo-video-error": errorCode,
@@ -1246,8 +1310,11 @@ async function demoFailResponse(request, env) {
   return demoProxyJson({ status: "failed" });
 }
 
-async function demoStatusResponse(env) {
-  const devUrl = String(env.DEV_URL || "");
+async function demoStatusResponse(request, env) {
+  if (!controlOwnerAuthorized(request, env)) {
+    return demoProxyJson({ error: "not_authorized" }, 403);
+  }
+  const devUrl = configuredHttpsOrigin(env.DEV_URL) || "";
   const upstreamHeaders = devRequestHeaders(env, { accept: "application/json" });
   if (!devUrl || !upstreamHeaders) {
     return demoProxyJson({ error: "generator_not_configured" }, 503);
@@ -1265,9 +1332,12 @@ async function demoStatusResponse(env) {
   }
 }
 
-async function demoAssetResponse(name, env) {
+async function demoAssetResponse(request, name, env) {
+  if (!controlOwnerAuthorized(request, env)) {
+    return new Response("Not authorized", { status: 403 });
+  }
   const file = DEMO_ASSETS.get(name);
-  const devUrl = String(env.DEV_URL || "");
+  const devUrl = configuredHttpsOrigin(env.DEV_URL) || "";
   const upstreamHeaders = devRequestHeaders(env);
   if (!file || !devUrl || !upstreamHeaders) {
     return new Response("Not found", { status: 404 });
@@ -1397,13 +1467,6 @@ const page = `<!doctype html>
       .drawer>summary:after{content:"+";margin-left:auto;color:var(--cyan);font:700 22px/1 var(--ui)}.drawer[open]>summary:after{content:"−"}
       .summary-title{display:inline-flex;align-items:baseline;gap:7px}
       .drawer-count{margin-left:7px;color:var(--cyan);font:750 10px/1 var(--mono);letter-spacing:.3px}.drawer-body{padding:0 17px 17px}
-      .preview-card{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:16px;padding:15px;
-        border:1px solid rgba(154,108,255,.5);background:linear-gradient(135deg,rgba(154,108,255,.1),rgba(17,26,45,.72))}
-      .preview-card h2{margin:0 0 5px;font:italic 23px/1 var(--display);text-transform:uppercase}.preview-meta{
-        margin:0;color:#b8c4d7;font:700 9px/1.55 var(--mono)}.preview-meta b{color:var(--purple)}.preview-actions{
-        display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}.preview-actions a{min-height:32px;display:inline-flex;
-        align-items:center;padding:0 10px;border:1px solid rgba(0,229,255,.42);color:var(--cyan);
-        font:800 9px/1 var(--mono);text-decoration:none}.preview-actions a.secondary{border-color:#43516a;color:#b8c4d7}
       .demo-control{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,420px);gap:18px;padding:16px;
         border:1px solid rgba(0,229,255,.42);background:linear-gradient(135deg,rgba(0,229,255,.07),rgba(17,26,45,.78))}
       .demo-control h2{margin:0;font:italic 26px/1 var(--display);text-transform:uppercase}.demo-copy{
@@ -1515,7 +1578,6 @@ const page = `<!doctype html>
       @media(max-width:680px){.topbar{padding:10px 13px}.brand strong{font-size:21px}.brand small{display:none}
         .github{width:38px;padding:0;justify-content:center}.github span{display:none}.github.releases-link{width:auto;padding:0 10px}main{padding:14px 10px 40px}.release-board{padding:14px}
         .hero{flex-direction:column}.auto{max-width:none;width:100%}.drawer>summary{font-size:19px}.environment-summary{grid-template-columns:1fr}
-        .preview-card{grid-template-columns:1fr}.preview-actions{justify-content:flex-start}
         .demo-control{grid-template-columns:1fr}
         .finance-toolbar{align-items:flex-start;flex-direction:column}.finance-kpis{grid-template-columns:1fr 1fr}
         .finance-kpi{padding:11px}.finance-kpi b{font-size:22px}.finance-panel-head{flex-direction:column}
@@ -1535,7 +1597,7 @@ const page = `<!doctype html>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h16a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H9l-5 4v-4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm2 5v2h12V8H6Zm0 4v2h8v-2H6Z"/></svg>
           <span class="feedback-badge" id="feedback-badge" hidden></span>
         </button>
-        <a class="github releases-link" href="https://chessriot.ripper234.chatgpt.site/changelog" target="_blank" rel="noopener noreferrer">Releases</a>
+        <a class="github releases-link" href="https://chessriot.gg/changelog" target="_blank" rel="noopener noreferrer">Releases</a>
         <a class="github github-source" href="https://github.com/ripper234/ChessRiot" target="_blank" rel="noopener noreferrer" aria-label="View ChessRiot source on GitHub">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7a11.5 11.5 0 0 0-3.64 22.4c.58.1.79-.25.79-.56v-2.23c-3.22.7-3.9-1.37-3.9-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.16.08 1.78 1.2 1.78 1.2 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.74-1.55-2.57-.29-5.27-1.29-5.27-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.16 1.18a10.98 10.98 0 0 1 5.76 0c2.2-1.49 3.16-1.18 3.16-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.09 0 4.42-2.71 5.39-5.29 5.68.42.36.79 1.07.79 2.16v3.2c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg>
           <span>GitHub</span>
@@ -1587,7 +1649,7 @@ const page = `<!doctype html>
                   <div><h2>Runtime waste by cause</h2><p class="finance-panel-copy">Only explicit, objective waste rules count. Usage itself is not waste.</p></div>
                   <span class="finance-panel-tag">RUNTIME</span>
                 </header>
-                <div id="finance-causes"><div class="finance-empty">Magic Rules and other runtime AI do not report tokens yet.</div></div>
+                <div id="finance-causes"><div class="finance-empty">Runtime AI does not report tokens yet.</div></div>
               </article>
             </section>
             <div class="finance-table-wrap">
@@ -1597,24 +1659,8 @@ const page = `<!doctype html>
                 <tbody id="finance-version-rows"><tr><td class="unavailable" colspan="8">No per-version usage has been recorded.</td></tr></tbody>
               </table>
             </div>
-            <p class="finance-footnote" id="finance-footnote">Stable gameplay expects zero LLM calls per move, but is not metered. The Magic Rules preview calls the model once per Compile Rules action before game creation, never per move, and currently has no shared prompt cache. Cached input and reasoning tokens are detail fields and are never added twice.</p>
+            <p class="finance-footnote" id="finance-footnote">Stable gameplay expects zero LLM calls per move, but is not metered. Any runtime AI feature must report its own usage and remain outside the per-move path. Cached input and reasoning tokens are detail fields and are never added twice.</p>
           </section>
-        </div>
-      </details>
-      <details class="drawer">
-        <summary><span class="summary-title">Feature previews <span class="drawer-count">1 · ISOLATED</span></span></summary>
-        <div class="drawer-body">
-          <article class="preview-card">
-            <div>
-              <h2>Magic Rules compiler</h2>
-              <p class="preview-meta"><b>feature/runtime-magic-rules</b><br>v0.11.0-magic.4 · Separate database · Owner only</p>
-            </div>
-            <div class="preview-actions">
-              <a href="https://chessriot-magic-preview.ripper234.chatgpt.site" target="_blank" rel="noopener noreferrer">OPEN PREVIEW</a>
-              <a class="secondary" href="https://github.com/ripper234/ChessRiot/tree/feature/runtime-magic-rules" target="_blank" rel="noopener noreferrer">VIEW BRANCH</a>
-              <a class="secondary" href="https://github.com/ripper234/ChessRiot/branches" target="_blank" rel="noopener noreferrer">ALL BRANCHES</a>
-            </div>
-          </article>
         </div>
       </details>
       <details class="drawer" id="demo-video-control">
@@ -1632,7 +1678,7 @@ const page = `<!doctype html>
             </div>
             <div class="demo-actions-panel">
               <button class="demo-regenerate" id="demo-video-regenerate" type="button">REGENERATE 90-SEC VIDEO</button>
-              <a class="demo-open" href="https://chessriot-dev.ripper234.chatgpt.site/demo" target="_blank" rel="noopener noreferrer">OPEN DEMO ↗</a>
+              <a class="demo-open" href="https://dev.chessriot.gg/demo" target="_blank" rel="noopener noreferrer">OPEN DEMO ↗</a>
               <p class="demo-note">Keep this tab open for about 90 seconds. The fixed script uses the Dev OpenAI key, with one active job, a 30-minute cooldown, and hard daily/monthly limits. The voice is AI-generated.</p>
             </div>
           </section>
@@ -1959,7 +2005,7 @@ const clientScript = String.raw`
       empty.className = "finance-empty";
       empty.textContent = payload.instrumentation.runtime.connected
         ? "Runtime usage is tracked, but no avoidable tokens are classified."
-        : "Magic Rules and other runtime AI do not report tokens yet.";
+        : "Runtime AI does not report tokens yet.";
       financeCauses.replaceChildren(empty);
       return;
     }
@@ -2111,8 +2157,8 @@ const clientScript = String.raw`
     renderFinanceCauses(payload);
     renderFinanceVersions(payload);
     financeFootnote.textContent = "Stable gameplay expects zero LLM calls per move, but is not metered. "
-      + "The Magic Rules preview calls the model once per Compile Rules action before game creation, "
-      + "never per move, and currently has no shared prompt cache. Cached input and reasoning tokens "
+      + "Any runtime AI feature must report its own usage and remain outside the per-move path. "
+      + "Cached input and reasoning tokens "
       + "are detail fields and are never added twice."
       + (payload.truncated ? " This view is a lower bound because the selected window exceeded 10,000 records." : "");
   }
@@ -2967,6 +3013,13 @@ const clientScript = String.raw`
     const errorRate = totals && totals.total
       ? Math.round(totals.failures / totals.total * 1000) / 10 + "%"
       : totals ? "0%" : null;
+    const configurationValues = health && health.configuration
+      ? Object.values(health.configuration)
+      : [];
+    const coreConfiguration = configurationValues.length
+      ? (configurationValues.every(Boolean) ? "READY" : "MISSING")
+      : null;
+    const capabilities = health && health.capabilities;
     metrics.append(
       metric("Games created · 24h", overview ? breakdownCount(overview, "game.created", "success") : null),
       metric("Moves · 24h", overview ? breakdownCount(overview, "move.submitted", "success") : null),
@@ -2974,6 +3027,9 @@ const clientScript = String.raw`
       metric("Failures · 24h", totals && totals.failures, Boolean(totals && totals.failures)),
       metric("Error rate", errorRate, Boolean(totals && totals.failures)),
       metric("p95 latency", totals && totals.p95LatencyMs !== null ? totals.p95LatencyMs + "ms" : null),
+      metric("Core config", coreConfiguration, coreConfiguration === "MISSING"),
+      metric("Push", capabilities ? (capabilities.push ? "READY" : "OFF") : null),
+      metric("Demo narration", capabilities ? (capabilities.demoNarration ? "READY" : "OFF") : null),
     );
     const note = article.querySelector(".telemetry-note");
     if (loading) note.textContent = "Loading health and telemetry…";
@@ -3496,20 +3552,38 @@ const clientScript = String.raw`
   });
 `;
 
-const securityHeaders = {
-  "content-type": "text/html; charset=utf-8",
-  "cache-control": "no-store",
-  "content-security-policy":
-    "default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; img-src 'self'; media-src 'self' blob:; connect-src 'self' https://chessriot.ripper234.chatgpt.site https://chessriot-dev.ripper234.chatgpt.site; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
-  "permissions-policy": "camera=(), microphone=(), geolocation=()",
-  "referrer-policy": "no-referrer",
-  "x-content-type-options": "nosniff",
-  "x-frame-options": "DENY",
-};
+function pageSecurityHeaders(env) {
+  const connectOrigins = ENVIRONMENTS
+    .map((config) => configuredHttpsOrigin(env[config.urlKey]))
+    .filter(Boolean);
+  return {
+    "content-type": "text/html; charset=utf-8",
+    "cache-control": "no-store",
+    "content-security-policy": [
+      "default-src 'none'",
+      "style-src 'unsafe-inline'",
+      "script-src 'self'",
+      "img-src 'self'",
+      "media-src 'self' blob:",
+      `connect-src 'self'${connectOrigins.length ? ` ${connectOrigins.join(" ")}` : ""}`,
+      "frame-ancestors 'none'",
+      "base-uri 'none'",
+      "form-action 'none'",
+    ].join("; "),
+    "permissions-policy": "camera=(), microphone=(), geolocation=()",
+    "referrer-policy": "no-referrer",
+    "strict-transport-security": "max-age=86400",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+  };
+}
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (request.method === "GET" && url.pathname === "/api/health") {
+      return controlHealthResponse(env);
+    }
     if (request.method === "GET" && url.pathname === "/api/financials") {
       return financialsResponse(request, env);
     }
@@ -3517,7 +3591,7 @@ export default {
       return aiUsageIngestResponse(request, env);
     }
     if (request.method === "GET" && url.pathname === "/api/status") {
-      return statusResponse(env);
+      return statusResponse(request, env);
     }
     if (request.method === "POST" && url.pathname === "/api/registry/observation") {
       return observationResponse(request, env);
@@ -3532,13 +3606,14 @@ export default {
       return demoFailResponse(request, env);
     }
     if (request.method === "GET" && url.pathname === "/api/demo-video/status") {
-      return demoStatusResponse(env);
+      return demoStatusResponse(request, env);
     }
     if (
       request.method === "GET"
       && url.pathname.startsWith("/api/demo-video/assets/")
     ) {
       return demoAssetResponse(
+        request,
         url.pathname.slice("/api/demo-video/assets/".length),
         env,
       );
@@ -3558,6 +3633,6 @@ export default {
         headers: { "cache-control": "no-store" },
       });
     }
-    return new Response(page, { headers: securityHeaders });
+    return new Response(page, { headers: pageSecurityHeaders(env) });
   },
 };
