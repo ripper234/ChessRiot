@@ -58,7 +58,7 @@
     "typescript": "5.9.3",
     "vinext": "0.0.50",
     "vite": "8.2.0",
-    "vitest": "3.2.7",
+    "vitest": "4.1.10",
     "wrangler": "4.118.0"
   }
 }
