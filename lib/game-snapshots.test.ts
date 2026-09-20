@@ -20,6 +20,9 @@ function startingSnapshot(overrides: Partial<GameSnapshot> = {}): GameSnapshot {
     fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
     turn: "w",
     plyCount: 0,
+    elapsedMs: { w: 0, b: 0 },
+    turnStartedAt: "2026-07-24T00:00:00.000Z",
+    clockAsOf: "2026-07-24T00:00:00.000Z",
     players: { white: { name: "Player" }, black: { name: "Riot Bot" } },
     you: { color: "w", name: "Player" },
     check: false,
@@ -77,37 +80,46 @@ describe("optimisticMoveSnapshot", () => {
     expect(authoritative).toEqual(startingSnapshot());
   });
 
-  it("shows a Multiplayer move immediately while preserving the authoritative version", () => {
-    const authoritative = startingSnapshot({
-      id: "multiplayer-game",
-      mode: "multiplayer",
-      aiDifficulty: null,
-      players: {
-        white: { name: "Player" },
-        black: { name: "Friend" },
-      },
-    });
-    const optimistic = optimisticMoveSnapshot(
-      authoritative,
-      "e2",
-      "e4",
-      undefined,
-      { createdAt: "2026-07-30T18:00:00.000Z" },
-    );
+  it.each([1, 3, 5] as const)(
+    "shows a %d-day Multiplayer move with the next player's deadline",
+    (turnPaceDays) => {
+      const authoritative = startingSnapshot({
+        id: "multiplayer-game",
+        mode: "multiplayer",
+        aiDifficulty: null,
+        turnPaceDays,
+        deadlineAt: "2026-07-30T17:00:00.000Z",
+        players: {
+          white: { name: "Player" },
+          black: { name: "Friend" },
+        },
+      });
+      const optimistic = optimisticMoveSnapshot(
+        authoritative,
+        "e2",
+        "e4",
+        undefined,
+        { createdAt: "2026-07-30T18:00:00.000Z" },
+      );
 
-    expect(optimistic).toMatchObject({
-      mode: "multiplayer",
-      version: authoritative.version,
-      turn: "b",
-      plyCount: 1,
-    });
-    expect(new Chess(optimistic!.fen).get("e4")).toMatchObject({
-      color: "w",
-      type: "p",
-    });
-    expect(authoritative.fen).toBe(startingSnapshot().fen);
-    expect(authoritative.moves).toHaveLength(0);
-  });
+      expect(optimistic).toMatchObject({
+        mode: "multiplayer",
+        version: authoritative.version,
+        turn: "b",
+        plyCount: 1,
+        deadlineAt: new Date(
+          Date.parse("2026-07-30T18:00:00.000Z")
+            + turnPaceDays * 24 * 60 * 60 * 1_000,
+        ).toISOString(),
+      });
+      expect(new Chess(optimistic!.fen).get("e4")).toMatchObject({
+        color: "w",
+        type: "p",
+      });
+      expect(authoritative.fen).toBe(startingSnapshot().fen);
+      expect(authoritative.moves).toHaveLength(0);
+    },
+  );
 
   it("shows the deterministic Solo reply before the request returns", () => {
     const authoritative = startingSnapshot({ aiDifficulty: 1 });
@@ -130,6 +142,37 @@ describe("optimisticMoveSnapshot", () => {
     expect(optimistic!.moves.map((move) => move.color)).toEqual(["w", "b"]);
     expect(new Chess(optimistic!.fen).turn()).toBe("w");
     expect(authoritative).toEqual(startingSnapshot({ aiDifficulty: 1 }));
+  });
+
+  it("keeps a human Magic continuation in the instant Solo preview", () => {
+    const authoritative = startingSnapshot({
+      aiDifficulty: 1,
+      magicRules: {
+        version: 3,
+        prompt: "Knights move 3 times",
+        labels: ["Knights may move up to 3 times per turn; check ends the turn"],
+        rules: [{ kind: "move_sequence", pieces: ["n"], maxMoves: 3 }],
+      },
+    });
+    const optimistic = optimisticSoloTurnSnapshot(
+      authoritative,
+      "b1",
+      "c3",
+      "magic-turn-request",
+      undefined,
+      {
+        continuation: [{ from: "c3", to: "b5" }],
+        createdAt: "2026-07-24T00:00:01.000Z",
+      },
+    );
+
+    expect(optimistic).not.toBeNull();
+    expect(optimistic?.moves[0]).toMatchObject({
+      from: "b1",
+      to: "c3",
+      continuation: [{ from: "c3", to: "b5", san: "Nb5" }],
+    });
+    expect(optimistic?.moves).toHaveLength(2);
   });
 
   it("returns only the human preview when that move ends the game", () => {

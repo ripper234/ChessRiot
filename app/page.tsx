@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { CreateGame } from "./ui/CreateGame";
-import { PublicHome } from "./ui/PublicHome";
+import { AccountGate } from "./ui/AccountGate";
+import { HomeExperience } from "./ui/HomeExperience";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,7 @@ function isAppHostname(host: string | null): boolean {
 
 export default async function HomePage() {
   if (isAppHostname((await headers()).get("host"))) {
-    return <CreateGame />;
+    return <AccountGate><CreateGame /></AccountGate>;
   }
-  return <PublicHome />;
+  return <HomeExperience />;
 }

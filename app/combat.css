@@ -274,6 +274,7 @@ html[data-theme="blockfield"] { --combat-sigil: "⚡"; }
 html[data-theme="toybox"] { --combat-sigil: "◆"; }
 html[data-theme="arena-pop"] { --combat-sigil: "★"; }
 html[data-theme="high-fantasy"] { --combat-sigil: "✧"; }
+html[data-theme="mythic-beasts"] { --combat-sigil: "🐉"; }
 html[data-theme="arcane-cards"] { --combat-sigil: "⌬"; }
 html[data-theme="iron-legions"] { --combat-sigil: "⚔"; }
 html[data-theme="shadow-shogun"] { --combat-sigil: "◉"; }
@@ -366,8 +367,8 @@ html[data-theme="mono"] { --combat-sigil: "■"; }
 }
 
 @keyframes combat-check-flash {
-  0%, 58% { opacity: 0; transform: scale(.55); }
-  68%, 86% { opacity: 1; transform: scale(1); }
+  0%, 40% { opacity: 0; transform: scale(.55); }
+  52%, 90% { opacity: 1; transform: scale(1); }
   100% { opacity: 0; transform: scale(1.08); }
 }
 @keyframes combat-castle-wall {
@@ -381,8 +382,8 @@ html[data-theme="mono"] { --combat-sigil: "■"; }
   100% { opacity: 0; transform: translateY(58%) rotate(68deg) scale(.72); }
 }
 @keyframes combat-special-title {
-  0%, 60% { opacity: 0; transform: translateY(10px); }
-  72%, 90% { opacity: 1; transform: translateY(0); }
+  0%, 38% { opacity: 0; transform: translateY(10px); }
+  48%, 90% { opacity: 1; transform: translateY(0); }
   100% { opacity: 0; }
 }
 @keyframes combat-promotion-rise {
@@ -407,8 +408,8 @@ html[data-theme="mono"] { --combat-sigil: "■"; }
   100% { opacity: 0; }
 }
 @keyframes combat-fork-pop {
-  0%, 56% { opacity: 0; transform: translateY(-10px) scale(.75); }
-  68%, 88% { opacity: 1; transform: translateY(0) scale(1); }
+  0%, 38% { opacity: 0; transform: translateY(-10px) scale(.75); }
+  48%, 90% { opacity: 1; transform: translateY(0) scale(1); }
   100% { opacity: 0; transform: translateY(-4px) scale(1.02); }
 }
 

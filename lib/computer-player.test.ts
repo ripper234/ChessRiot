@@ -147,4 +147,26 @@ describe("Riot Bot", () => {
     expect(move?.second?.from).toBe(move?.to);
     expect(() => applyCandidate(fen, [], move!, rules)).not.toThrow();
   });
+
+  it("returns every legal continuation for a three-move knight rule", () => {
+    const rules: CompiledMagicRules = {
+      version: 3,
+      rules: [{ kind: "move_sequence", pieces: ["n"], maxMoves: 3 }],
+    };
+    const fen = "4k3/8/8/8/8/8/1N6/4K3 w - - 0 1";
+    const moves = legalMagicMoves(new Chess(fen), rules);
+    const knightIndex = moves.findIndex((move) => move.from === "b2");
+    let randomCall = 0;
+    const move = chooseComputerMove(
+      fen,
+      1,
+      "w",
+      () => randomCall++ === 0 ? (knightIndex + 0.1) / moves.length : 0,
+      rules,
+    );
+    expect(move).toMatchObject({ from: "b2" });
+    expect(move?.continuation).toHaveLength(2);
+    expect(move?.continuation?.[0]?.from).toBe(move?.to);
+    expect(() => applyCandidate(fen, [], move!, rules)).not.toThrow();
+  });
 });

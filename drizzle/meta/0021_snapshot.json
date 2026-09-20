@@ -1,0 +1,3329 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "149e941f-329a-44ec-ac11-99abd21f5c58",
+  "prevId": "6522b63d-3669-4009-a07b-146335467297",
+  "tables": {
+    "account_blocks": {
+      "name": "account_blocks",
+      "columns": {
+        "blocker_account_id": {
+          "name": "blocker_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "blocked_account_id": {
+          "name": "blocked_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "account_blocks_blocked_idx": {
+          "name": "account_blocks_blocked_idx",
+          "columns": [
+            "blocked_account_id",
+            "created_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "account_blocks_blocker_account_id_accounts_id_fk": {
+          "name": "account_blocks_blocker_account_id_accounts_id_fk",
+          "tableFrom": "account_blocks",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "blocker_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "account_blocks_blocked_account_id_accounts_id_fk": {
+          "name": "account_blocks_blocked_account_id_accounts_id_fk",
+          "tableFrom": "account_blocks",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "blocked_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "account_blocks_blocker_account_id_blocked_account_id_pk": {
+          "columns": [
+            "blocker_account_id",
+            "blocked_account_id"
+          ],
+          "name": "account_blocks_blocker_account_id_blocked_account_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "account_blocks_people_check": {
+          "name": "account_blocks_people_check",
+          "value": "\"account_blocks\".\"blocker_account_id\" <> \"account_blocks\".\"blocked_account_id\""
+        }
+      }
+    },
+    "account_credit_ledger": {
+      "name": "account_credit_ledger",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "amount": {
+          "name": "amount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_key": {
+          "name": "source_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "world_code": {
+          "name": "world_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "game_id": {
+          "name": "game_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "account_credit_ledger_source_unique": {
+          "name": "account_credit_ledger_source_unique",
+          "columns": [
+            "source_key"
+          ],
+          "isUnique": true
+        },
+        "account_credit_ledger_account_time_idx": {
+          "name": "account_credit_ledger_account_time_idx",
+          "columns": [
+            "account_id",
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "account_credit_ledger_world_time_idx": {
+          "name": "account_credit_ledger_world_time_idx",
+          "columns": [
+            "world_code",
+            "created_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "account_credit_ledger_account_id_accounts_id_fk": {
+          "name": "account_credit_ledger_account_id_accounts_id_fk",
+          "tableFrom": "account_credit_ledger",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "account_credit_ledger_game_id_games_id_fk": {
+          "name": "account_credit_ledger_game_id_games_id_fk",
+          "tableFrom": "account_credit_ledger",
+          "tableTo": "games",
+          "columnsFrom": [
+            "game_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "account_credit_ledger_amount_check": {
+          "name": "account_credit_ledger_amount_check",
+          "value": "\"account_credit_ledger\".\"amount\" <> 0"
+        },
+        "account_credit_ledger_reason_check": {
+          "name": "account_credit_ledger_reason_check",
+          "value": "\"account_credit_ledger\".\"reason\" IN ('starter', 'referral', 'magic_spend', 'magic_refund', 'world_royalty')"
+        }
+      }
+    },
+    "account_feature_flags": {
+      "name": "account_feature_flags",
+      "columns": {
+        "account_id": {
+          "name": "account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "feature_key": {
+          "name": "feature_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "account_feature_flags_feature_idx": {
+          "name": "account_feature_flags_feature_idx",
+          "columns": [
+            "feature_key",
+            "enabled"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "account_feature_flags_account_id_accounts_id_fk": {
+          "name": "account_feature_flags_account_id_accounts_id_fk",
+          "tableFrom": "account_feature_flags",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "account_feature_flags_account_id_feature_key_pk": {
+          "columns": [
+            "account_id",
+            "feature_key"
+          ],
+          "name": "account_feature_flags_account_id_feature_key_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "account_notifications": {
+      "name": "account_notifications",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "recipient_account_id": {
+          "name": "recipient_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "actor_account_id": {
+          "name": "actor_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "game_id": {
+          "name": "game_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_key": {
+          "name": "source_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "read_at": {
+          "name": "read_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "account_notifications_source_unique": {
+          "name": "account_notifications_source_unique",
+          "columns": [
+            "recipient_account_id",
+            "source_key"
+          ],
+          "isUnique": true
+        },
+        "account_notifications_recipient_time_idx": {
+          "name": "account_notifications_recipient_time_idx",
+          "columns": [
+            "recipient_account_id",
+            "created_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "account_notifications_recipient_account_id_accounts_id_fk": {
+          "name": "account_notifications_recipient_account_id_accounts_id_fk",
+          "tableFrom": "account_notifications",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "recipient_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "account_notifications_actor_account_id_accounts_id_fk": {
+          "name": "account_notifications_actor_account_id_accounts_id_fk",
+          "tableFrom": "account_notifications",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "actor_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "account_notifications_game_id_games_id_fk": {
+          "name": "account_notifications_game_id_games_id_fk",
+          "tableFrom": "account_notifications",
+          "tableTo": "games",
+          "columnsFrom": [
+            "game_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "account_notifications_kind_check": {
+          "name": "account_notifications_kind_check",
+          "value": "\"account_notifications\".\"kind\" IN ('friend_request', 'challenge', 'turn', 'result')"
+        }
+      }
+    },
+    "account_tombstones": {
+      "name": "account_tombstones",
+      "columns": {
+        "account_id": {
+          "name": "account_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "username_canonical": {
+          "name": "username_canonical",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "account_tombstones_username_unique": {
+          "name": "account_tombstones_username_unique",
+          "columns": [
+            "username_canonical"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "accounts": {
+      "name": "accounts",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "username": {
+          "name": "username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "username_canonical": {
+          "name": "username_canonical",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "username_set_at": {
+          "name": "username_set_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "tutorial_status": {
+          "name": "tutorial_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'skipped'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_captcha_at": {
+          "name": "last_captcha_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "accounts_username_canonical_unique": {
+          "name": "accounts_username_canonical_unique",
+          "columns": [
+            "username_canonical"
+          ],
+          "isUnique": true
+        },
+        "accounts_created_idx": {
+          "name": "accounts_created_idx",
+          "columns": [
+            "created_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "accounts_tutorial_status_check": {
+          "name": "accounts_tutorial_status_check",
+          "value": "\"accounts\".\"tutorial_status\" IN ('pending', 'completed', 'skipped')"
+        }
+      }
+    },
+    "bot_turn_leases": {
+      "name": "bot_turn_leases",
+      "columns": {
+        "game_id": {
+          "name": "game_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "game_version": {
+          "name": "game_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "nonce": {
+          "name": "nonce",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lease_until": {
+          "name": "lease_until",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "demo_video_generation_lock": {
+      "name": "demo_video_generation_lock",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "job_id": {
+          "name": "job_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "demo_video_generation_lock_id_check": {
+          "name": "demo_video_generation_lock_id_check",
+          "value": "\"demo_video_generation_lock\".\"id\" = 1"
+        }
+      }
+    },
+    "demo_video_jobs": {
+      "name": "demo_video_jobs",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "requested_at": {
+          "name": "requested_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "narration_ready_at": {
+          "name": "narration_ready_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "published_at": {
+          "name": "published_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "duration_seconds": {
+          "name": "duration_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "size_bytes": {
+          "name": "size_bytes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "media_key": {
+          "name": "media_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "demo_video_jobs_requested_idx": {
+          "name": "demo_video_jobs_requested_idx",
+          "columns": [
+            "requested_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "demo_video_jobs_status_check": {
+          "name": "demo_video_jobs_status_check",
+          "value": "\"demo_video_jobs\".\"status\" IN ('narrating', 'rendering', 'publishing', 'ready', 'failed')"
+        }
+      }
+    },
+    "demo_video_nonces": {
+      "name": "demo_video_nonces",
+      "columns": {
+        "nonce": {
+          "name": "nonce",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "used_at": {
+          "name": "used_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "demo_video_nonces_expiry_idx": {
+          "name": "demo_video_nonces_expiry_idx",
+          "columns": [
+            "expires_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "feature_access_requests": {
+      "name": "feature_access_requests",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "feature_key": {
+          "name": "feature_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "requested_at": {
+          "name": "requested_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "feature_access_requests_account_feature_unique": {
+          "name": "feature_access_requests_account_feature_unique",
+          "columns": [
+            "account_id",
+            "feature_key"
+          ],
+          "isUnique": true
+        },
+        "feature_access_requests_feature_time_idx": {
+          "name": "feature_access_requests_feature_time_idx",
+          "columns": [
+            "feature_key",
+            "requested_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "feature_access_requests_account_id_accounts_id_fk": {
+          "name": "feature_access_requests_account_id_accounts_id_fk",
+          "tableFrom": "feature_access_requests",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "feedback": {
+      "name": "feedback",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "comment": {
+          "name": "comment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "page": {
+          "name": "page",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "environment": {
+          "name": "environment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "app_version": {
+          "name": "app_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'new'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "feedback_request_unique": {
+          "name": "feedback_request_unique",
+          "columns": [
+            "request_id"
+          ],
+          "isUnique": true
+        },
+        "feedback_created_idx": {
+          "name": "feedback_created_idx",
+          "columns": [
+            "created_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "feedback_status_check": {
+          "name": "feedback_status_check",
+          "value": "\"feedback\".\"status\" IN ('new', 'reviewed', 'closed')"
+        }
+      }
+    },
+    "friend_requests": {
+      "name": "friend_requests",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "pair_key": {
+          "name": "pair_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sender_account_id": {
+          "name": "sender_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "recipient_account_id": {
+          "name": "recipient_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "responded_at": {
+          "name": "responded_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "friend_requests_pair_unique": {
+          "name": "friend_requests_pair_unique",
+          "columns": [
+            "pair_key"
+          ],
+          "isUnique": true
+        },
+        "friend_requests_sender_status_idx": {
+          "name": "friend_requests_sender_status_idx",
+          "columns": [
+            "sender_account_id",
+            "status"
+          ],
+          "isUnique": false
+        },
+        "friend_requests_recipient_status_idx": {
+          "name": "friend_requests_recipient_status_idx",
+          "columns": [
+            "recipient_account_id",
+            "status"
+          ],
+          "isUnique": false
+        },
+        "friend_requests_created_idx": {
+          "name": "friend_requests_created_idx",
+          "columns": [
+            "created_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "friend_requests_sender_account_id_accounts_id_fk": {
+          "name": "friend_requests_sender_account_id_accounts_id_fk",
+          "tableFrom": "friend_requests",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "sender_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "friend_requests_recipient_account_id_accounts_id_fk": {
+          "name": "friend_requests_recipient_account_id_accounts_id_fk",
+          "tableFrom": "friend_requests",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "recipient_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "friend_requests_status_check": {
+          "name": "friend_requests_status_check",
+          "value": "\"friend_requests\".\"status\" IN ('pending', 'accepted', 'declined')"
+        },
+        "friend_requests_people_check": {
+          "name": "friend_requests_people_check",
+          "value": "\"friend_requests\".\"sender_account_id\" <> \"friend_requests\".\"recipient_account_id\""
+        }
+      }
+    },
+    "game_actions": {
+      "name": "game_actions",
+      "columns": {
+        "game_id": {
+          "name": "game_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "action_type": {
+          "name": "action_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "payload": {
+          "name": "payload",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "game_actions_game_id_request_id_pk": {
+          "columns": [
+            "game_id",
+            "request_id"
+          ],
+          "name": "game_actions_game_id_request_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "game_memberships": {
+      "name": "game_memberships",
+      "columns": {
+        "game_id": {
+          "name": "game_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "color": {
+          "name": "color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "claimed_at": {
+          "name": "claimed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "game_memberships_game_account_unique": {
+          "name": "game_memberships_game_account_unique",
+          "columns": [
+            "game_id",
+            "account_id"
+          ],
+          "isUnique": true
+        },
+        "game_memberships_account_idx": {
+          "name": "game_memberships_account_idx",
+          "columns": [
+            "account_id",
+            "claimed_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "game_memberships_game_id_color_pk": {
+          "columns": [
+            "game_id",
+            "color"
+          ],
+          "name": "game_memberships_game_id_color_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "game_memberships_color_check": {
+          "name": "game_memberships_color_check",
+          "value": "\"game_memberships\".\"color\" IN ('w', 'b')"
+        }
+      }
+    },
+    "game_reactions": {
+      "name": "game_reactions",
+      "columns": {
+        "sequence": {
+          "name": "sequence",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "game_id": {
+          "name": "game_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sender_color": {
+          "name": "sender_color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reaction_key": {
+          "name": "reaction_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "game_reactions_id_unique": {
+          "name": "game_reactions_id_unique",
+          "columns": [
+            "id"
+          ],
+          "isUnique": true
+        },
+        "game_reactions_request_unique": {
+          "name": "game_reactions_request_unique",
+          "columns": [
+            "game_id",
+            "request_id"
+          ],
+          "isUnique": true
+        },
+        "game_reactions_game_sequence_idx": {
+          "name": "game_reactions_game_sequence_idx",
+          "columns": [
+            "game_id",
+            "sequence"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "game_reactions_color_check": {
+          "name": "game_reactions_color_check",
+          "value": "\"game_reactions\".\"sender_color\" IN ('w', 'b')"
+        },
+        "game_reactions_key_check": {
+          "name": "game_reactions_key_check",
+          "value": "\"game_reactions\".\"reaction_key\" IN ('hi', 'good_luck', 'nice_move', 'well_played', 'good_game', 'thanks')"
+        }
+      }
+    },
+    "game_recap_shares": {
+      "name": "game_recap_shares",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "game_id": {
+          "name": "game_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "game_recap_shares_game_unique": {
+          "name": "game_recap_shares_game_unique",
+          "columns": [
+            "game_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "game_recap_shares_game_id_games_id_fk": {
+          "name": "game_recap_shares_game_id_games_id_fk",
+          "tableFrom": "game_recap_shares",
+          "tableTo": "games",
+          "columnsFrom": [
+            "game_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "game_settings": {
+      "name": "game_settings",
+      "columns": {
+        "game_id": {
+          "name": "game_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "game_mode": {
+          "name": "game_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'multiplayer'"
+        },
+        "variant_id": {
+          "name": "variant_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'standard'"
+        },
+        "ai_difficulty": {
+          "name": "ai_difficulty",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "human_color": {
+          "name": "human_color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'w'"
+        },
+        "turn_pace_days": {
+          "name": "turn_pace_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "magic_prompt": {
+          "name": "magic_prompt",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "magic_rules_json": {
+          "name": "magic_rules_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "world_code": {
+          "name": "world_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "game_settings_world_idx": {
+          "name": "game_settings_world_idx",
+          "columns": [
+            "world_code"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "game_settings_game_id_games_id_fk": {
+          "name": "game_settings_game_id_games_id_fk",
+          "tableFrom": "game_settings",
+          "tableTo": "games",
+          "columnsFrom": [
+            "game_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "game_settings_game_mode_check": {
+          "name": "game_settings_game_mode_check",
+          "value": "\"game_settings\".\"game_mode\" IN ('solo', 'multiplayer')"
+        },
+        "game_settings_variant_id_check": {
+          "name": "game_settings_variant_id_check",
+          "value": "\"game_settings\".\"variant_id\" IN (\n        'standard',\n        'pawn-riot',\n        'half-army',\n        'pawn-duel',\n        'mate-pawn',\n        'mate-rook',\n        'mate-two-bishops'\n      )"
+        },
+        "game_settings_ai_difficulty_check": {
+          "name": "game_settings_ai_difficulty_check",
+          "value": "\"game_settings\".\"ai_difficulty\" IS NULL OR \"game_settings\".\"ai_difficulty\" BETWEEN 1 AND 5"
+        },
+        "game_settings_human_color_check": {
+          "name": "game_settings_human_color_check",
+          "value": "\"game_settings\".\"human_color\" IN ('w', 'b')"
+        },
+        "game_settings_turn_pace_days_check": {
+          "name": "game_settings_turn_pace_days_check",
+          "value": "\"game_settings\".\"turn_pace_days\" IS NULL OR \"game_settings\".\"turn_pace_days\" IN (1, 3, 5)"
+        },
+        "game_settings_mode_difficulty_check": {
+          "name": "game_settings_mode_difficulty_check",
+          "value": "(\n        (\"game_settings\".\"game_mode\" = 'solo' AND \"game_settings\".\"ai_difficulty\" IS NOT NULL) OR\n        (\"game_settings\".\"game_mode\" = 'multiplayer' AND \"game_settings\".\"ai_difficulty\" IS NULL)\n      )"
+        }
+      }
+    },
+    "games": {
+      "name": "games",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "create_request_id": {
+          "name": "create_request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "white_name": {
+          "name": "white_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "black_name": {
+          "name": "black_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "white_token_hash": {
+          "name": "white_token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "black_token_hash": {
+          "name": "black_token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "invite_token_hash": {
+          "name": "invite_token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "initial_fen": {
+          "name": "initial_fen",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "current_fen": {
+          "name": "current_fen",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "turn_color": {
+          "name": "turn_color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "ply_count": {
+          "name": "ply_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "winner_color": {
+          "name": "winner_color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "termination": {
+          "name": "termination",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "last_mutation_nonce": {
+          "name": "last_mutation_nonce",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "joined_at": {
+          "name": "joined_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "games_create_request_unique": {
+          "name": "games_create_request_unique",
+          "columns": [
+            "create_request_id"
+          ],
+          "isUnique": true
+        },
+        "games_invite_token_unique": {
+          "name": "games_invite_token_unique",
+          "columns": [
+            "invite_token_hash"
+          ],
+          "isUnique": true
+        },
+        "games_created_idx": {
+          "name": "games_created_idx",
+          "columns": [
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "games_finished_idx": {
+          "name": "games_finished_idx",
+          "columns": [
+            "finished_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "magic_rule_compilations": {
+      "name": "magic_rule_compilations",
+      "columns": {
+        "cache_key": {
+          "name": "cache_key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "compiler_version": {
+          "name": "compiler_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "rules_json": {
+          "name": "rules_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "world_code": {
+          "name": "world_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "lease_token": {
+          "name": "lease_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "lease_until": {
+          "name": "lease_until",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "magic_rule_compilations_status_lease_idx": {
+          "name": "magic_rule_compilations_status_lease_idx",
+          "columns": [
+            "status",
+            "lease_until"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "magic_rule_compilations_status_check": {
+          "name": "magic_rule_compilations_status_check",
+          "value": "\"magic_rule_compilations\".\"status\" IN ('pending', 'ready')"
+        },
+        "magic_rule_compilations_ready_check": {
+          "name": "magic_rule_compilations_ready_check",
+          "value": "(\n        (\"magic_rule_compilations\".\"status\" = 'ready' AND \"magic_rule_compilations\".\"rules_json\" IS NOT NULL\n          AND \"magic_rule_compilations\".\"lease_token\" IS NULL AND \"magic_rule_compilations\".\"lease_until\" IS NULL) OR\n        (\"magic_rule_compilations\".\"status\" = 'pending' AND \"magic_rule_compilations\".\"rules_json\" IS NULL\n          AND \"magic_rule_compilations\".\"lease_token\" IS NOT NULL AND \"magic_rule_compilations\".\"lease_until\" IS NOT NULL)\n      )"
+        }
+      }
+    },
+    "magic_world_derivations": {
+      "name": "magic_world_derivations",
+      "columns": {
+        "parent_code": {
+          "name": "parent_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "child_code": {
+          "name": "child_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_by_account_id": {
+          "name": "created_by_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "magic_world_derivations_child_idx": {
+          "name": "magic_world_derivations_child_idx",
+          "columns": [
+            "child_code",
+            "created_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "magic_world_derivations_parent_code_magic_worlds_code_fk": {
+          "name": "magic_world_derivations_parent_code_magic_worlds_code_fk",
+          "tableFrom": "magic_world_derivations",
+          "tableTo": "magic_worlds",
+          "columnsFrom": [
+            "parent_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "magic_world_derivations_child_code_magic_worlds_code_fk": {
+          "name": "magic_world_derivations_child_code_magic_worlds_code_fk",
+          "tableFrom": "magic_world_derivations",
+          "tableTo": "magic_worlds",
+          "columnsFrom": [
+            "child_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "magic_world_derivations_created_by_account_id_accounts_id_fk": {
+          "name": "magic_world_derivations_created_by_account_id_accounts_id_fk",
+          "tableFrom": "magic_world_derivations",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "created_by_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "magic_world_derivations_parent_code_child_code_pk": {
+          "columns": [
+            "parent_code",
+            "child_code"
+          ],
+          "name": "magic_world_derivations_parent_code_child_code_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "magic_world_derivations_distinct_check": {
+          "name": "magic_world_derivations_distinct_check",
+          "value": "\"magic_world_derivations\".\"parent_code\" <> \"magic_world_derivations\".\"child_code\""
+        }
+      }
+    },
+    "magic_world_entitlements": {
+      "name": "magic_world_entitlements",
+      "columns": {
+        "game_create_request_id": {
+          "name": "game_create_request_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "world_code": {
+          "name": "world_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "request_fingerprint": {
+          "name": "request_fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "consumed_at": {
+          "name": "consumed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "game_id": {
+          "name": "game_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "magic_world_entitlements_account_time_idx": {
+          "name": "magic_world_entitlements_account_time_idx",
+          "columns": [
+            "account_id",
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "magic_world_entitlements_world_time_idx": {
+          "name": "magic_world_entitlements_world_time_idx",
+          "columns": [
+            "world_code",
+            "created_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "magic_world_entitlements_account_id_accounts_id_fk": {
+          "name": "magic_world_entitlements_account_id_accounts_id_fk",
+          "tableFrom": "magic_world_entitlements",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "magic_world_entitlements_world_code_magic_worlds_code_fk": {
+          "name": "magic_world_entitlements_world_code_magic_worlds_code_fk",
+          "tableFrom": "magic_world_entitlements",
+          "tableTo": "magic_worlds",
+          "columnsFrom": [
+            "world_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "magic_world_entitlements_game_id_games_id_fk": {
+          "name": "magic_world_entitlements_game_id_games_id_fk",
+          "tableFrom": "magic_world_entitlements",
+          "tableTo": "games",
+          "columnsFrom": [
+            "game_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "magic_world_sources": {
+      "name": "magic_world_sources",
+      "columns": {
+        "source_key": {
+          "name": "source_key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "world_code": {
+          "name": "world_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "contributor_account_id": {
+          "name": "contributor_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "prompt_hash": {
+          "name": "prompt_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "compiler_version": {
+          "name": "compiler_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "parent_code": {
+          "name": "parent_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "magic_world_sources_world_time_idx": {
+          "name": "magic_world_sources_world_time_idx",
+          "columns": [
+            "world_code",
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "magic_world_sources_contributor_time_idx": {
+          "name": "magic_world_sources_contributor_time_idx",
+          "columns": [
+            "contributor_account_id",
+            "created_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "magic_world_sources_world_code_magic_worlds_code_fk": {
+          "name": "magic_world_sources_world_code_magic_worlds_code_fk",
+          "tableFrom": "magic_world_sources",
+          "tableTo": "magic_worlds",
+          "columnsFrom": [
+            "world_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "magic_world_sources_contributor_account_id_accounts_id_fk": {
+          "name": "magic_world_sources_contributor_account_id_accounts_id_fk",
+          "tableFrom": "magic_world_sources",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "contributor_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "magic_world_sources_kind_check": {
+          "name": "magic_world_sources_kind_check",
+          "value": "\"magic_world_sources\".\"kind\" IN ('create', 'rediscover', 'fork', 'play')"
+        }
+      }
+    },
+    "magic_world_uses": {
+      "name": "magic_world_uses",
+      "columns": {
+        "game_id": {
+          "name": "game_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "world_code": {
+          "name": "world_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "spender_account_id": {
+          "name": "spender_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "creator_account_id": {
+          "name": "creator_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "qualifies_for_royalty": {
+          "name": "qualifies_for_royalty",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "human_played_at": {
+          "name": "human_played_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "magic_world_uses_world_time_idx": {
+          "name": "magic_world_uses_world_time_idx",
+          "columns": [
+            "world_code",
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "magic_world_uses_creator_qualifies_idx": {
+          "name": "magic_world_uses_creator_qualifies_idx",
+          "columns": [
+            "creator_account_id",
+            "qualifies_for_royalty",
+            "created_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "magic_world_uses_game_id_games_id_fk": {
+          "name": "magic_world_uses_game_id_games_id_fk",
+          "tableFrom": "magic_world_uses",
+          "tableTo": "games",
+          "columnsFrom": [
+            "game_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "magic_world_uses_world_code_magic_worlds_code_fk": {
+          "name": "magic_world_uses_world_code_magic_worlds_code_fk",
+          "tableFrom": "magic_world_uses",
+          "tableTo": "magic_worlds",
+          "columnsFrom": [
+            "world_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "magic_world_uses_spender_account_id_accounts_id_fk": {
+          "name": "magic_world_uses_spender_account_id_accounts_id_fk",
+          "tableFrom": "magic_world_uses",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "spender_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "magic_world_uses_creator_account_id_accounts_id_fk": {
+          "name": "magic_world_uses_creator_account_id_accounts_id_fk",
+          "tableFrom": "magic_world_uses",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "creator_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "magic_world_uses_qualifies_check": {
+          "name": "magic_world_uses_qualifies_check",
+          "value": "\"magic_world_uses\".\"qualifies_for_royalty\" IN (0, 1)"
+        }
+      }
+    },
+    "magic_worlds": {
+      "name": "magic_worlds",
+      "columns": {
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "full_hash": {
+          "name": "full_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "canonical_code": {
+          "name": "canonical_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "rules_json": {
+          "name": "rules_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "creator_account_id": {
+          "name": "creator_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "magic_worlds_full_hash_unique": {
+          "name": "magic_worlds_full_hash_unique",
+          "columns": [
+            "full_hash"
+          ],
+          "isUnique": true
+        },
+        "magic_worlds_canonical_unique": {
+          "name": "magic_worlds_canonical_unique",
+          "columns": [
+            "canonical_code"
+          ],
+          "isUnique": true
+        },
+        "magic_worlds_creator_time_idx": {
+          "name": "magic_worlds_creator_time_idx",
+          "columns": [
+            "creator_account_id",
+            "created_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "magic_worlds_creator_account_id_accounts_id_fk": {
+          "name": "magic_worlds_creator_account_id_accounts_id_fk",
+          "tableFrom": "magic_worlds",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "creator_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "moves": {
+      "name": "moves",
+      "columns": {
+        "game_id": {
+          "name": "game_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ply": {
+          "name": "ply",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "color": {
+          "name": "color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "from_square": {
+          "name": "from_square",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "to_square": {
+          "name": "to_square",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "promotion": {
+          "name": "promotion",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "san": {
+          "name": "san",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "second_from_square": {
+          "name": "second_from_square",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "second_to_square": {
+          "name": "second_to_square",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "second_san": {
+          "name": "second_san",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "continuation_json": {
+          "name": "continuation_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "fen_before": {
+          "name": "fen_before",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "fen_after": {
+          "name": "fen_after",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "moves_request_unique": {
+          "name": "moves_request_unique",
+          "columns": [
+            "game_id",
+            "request_id"
+          ],
+          "isUnique": true
+        },
+        "moves_created_idx": {
+          "name": "moves_created_idx",
+          "columns": [
+            "created_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "moves_game_id_ply_pk": {
+          "columns": [
+            "game_id",
+            "ply"
+          ],
+          "name": "moves_game_id_ply_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "observability_events": {
+      "name": "observability_events",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "environment": {
+          "name": "environment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "app_version": {
+          "name": "app_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "event_name": {
+          "name": "event_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "subject_hash": {
+          "name": "subject_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "actor_hash": {
+          "name": "actor_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "route": {
+          "name": "route",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "method": {
+          "name": "method",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status_code": {
+          "name": "status_code",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "latency_ms": {
+          "name": "latency_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "metadata_json": {
+          "name": "metadata_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "observability_events_id_unique": {
+          "name": "observability_events_id_unique",
+          "columns": [
+            "id"
+          ],
+          "isUnique": true
+        },
+        "observability_actor_time_idx": {
+          "name": "observability_actor_time_idx",
+          "columns": [
+            "actor_hash",
+            "occurred_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "public_rate_limit_windows": {
+      "name": "public_rate_limit_windows",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "scope": {
+          "name": "scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "hit_count": {
+          "name": "hit_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "public_rate_limit_expiry_idx": {
+          "name": "public_rate_limit_expiry_idx",
+          "columns": [
+            "expires_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "push_deliveries": {
+      "name": "push_deliveries",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "subscription_id": {
+          "name": "subscription_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "game_id": {
+          "name": "game_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "game_version": {
+          "name": "game_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status_code": {
+          "name": "status_code",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "push_deliveries_once_unique": {
+          "name": "push_deliveries_once_unique",
+          "columns": [
+            "subscription_id",
+            "game_id",
+            "game_version",
+            "kind"
+          ],
+          "isUnique": true
+        },
+        "push_deliveries_created_idx": {
+          "name": "push_deliveries_created_idx",
+          "columns": [
+            "created_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "push_deliveries_subscription_id_push_subscriptions_id_fk": {
+          "name": "push_deliveries_subscription_id_push_subscriptions_id_fk",
+          "tableFrom": "push_deliveries",
+          "tableTo": "push_subscriptions",
+          "columnsFrom": [
+            "subscription_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "push_deliveries_game_id_games_id_fk": {
+          "name": "push_deliveries_game_id_games_id_fk",
+          "tableFrom": "push_deliveries",
+          "tableTo": "games",
+          "columnsFrom": [
+            "game_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "push_deliveries_kind_check": {
+          "name": "push_deliveries_kind_check",
+          "value": "\"push_deliveries\".\"kind\" IN ('your_turn')"
+        },
+        "push_deliveries_status_check": {
+          "name": "push_deliveries_status_check",
+          "value": "\"push_deliveries\".\"status\" IN ('pending', 'sent', 'failed', 'stale')"
+        }
+      }
+    },
+    "push_subscriptions": {
+      "name": "push_subscriptions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "game_id": {
+          "name": "game_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "color": {
+          "name": "color",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "endpoint_hash": {
+          "name": "endpoint_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "endpoint": {
+          "name": "endpoint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "p256dh": {
+          "name": "p256dh",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "auth": {
+          "name": "auth",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expiration_time": {
+          "name": "expiration_time",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_success_at": {
+          "name": "last_success_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "failure_count": {
+          "name": "failure_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "disabled_at": {
+          "name": "disabled_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "push_subscriptions_game_color_endpoint_unique": {
+          "name": "push_subscriptions_game_color_endpoint_unique",
+          "columns": [
+            "game_id",
+            "color",
+            "endpoint_hash"
+          ],
+          "isUnique": true
+        },
+        "push_subscriptions_game_color_updated_idx": {
+          "name": "push_subscriptions_game_color_updated_idx",
+          "columns": [
+            "game_id",
+            "color",
+            "updated_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "push_subscriptions_game_id_games_id_fk": {
+          "name": "push_subscriptions_game_id_games_id_fk",
+          "tableFrom": "push_subscriptions",
+          "tableTo": "games",
+          "columnsFrom": [
+            "game_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "push_subscriptions_account_id_accounts_id_fk": {
+          "name": "push_subscriptions_account_id_accounts_id_fk",
+          "tableFrom": "push_subscriptions",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "push_subscriptions_color_check": {
+          "name": "push_subscriptions_color_check",
+          "value": "\"push_subscriptions\".\"color\" IN ('w', 'b')"
+        }
+      }
+    },
+    "rate_limit_windows": {
+      "name": "rate_limit_windows",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "scope": {
+          "name": "scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "window_start": {
+          "name": "window_start",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "hit_count": {
+          "name": "hit_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "rate_limit_expiry_idx": {
+          "name": "rate_limit_expiry_idx",
+          "columns": [
+            "expires_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "referral_attributions": {
+      "name": "referral_attributions",
+      "columns": {
+        "referred_account_id": {
+          "name": "referred_account_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "referrer_account_id": {
+          "name": "referrer_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "referral_code": {
+          "name": "referral_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "credits": {
+          "name": "credits",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "referral_attributions_referrer_status_idx": {
+          "name": "referral_attributions_referrer_status_idx",
+          "columns": [
+            "referrer_account_id",
+            "status",
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "referral_attributions_status_completed_idx": {
+          "name": "referral_attributions_status_completed_idx",
+          "columns": [
+            "status",
+            "completed_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "referral_attributions_referred_account_id_accounts_id_fk": {
+          "name": "referral_attributions_referred_account_id_accounts_id_fk",
+          "tableFrom": "referral_attributions",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "referred_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "referral_attributions_referrer_account_id_accounts_id_fk": {
+          "name": "referral_attributions_referrer_account_id_accounts_id_fk",
+          "tableFrom": "referral_attributions",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "referrer_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "referral_attributions_referral_code_referral_links_code_fk": {
+          "name": "referral_attributions_referral_code_referral_links_code_fk",
+          "tableFrom": "referral_attributions",
+          "tableTo": "referral_links",
+          "columnsFrom": [
+            "referral_code"
+          ],
+          "columnsTo": [
+            "code"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "referral_attributions_status_check": {
+          "name": "referral_attributions_status_check",
+          "value": "\"referral_attributions\".\"status\" IN ('pending', 'rewarded')"
+        },
+        "referral_attributions_people_check": {
+          "name": "referral_attributions_people_check",
+          "value": "\"referral_attributions\".\"referrer_account_id\" <> \"referral_attributions\".\"referred_account_id\""
+        },
+        "referral_attributions_credits_check": {
+          "name": "referral_attributions_credits_check",
+          "value": "(\n        (\"referral_attributions\".\"status\" = 'pending' AND \"referral_attributions\".\"credits\" = 0 AND \"referral_attributions\".\"completed_at\" IS NULL) OR\n        (\"referral_attributions\".\"status\" = 'rewarded' AND \"referral_attributions\".\"credits\" > 0 AND \"referral_attributions\".\"completed_at\" IS NOT NULL)\n      )"
+        }
+      }
+    },
+    "referral_links": {
+      "name": "referral_links",
+      "columns": {
+        "account_id": {
+          "name": "account_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "referral_links_code_unique": {
+          "name": "referral_links_code_unique",
+          "columns": [
+            "code"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "referral_links_account_id_accounts_id_fk": {
+          "name": "referral_links_account_id_accounts_id_fk",
+          "tableFrom": "referral_links",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "referral_links_code_check": {
+          "name": "referral_links_code_check",
+          "value": "length(\"referral_links\".\"code\") = 16 AND \"referral_links\".\"code\" NOT GLOB '*[^A-Za-z0-9_-]*'"
+        }
+      }
+    },
+    "safety_report_archive": {
+      "name": "safety_report_archive",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reporter_username": {
+          "name": "reporter_username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "target_username": {
+          "name": "target_username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "safety_report_archive_status_time_idx": {
+          "name": "safety_report_archive_status_time_idx",
+          "columns": [
+            "status",
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "safety_report_archive_expiry_idx": {
+          "name": "safety_report_archive_expiry_idx",
+          "columns": [
+            "expires_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "safety_report_archive_category_check": {
+          "name": "safety_report_archive_category_check",
+          "value": "\"safety_report_archive\".\"category\" IN ('spam', 'harassment', 'inappropriate_username', 'cheating', 'other')"
+        },
+        "safety_report_archive_status_check": {
+          "name": "safety_report_archive_status_check",
+          "value": "\"safety_report_archive\".\"status\" IN ('new', 'reviewed', 'closed')"
+        }
+      }
+    },
+    "safety_reports": {
+      "name": "safety_reports",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reporter_account_id": {
+          "name": "reporter_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "target_account_id": {
+          "name": "target_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'new'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "safety_reports_status_time_idx": {
+          "name": "safety_reports_status_time_idx",
+          "columns": [
+            "status",
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "safety_reports_reporter_time_idx": {
+          "name": "safety_reports_reporter_time_idx",
+          "columns": [
+            "reporter_account_id",
+            "created_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "safety_reports_reporter_account_id_accounts_id_fk": {
+          "name": "safety_reports_reporter_account_id_accounts_id_fk",
+          "tableFrom": "safety_reports",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "reporter_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "safety_reports_target_account_id_accounts_id_fk": {
+          "name": "safety_reports_target_account_id_accounts_id_fk",
+          "tableFrom": "safety_reports",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "target_account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "safety_reports_people_check": {
+          "name": "safety_reports_people_check",
+          "value": "\"safety_reports\".\"reporter_account_id\" <> \"safety_reports\".\"target_account_id\""
+        },
+        "safety_reports_category_check": {
+          "name": "safety_reports_category_check",
+          "value": "\"safety_reports\".\"category\" IN ('spam', 'harassment', 'inappropriate_username', 'cheating', 'other')"
+        },
+        "safety_reports_status_check": {
+          "name": "safety_reports_status_check",
+          "value": "\"safety_reports\".\"status\" IN ('new', 'reviewed', 'closed')"
+        }
+      }
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

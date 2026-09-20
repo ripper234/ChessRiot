@@ -17,6 +17,9 @@ const VALUES: Record<PieceSymbol, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 1
 const NAMES: Record<PieceSymbol, string> = {
   p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king",
 };
+const HEBREW_NAMES: Record<PieceSymbol, string> = {
+  p: "חייל", n: "פרש", b: "רץ", r: "צריח", q: "מלכה", k: "מלך",
+};
 
 type StorageReader = Pick<Storage, "getItem">;
 type StorageWriter = Pick<Storage, "setItem">;
@@ -74,13 +77,26 @@ function applyIntent(chess: Chess, intent: MoveIntent) {
     to: intent.to,
     ...(intent.promotion ? { promotion: intent.promotion } : {}),
   });
-  if (!intent.second) return { chess, first, final: first };
-  const secondChess = new Chess(forceTurn(chess.fen(), first.color));
-  const second = secondChess.move({ from: intent.second.from, to: intent.second.to });
-  return { chess: secondChess, first, final: second };
+  const moves = [first];
+  const continuation: NonNullable<MoveIntent["continuation"]> = intent.continuation
+    ?? (intent.second ? [intent.second] : []);
+  let current = chess;
+  for (const leg of continuation) {
+    current = new Chess(forceTurn(current.fen(), first.color));
+    moves.push(current.move({
+      from: leg.from,
+      to: leg.to,
+      ...(leg.promotion ? { promotion: leg.promotion } : {}),
+    }));
+  }
+  return { chess: current, first, final: moves.at(-1) ?? first, moves };
 }
 
-export function analyzeMoveRisk(fen: string, intent: MoveIntent): CoachWarning | null {
+export function analyzeMoveRisk(
+  fen: string,
+  intent: MoveIntent,
+  locale: "en" | "he" = "en",
+): CoachWarning | null {
   try {
     const chess = new Chess(fen);
     const moving = chess.get(intent.from);
@@ -88,9 +104,11 @@ export function analyzeMoveRisk(fen: string, intent: MoveIntent): CoachWarning |
     const result = applyIntent(chess, intent);
     const after = result.chess;
     if (after.isCheckmate()) return null;
-    const immediateGain = (result.first.captured ? VALUES[result.first.captured] : 0)
-      + (result.final !== result.first && result.final.captured ? VALUES[result.final.captured] : 0);
-    const destination = (intent.second?.to ?? intent.to) as Square;
+    const immediateGain = result.moves.reduce(
+      (total, move) => total + (move.captured ? VALUES[move.captured] : 0),
+      0,
+    );
+    const destination = (intent.continuation?.at(-1)?.to ?? intent.second?.to ?? intent.to) as Square;
     const finalPiece = after.get(destination);
     if (!finalPiece || finalPiece.color !== moving.color) return null;
 
@@ -115,7 +133,9 @@ export function analyzeMoveRisk(fen: string, intent: MoveIntent): CoachWarning |
     }
     if (!best) return null;
     return {
-      explanation: `This leaves your ${NAMES[finalPiece.type]} on ${destination}, where an enemy ${NAMES[best.attacker]} can capture it next move without enough compensation.`,
+      explanation: locale === "he"
+        ? `ה${HEBREW_NAMES[finalPiece.type]} שלך נשאר ב־${destination}, ושם ${HEBREW_NAMES[best.attacker]} יריב יכול לקחת אותו במהלך הבא בלי תמורה מספקת.`
+        : `This leaves your ${NAMES[finalPiece.type]} on ${destination}, where an enemy ${NAMES[best.attacker]} can capture it next move without enough compensation.`,
     };
   } catch {
     return null;
@@ -130,12 +150,14 @@ export function analyzeGreatMove(fen: string, intent: MoveIntent): GreatMoveInsi
     const result = applyIntent(before, intent);
     const after = result.chess;
     if (after.isCheckmate()) return null;
-    const destination = (intent.second?.to ?? intent.to) as Square;
+    const destination = (intent.continuation?.at(-1)?.to ?? intent.second?.to ?? intent.to) as Square;
     const finalPiece = after.get(destination);
     if (!finalPiece) return null;
 
-    const gained = (result.first.captured ? VALUES[result.first.captured] : 0)
-      + (result.final !== result.first && result.final.captured ? VALUES[result.final.captured] : 0);
+    const gained = result.moves.reduce(
+      (total, move) => total + (move.captured ? VALUES[move.captured] : 0),
+      0,
+    );
     if (gained - VALUES[moving.type] >= 2) {
       return { kind: "material", label: "GREAT WIN" };
     }

@@ -1,12 +1,15 @@
 import { Chess } from "chess.js";
 import { ensureSchema, getDatabase } from "@/db";
-import { turnDeadlineAt, turnDeadlineExpired } from "./game-deadlines";
+import { turnDeadlineAt } from "./game-deadlines";
 import { claimableDraws, replayWithRepetition } from "./game-rules";
+import { gameClockSnapshot } from "./game-clocks";
+import { parseMoveContinuation } from "./move-continuation";
 import {
   parseStoredMagicRules,
   publicMagicRules,
   type CompiledMagicRules,
 } from "./magic-rules";
+import { displayMagicWorldCode } from "./magic-world-code";
 import {
   normalizeGameVariantId,
   type GameVariantId,
@@ -51,6 +54,9 @@ export interface GameRow {
   turn_pace_days: TurnPaceDays | null;
   magic_prompt: string | null;
   magic_rules_json: string | null;
+  world_code: string | null;
+  world_creator_username: string | null;
+  world_created_at: string | null;
 }
 
 interface MoveRow {
@@ -65,6 +71,7 @@ interface MoveRow {
   second_from_square: string | null;
   second_to_square: string | null;
   second_san: string | null;
+  continuation_json?: string | null;
   fen_before: string;
   fen_after: string;
   created_at: string;
@@ -81,9 +88,14 @@ export async function findGameById(id: string): Promise<GameRow | null> {
         COALESCE(game_settings.human_color, 'w') AS human_color,
         game_settings.turn_pace_days AS turn_pace_days,
         game_settings.magic_prompt AS magic_prompt,
-        game_settings.magic_rules_json AS magic_rules_json
+        game_settings.magic_rules_json AS magic_rules_json,
+        game_settings.world_code AS world_code,
+        world_creator.username AS world_creator_username,
+        magic_worlds.created_at AS world_created_at
         FROM games
         LEFT JOIN game_settings ON game_settings.game_id = games.id
+        LEFT JOIN magic_worlds ON magic_worlds.code = game_settings.world_code
+        LEFT JOIN accounts AS world_creator ON world_creator.id = magic_worlds.creator_account_id
         WHERE games.id = ?`)
       .bind(id)
       .first<GameRow>()) ?? null
@@ -101,9 +113,14 @@ export async function findGameByCreateRequest(requestId: string): Promise<GameRo
         COALESCE(game_settings.human_color, 'w') AS human_color,
         game_settings.turn_pace_days AS turn_pace_days,
         game_settings.magic_prompt AS magic_prompt,
-        game_settings.magic_rules_json AS magic_rules_json
+        game_settings.magic_rules_json AS magic_rules_json,
+        game_settings.world_code AS world_code,
+        world_creator.username AS world_creator_username,
+        magic_worlds.created_at AS world_created_at
         FROM games
         LEFT JOIN game_settings ON game_settings.game_id = games.id
+        LEFT JOIN magic_worlds ON magic_worlds.code = game_settings.world_code
+        LEFT JOIN accounts AS world_creator ON world_creator.id = magic_worlds.creator_account_id
         WHERE games.create_request_id = ?`)
       .bind(requestId)
       .first<GameRow>()) ?? null
@@ -121,9 +138,14 @@ export async function findGameByInviteHash(inviteHash: string): Promise<GameRow 
         COALESCE(game_settings.human_color, 'w') AS human_color,
         game_settings.turn_pace_days AS turn_pace_days,
         game_settings.magic_prompt AS magic_prompt,
-        game_settings.magic_rules_json AS magic_rules_json
+        game_settings.magic_rules_json AS magic_rules_json,
+        game_settings.world_code AS world_code,
+        world_creator.username AS world_creator_username,
+        magic_worlds.created_at AS world_created_at
         FROM games
         LEFT JOIN game_settings ON game_settings.game_id = games.id
+        LEFT JOIN magic_worlds ON magic_worlds.code = game_settings.world_code
+        LEFT JOIN accounts AS world_creator ON world_creator.id = magic_worlds.creator_account_id
         WHERE games.invite_token_hash = ?`)
       .bind(inviteHash)
       .first<GameRow>()) ?? null
@@ -136,25 +158,38 @@ export async function readMoves(gameId: string): Promise<StoredMove[]> {
     .prepare("SELECT * FROM moves WHERE game_id = ? ORDER BY ply ASC")
     .bind(gameId)
     .all<MoveRow>();
-  return (result.results ?? []).map((row: MoveRow) => ({
-    ply: row.ply,
-    requestId: row.request_id,
-    color: row.color,
-    from: row.from_square,
-    to: row.to_square,
-    promotion: row.promotion,
-    san: row.san,
-    second: row.second_from_square && row.second_to_square && row.second_san
+  return (result.results ?? []).map((row: MoveRow) => {
+    const legacySecond = row.second_from_square && row.second_to_square && row.second_san
       ? {
         from: row.second_from_square,
         to: row.second_to_square,
         san: row.second_san,
       }
-      : null,
-    fenBefore: row.fen_before,
-    fenAfter: row.fen_after,
-    createdAt: row.created_at,
-  }));
+      : null;
+    const continuation = row.continuation_json === null || row.continuation_json === undefined
+      ? legacySecond ? [legacySecond] : []
+      : parseMoveContinuation(row.continuation_json);
+    return {
+      ply: row.ply,
+      requestId: row.request_id,
+      color: row.color,
+      from: row.from_square,
+      to: row.to_square,
+      promotion: row.promotion,
+      san: row.san,
+      second: continuation[0]
+        ? {
+          from: continuation[0].from,
+          to: continuation[0].to,
+          san: continuation[0].san,
+        }
+        : null,
+      continuation,
+      fenBefore: row.fen_before,
+      fenAfter: row.fen_after,
+      createdAt: row.created_at,
+    };
+  });
 }
 
 export function playerColor(game: GameRow, tokenHash: string): Color | null {
@@ -166,7 +201,6 @@ export function playerColor(game: GameRow, tokenHash: string): Color | null {
 export async function accountPlayerColor(
   game: GameRow,
   accountId: string,
-  tokenHash?: string | null,
 ): Promise<Color | null> {
   await ensureSchema();
   const existing = await getDatabase()
@@ -175,26 +209,160 @@ export async function accountPlayerColor(
     .bind(game.id, accountId)
     .first<{ color: Color }>();
   if (existing?.color === "w" || existing?.color === "b") return existing.color;
+  return null;
+}
 
-  if (!tokenHash) return null;
-  const legacyColor = playerColor(game, tokenHash);
-  if (!legacyColor) return null;
-  try {
-    await getDatabase()
-      .prepare(`INSERT INTO game_memberships (
-        game_id, color, account_id, claimed_at
-      ) VALUES (?, ?, ?, ?)`)
-      .bind(game.id, legacyColor, accountId, new Date().toISOString())
-      .run();
-  } catch {
-    const winner = await getDatabase()
-      .prepare(`SELECT account_id FROM game_memberships
-        WHERE game_id = ? AND color = ?`)
-      .bind(game.id, legacyColor)
-      .first<{ account_id: string }>();
-    if (winner?.account_id !== accountId) return null;
+export type GoogleSeatLinkResult =
+  | {
+      ok: true;
+      color: Color;
+      alreadyLinked: boolean;
+    }
+  | {
+      ok: false;
+      reason:
+        | "invalid_account"
+        | "invalid_token"
+        | "account_owns_opposite_seat"
+        | "seat_already_linked"
+        | "link_conflict";
+    };
+
+const GOOGLE_ACCOUNT_ID_PATTERN = /^google_[A-Za-z0-9_-]{43}$/;
+
+async function gameMemberships(gameId: string): Promise<Map<Color, string>> {
+  const result = await getDatabase()
+    .prepare(`SELECT color, account_id FROM game_memberships
+      WHERE game_id = ?`)
+    .bind(gameId)
+    .all<{ color: Color; account_id: string }>();
+  const memberships = new Map<Color, string>();
+  for (const row of result.results ?? []) {
+    if (row.color === "w" || row.color === "b") {
+      memberships.set(row.color, row.account_id);
+    }
   }
-  return legacyColor;
+  return memberships;
+}
+
+function settledGoogleSeatLink(
+  memberships: Map<Color, string>,
+  color: Color,
+  accountId: string,
+): GoogleSeatLinkResult {
+  if (memberships.get(color) === accountId) {
+    return { ok: true, color, alreadyLinked: true };
+  }
+  if (memberships.get(oppositeColor(color)) === accountId) {
+    return { ok: false, reason: "account_owns_opposite_seat" };
+  }
+  const owner = memberships.get(color);
+  if (owner && GOOGLE_ACCOUNT_ID_PATTERN.test(owner)) {
+    return { ok: false, reason: "seat_already_linked" };
+  }
+  return { ok: false, reason: "link_conflict" };
+}
+
+/**
+ * Explicitly replaces a legacy private-seat membership with a Google account.
+ *
+ * Callers must independently require a valid Google session and the original
+ * private seat token, so merely opening a private link cannot change ownership.
+ */
+export async function linkGuestSeatToGoogleAccount(
+  game: GameRow,
+  accountId: string,
+  tokenHash: string,
+): Promise<GoogleSeatLinkResult> {
+  if (!GOOGLE_ACCOUNT_ID_PATTERN.test(accountId)) {
+    return { ok: false, reason: "invalid_account" };
+  }
+  const color = playerColor(game, tokenHash);
+  if (!color) return { ok: false, reason: "invalid_token" };
+
+  await ensureSchema();
+  const db = getDatabase();
+  let memberships = await gameMemberships(game.id);
+  if (memberships.get(color) === accountId) {
+    return { ok: true, color, alreadyLinked: true };
+  }
+  if (memberships.get(oppositeColor(color)) === accountId) {
+    return { ok: false, reason: "account_owns_opposite_seat" };
+  }
+
+  const previousAccountId = memberships.get(color);
+  if (previousAccountId && GOOGLE_ACCOUNT_ID_PATTERN.test(previousAccountId)) {
+    return { ok: false, reason: "seat_already_linked" };
+  }
+
+  const now = new Date().toISOString();
+  if (!previousAccountId) {
+    try {
+      const inserted = await db
+        .prepare(`INSERT INTO game_memberships (
+          game_id, color, account_id, claimed_at
+        ) SELECT ?, ?, ?, ?
+        WHERE NOT EXISTS (
+          SELECT 1 FROM game_memberships
+          WHERE game_id = ? AND account_id = ?
+        )`)
+        .bind(game.id, color, accountId, now, game.id, accountId)
+        .run();
+      if ((inserted.meta.changes ?? 0) === 1) {
+        return { ok: true, color, alreadyLinked: false };
+      }
+    } catch {
+      // A concurrent claimant may have won. Resolve from current state below.
+    }
+    memberships = await gameMemberships(game.id);
+    return settledGoogleSeatLink(memberships, color, accountId);
+  }
+
+  try {
+    const migration = await db.batch([
+      db.prepare(`UPDATE game_memberships
+        SET account_id = ?, claimed_at = ?
+        WHERE game_id = ? AND color = ? AND account_id = ?
+          AND NOT EXISTS (
+            SELECT 1 FROM game_memberships
+            WHERE game_id = ? AND account_id = ?
+          )`)
+        .bind(
+          accountId,
+          now,
+          game.id,
+          color,
+          previousAccountId,
+          game.id,
+          accountId,
+        ),
+      db.prepare(`UPDATE push_subscriptions
+        SET account_id = ?, updated_at = ?
+        WHERE game_id = ? AND color = ? AND account_id = ?
+          AND EXISTS (
+            SELECT 1 FROM game_memberships
+            WHERE game_id = ? AND color = ? AND account_id = ?
+          )`)
+        .bind(
+          accountId,
+          now,
+          game.id,
+          color,
+          previousAccountId,
+          game.id,
+          color,
+          accountId,
+        ),
+    ]);
+    if ((migration[0]?.meta.changes ?? 0) === 1) {
+      return { ok: true, color, alreadyLinked: false };
+    }
+  } catch {
+    // A concurrent claimant may have won. Resolve from current state below.
+  }
+
+  memberships = await gameMemberships(game.id);
+  return settledGoogleSeatLink(memberships, color, accountId);
 }
 
 export async function membershipAccountId(
@@ -245,24 +413,29 @@ export function multiplayerTurnDeadline(game: GameRow): string | null {
     : null;
 }
 
-export async function expireMultiplayerTurn(game: GameRow): Promise<GameRow> {
-  if (
-    game.game_mode !== "multiplayer"
-    || game.status !== "active"
-    || !game.turn_pace_days
-    || !turnDeadlineExpired(game.updated_at, game.turn_pace_days)
-  ) {
+export async function expireMultiplayerTurn(
+  game: GameRow,
+  nowMs = Date.now(),
+): Promise<GameRow> {
+  const deadlineAt = multiplayerTurnDeadline(game);
+  if (deadlineAt === null || Date.parse(deadlineAt) > nowMs) {
     return game;
   }
 
   const winner = oppositeColor(game.turn_color);
-  const now = new Date().toISOString();
   const result = await getDatabase()
     .prepare(`UPDATE games SET
       status = 'completed', winner_color = ?, termination = 'timeout',
       version = version + 1, last_mutation_nonce = ?, updated_at = ?, finished_at = ?
       WHERE id = ? AND version = ? AND status = 'active'`)
-    .bind(winner, crypto.randomUUID(), now, now, game.id, game.version)
+    .bind(
+      winner,
+      crypto.randomUUID(),
+      deadlineAt,
+      deadlineAt,
+      game.id,
+      game.version,
+    )
     .run();
   const current = await findGameById(game.id);
   if ((result.meta.changes ?? 0) === 1) {
@@ -278,6 +451,84 @@ export async function expireMultiplayerTurn(game: GameRow): Promise<GameRow> {
     });
   }
   return current ?? game;
+}
+
+/**
+ * Lazily adjudicates overdue games before account-level dashboard and activity
+ * reads. Every candidate is settled before the page is queried so the same
+ * response can never return a known-overdue game as active.
+ */
+export async function expireAccountMultiplayerTurns(
+  accountId: string | string[],
+  nowMs?: number,
+): Promise<number> {
+  await ensureSchema();
+  const accountIds = [...new Set(
+    (Array.isArray(accountId) ? accountId : [accountId]).filter(Boolean),
+  )];
+  if (!accountIds.length) return 0;
+
+  const membershipPlaceholders = accountIds.map(() => "?").join(",");
+  const settled = await getDatabase()
+    .prepare(`UPDATE games AS target SET
+        status = 'completed',
+        winner_color = CASE target.turn_color WHEN 'w' THEN 'b' ELSE 'w' END,
+        termination = 'timeout',
+        version = target.version + 1,
+        last_mutation_nonce = lower(hex(randomblob(16))),
+        updated_at = (
+          SELECT strftime(
+            '%Y-%m-%dT%H:%M:%fZ',
+            target.updated_at,
+            '+' || settings.turn_pace_days || ' days'
+          )
+          FROM game_settings AS settings
+          WHERE settings.game_id = target.id
+        ),
+        finished_at = (
+          SELECT strftime(
+            '%Y-%m-%dT%H:%M:%fZ',
+            target.updated_at,
+            '+' || settings.turn_pace_days || ' days'
+          )
+          FROM game_settings AS settings
+          WHERE settings.game_id = target.id
+        )
+      WHERE target.status = 'active'
+        AND target.id IN (
+          SELECT game_memberships.game_id
+          FROM game_memberships
+          WHERE game_memberships.account_id IN (${membershipPlaceholders})
+        )
+        AND EXISTS (
+          SELECT 1
+          FROM game_settings AS settings
+          WHERE settings.game_id = target.id
+            AND settings.game_mode = 'multiplayer'
+            AND settings.turn_pace_days IN (1, 3, 5)
+            AND julianday(COALESCE(?, 'now')) >= julianday(
+              target.updated_at,
+              '+' || settings.turn_pace_days || ' days'
+            )
+        )
+      RETURNING id`)
+    .bind(
+      ...accountIds,
+      nowMs === undefined ? null : new Date(nowMs).toISOString(),
+    )
+    .all<{ id: string }>();
+  const expired = settled.results?.length ?? 0;
+  if (expired > 0) await recordEvent({
+    event: "game.completed",
+    outcome: "success",
+    metadata: {
+      mode: "multiplayer",
+      termination: "timeout",
+      source: "account_sync",
+      count: expired,
+    },
+  });
+  return expired;
 }
 
 export function assertAuthoritativeState(
@@ -299,10 +550,24 @@ export function assertAuthoritativeState(
   return replayed;
 }
 
-export function snapshot(game: GameRow, moves: StoredMove[], you: Color): GameSnapshot {
+export function snapshot(
+  game: GameRow,
+  moves: StoredMove[],
+  you: Color,
+  nowMs = Date.now(),
+): GameSnapshot {
   const magicRules = gameMagicRules(game);
   const replayed = replayWithRepetition(game.initial_fen, moves, magicRules);
   const position = replayed.chess;
+  const clocks = gameClockSnapshot({
+    mode: game.game_mode,
+    status: game.status,
+    turn: game.turn_color,
+    createdAt: game.created_at,
+    joinedAt: game.joined_at,
+    finishedAt: game.finished_at,
+    moves,
+  }, nowMs);
   return {
     id: game.id,
     mode: game.game_mode,
@@ -310,12 +575,19 @@ export function snapshot(game: GameRow, moves: StoredMove[], you: Color): GameSn
     aiDifficulty: game.ai_difficulty,
     turnPaceDays: game.turn_pace_days,
     magicRules: publicMagicRules(game.magic_prompt, magicRules),
+    world: game.world_code && game.world_created_at ? {
+      code: game.world_code,
+      displayCode: displayMagicWorldCode(game.world_code),
+      creatorUsername: game.world_creator_username,
+      createdAt: game.world_created_at,
+    } : null,
     status: game.status,
     version: game.version,
     initialFen: game.initial_fen,
     fen: game.current_fen,
     turn: game.turn_color,
     plyCount: game.ply_count,
+    ...clocks,
     players: {
       white: { name: game.white_name },
       black: game.black_name ? { name: game.black_name } : null,
@@ -336,6 +608,7 @@ export function snapshot(game: GameRow, moves: StoredMove[], you: Color): GameSn
       promotion,
       san,
       second,
+      continuation,
       fenBefore,
       fenAfter,
       createdAt,
@@ -347,6 +620,7 @@ export function snapshot(game: GameRow, moves: StoredMove[], you: Color): GameSn
       promotion,
       san,
       second,
+      continuation,
       fenBefore,
       fenAfter,
       createdAt,

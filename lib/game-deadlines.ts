@@ -22,16 +22,29 @@ export function turnDeadlineExpired(
   return deadline !== null && Date.parse(deadline) <= nowMs;
 }
 
-export function formatTurnTimeLeft(deadlineAt: string, nowMs = Date.now()): string {
+export function formatTurnTimeLeft(
+  deadlineAt: string,
+  nowMs = Date.now(),
+  locale: "en" | "he" = "en",
+): string {
   const deadlineMs = Date.parse(deadlineAt);
-  if (!Number.isFinite(deadlineMs)) return "DEADLINE UNAVAILABLE";
+  if (!Number.isFinite(deadlineMs)) {
+    return locale === "he" ? "המועד אינו זמין" : "DEADLINE UNAVAILABLE";
+  }
   const remainingMs = deadlineMs - nowMs;
-  if (remainingMs <= 0) return "TIME EXPIRED";
+  if (remainingMs <= 0) return locale === "he" ? "הזמן נגמר" : "TIME EXPIRED";
   const totalMinutes = Math.ceil(remainingMs / 60_000);
-  if (totalMinutes < 60) return `${totalMinutes}M LEFT`;
+  if (totalMinutes < 60) {
+    return locale === "he" ? `נותרו ${totalMinutes} דק׳` : `${totalMinutes}M LEFT`;
+  }
   const totalHours = Math.ceil(remainingMs / 3_600_000);
-  if (totalHours < 24) return `${totalHours}H LEFT`;
+  if (totalHours < 24) {
+    return locale === "he" ? `נותרו ${totalHours} שעות` : `${totalHours}H LEFT`;
+  }
   const days = Math.floor(totalHours / 24);
   const hours = totalHours % 24;
+  if (locale === "he") {
+    return hours ? `נותרו ${days} ימים ו־${hours} שעות` : `נותרו ${days} ימים`;
+  }
   return hours ? `${days}D ${hours}H LEFT` : `${days}D LEFT`;
 }

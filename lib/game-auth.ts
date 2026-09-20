@@ -1,13 +1,8 @@
-import {
-  guestAccountForToken,
-  verifiedRequestAccount,
-  type PlayerAccount,
-} from "./account-auth";
-import { upsertAccount } from "./accounts";
+import { requireGoogleApiAccount, type AccountProfile } from "./accounts";
 import {
   accountPlayerColor,
   findGameById,
-  membershipAccountId,
+  linkGuestSeatToGoogleAccount,
   playerColor,
   type GameRow,
 } from "./game-store";
@@ -18,23 +13,20 @@ import { hashSecret } from "./validation";
 export type GameAuthorization =
   | {
       ok: true;
-      account: PlayerAccount;
+      account: AccountProfile;
       game: GameRow;
       color: Color;
     }
   | {
       ok: false;
-      status: 401 | 404;
-      code: "private_link_required" | "not_found";
+      status: 401 | 404 | 428;
+      code: "sign_in_required" | "username_required" | "not_found";
       message: string;
     };
 
 /**
- * Authorizes either a verified account membership or a private seat key.
- *
- * Account memberships preserve cross-device access when a hosting identity is
- * available. The private seat key remains a complete capability so public
- * guest play never depends on an interactive account gate.
+ * Requires a Google session, then authorizes the account membership. An exact
+ * legacy private-seat key may migrate that seat only after Google sign-in.
  */
 export async function authorizeGameRequest(
   request: Request,
@@ -50,49 +42,32 @@ export async function authorizeGameRequest(
     };
   }
 
-  const token = bearerToken(request);
-  const tokenHash = token ? await hashSecret(token) : null;
-  const account = await verifiedRequestAccount(request);
-  if (account) {
-    const color = await accountPlayerColor(game, account.id, tokenHash);
-    if (color) return { ok: true, account, game, color };
-  }
-
-  const tokenColor = tokenHash ? playerColor(game, tokenHash) : null;
-  if (token && tokenColor) {
-    const existingAccountId = await membershipAccountId(game.id, tokenColor);
-    const displayName = tokenColor === "w"
-      ? game.white_name
-      : game.black_name ?? "Player 2";
-    const seatAccount = existingAccountId
-      ? { id: existingAccountId, displayName }
-      : await guestAccountForToken(token, displayName);
-    if (!existingAccountId) {
-      await upsertAccount(seatAccount);
-      const claimed = await accountPlayerColor(
-        game,
-        seatAccount.id,
-        tokenHash,
-      );
-      if (claimed !== tokenColor) {
-        return {
-          ok: false,
-          status: 404,
-          code: "not_found",
-          message: "Game not found",
-        };
-      }
-    }
-    return { ok: true, account: seatAccount, game, color: tokenColor };
-  }
-
+  const account = await requireGoogleApiAccount(request);
   if (!account) {
     return {
       ok: false,
       status: 401,
-      code: "private_link_required",
-      message: "Open the private game link for your seat",
+      code: "sign_in_required",
+      message: "Sign in with Google to open this game",
     };
+  }
+  if (!account.username) {
+    return {
+      ok: false,
+      status: 428,
+      code: "username_required",
+      message: "Choose your permanent username before playing",
+    };
+  }
+  const accountColor = await accountPlayerColor(game, account.id);
+  if (accountColor) return { ok: true, account, game, color: accountColor };
+
+  const token = bearerToken(request);
+  const tokenHash = token ? await hashSecret(token) : null;
+  const tokenColor = tokenHash ? playerColor(game, tokenHash) : null;
+  if (token && tokenColor) {
+    const linked = await linkGuestSeatToGoogleAccount(game, account.id, tokenHash!);
+    if (linked.ok) return { ok: true, account, game, color: linked.color };
   }
 
   return {

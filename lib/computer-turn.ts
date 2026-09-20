@@ -9,6 +9,8 @@ import {
   readMoves,
 } from "./game-store";
 import { recordEvent } from "./observability";
+import { markMagicWorldPlayed } from "./magic-worlds";
+import { serializeMoveContinuation } from "./move-continuation";
 
 function changes(result: D1Result<unknown> | undefined): number {
   return result?.meta.changes ?? 0;
@@ -151,8 +153,8 @@ export async function playPendingComputerTurn(gameId: string): Promise<void> {
           `INSERT INTO moves (
       game_id, ply, request_id, color, from_square, to_square, promotion,
       san, second_from_square, second_to_square, second_san,
-      fen_before, fen_after, created_at
-    ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      continuation_json, fen_before, fen_after, created_at
+    ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       FROM games WHERE id = ? AND version = ? AND last_mutation_nonce = ?`,
         )
         .bind(
@@ -167,6 +169,7 @@ export async function playPendingComputerTurn(gameId: string): Promise<void> {
           candidate.second?.from ?? null,
           candidate.second?.to ?? null,
           outcome.secondMove?.san ?? null,
+          serializeMoveContinuation(outcome.continuationMoves),
           outcome.fenBefore,
           outcome.fenAfter,
           now,
@@ -181,6 +184,7 @@ export async function playPendingComputerTurn(gameId: string): Promise<void> {
       (changes(results[0]) === 0 && changes(results[1]) === 0);
     if (committed) {
       const wonCommit = changes(results[0]) === 1;
+      await markMagicWorldPlayed(gameId).catch(() => undefined);
       await recordEvent({
         event: wonCommit ? "bot.move_committed" : "bot.move_raced",
         outcome: "success",

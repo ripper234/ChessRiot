@@ -1,6 +1,10 @@
 # Historical implementation plan
 
-This plan describes the superseded Google-auth/Vercel milestone. See root `SPEC.md`, `MVP.md`, and `TEST_FLOWS.md` for the implemented v0.1.
+This plan describes the original Google-auth/Vercel milestone. Its account,
+username, friend, challenge, and persistent-history goals became released
+product capabilities in v0.19.0, implemented on ChatGPT Sites rather than the
+proposed Vercel/Supabase stack. Email delivery remains deferred. See root
+`SPEC.md`, `MVP.md`, and `TEST_FLOWS.md` for the current contract.
 
 # ChessRiot Implementation Plan
 

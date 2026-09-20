@@ -4,13 +4,23 @@ import {
   handleImageOptimization,
 } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
+import { initializeRuntimeInvariants } from "@/db";
 import {
   observeHttpRequest,
   prepareRequestObservation,
   recordEvent,
   sanitizeObservedRoute,
 } from "@/lib/observability";
-import { deliverCommittedTurnNotification } from "@/lib/push-notifications";
+import { enforceDataRetention } from "@/lib/data-retention";
+import {
+  drainPendingAccountNotifications,
+  drainPendingTurnNotifications,
+} from "@/lib/push-notifications";
+import { runBoundedPushDrain } from "@/lib/push-drain";
+import {
+  GOOGLE_SESSION_COOKIE,
+  refreshedGoogleSessionCookieFromHeaders,
+} from "@/lib/google-auth";
 
 interface Env {
   ASSETS: Fetcher;
@@ -20,6 +30,14 @@ interface Env {
   APP_ORIGIN?: string;
   CONTROL_ORIGIN?: string;
   OPENAI_API_KEY?: string;
+  OPENAI_API_KEY_DEV?: string;
+  OPENAI_API_KEY_PROD?: string;
+  GOOGLE_CLIENT_ID_DEV?: string;
+  GOOGLE_CLIENT_ID_PROD?: string;
+  GOOGLE_CLIENT_SECRET_DEV?: string;
+  GOOGLE_CLIENT_SECRET_PROD?: string;
+  GOOGLE_AUTH_SESSION_SECRET_DEV?: string;
+  GOOGLE_AUTH_SESSION_SECRET_PROD?: string;
   OBSERVABILITY_HASH_SECRET?: string;
   OPS_READ_SECRET?: string;
   ACCOUNT_ID_SECRET?: string;
@@ -39,6 +57,31 @@ interface Env {
 interface ExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
   passThroughOnException(): void;
+}
+
+function schedulePushDrain(ctx: ExecutionContext): void {
+  ctx.waitUntil((async () => {
+    try {
+      await runBoundedPushDrain(
+        drainPendingTurnNotifications,
+        drainPendingAccountNotifications,
+        {
+          onLaneError: (lane, error) => {
+            console.error(JSON.stringify({
+              type: "chessriot_push_lane_failure",
+              lane,
+              errorType: error instanceof Error ? error.name.slice(0, 80) : "UnknownError",
+            }));
+          },
+        },
+      );
+    } catch (error) {
+      console.error(JSON.stringify({
+        type: "chessriot_push_drain_failure",
+        errorType: error instanceof Error ? error.name.slice(0, 80) : "UnknownError",
+      }));
+    }
+  })());
 }
 
 function hardenResponse(response: Response, url: URL): Response {
@@ -61,21 +104,63 @@ function hardenResponse(response: Response, url: URL): Response {
   });
 }
 
+function userActivityPath(pathname: string): boolean {
+  return pathname.startsWith("/api/")
+    || (!pathname.startsWith("/_") && !/\.[A-Za-z0-9]{1,8}$/.test(pathname));
+}
+
+async function renewActiveGoogleSession(
+  request: Request,
+  response: Response,
+  url: URL,
+): Promise<Response> {
+  const setCookie = response.headers.get("set-cookie") ?? "";
+  if (
+    !response.ok
+    || !userActivityPath(url.pathname)
+    || url.pathname === "/api/auth/google/callback"
+    || url.pathname === "/api/auth/signout"
+    || (url.pathname === "/api/me/account" && request.method === "DELETE")
+    || setCookie.includes(`${GOOGLE_SESSION_COOKIE}=`)
+  ) return response;
+  const renewed = await refreshedGoogleSessionCookieFromHeaders(request.headers);
+  if (!renewed) return response;
+  const headers = new Headers(response.headers);
+  headers.append("set-cookie", renewed);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function bindRuntimeEnvironment(env: Env): void {
+  globalThis.__CHESSRIOT_DB__ = env.DB;
+  globalThis.__CHESSRIOT_ENV__ = env.CHESSRIOT_ENV;
+  globalThis.__CHESSRIOT_APP_ORIGIN__ = env.APP_ORIGIN;
+  globalThis.__CHESSRIOT_CONTROL_ORIGIN__ = env.CONTROL_ORIGIN;
+  globalThis.__CHESSRIOT_DEMO_BUCKET__ = env.BUCKET;
+  globalThis.__CHESSRIOT_OPENAI_API_KEY__ = env.OPENAI_API_KEY;
+  globalThis.__CHESSRIOT_OPENAI_API_KEY_DEV__ = env.OPENAI_API_KEY_DEV;
+  globalThis.__CHESSRIOT_OPENAI_API_KEY_PROD__ = env.OPENAI_API_KEY_PROD;
+  globalThis.__CHESSRIOT_GOOGLE_CLIENT_ID_DEV__ = env.GOOGLE_CLIENT_ID_DEV;
+  globalThis.__CHESSRIOT_GOOGLE_CLIENT_ID_PROD__ = env.GOOGLE_CLIENT_ID_PROD;
+  globalThis.__CHESSRIOT_GOOGLE_CLIENT_SECRET_DEV__ = env.GOOGLE_CLIENT_SECRET_DEV;
+  globalThis.__CHESSRIOT_GOOGLE_CLIENT_SECRET_PROD__ = env.GOOGLE_CLIENT_SECRET_PROD;
+  globalThis.__CHESSRIOT_GOOGLE_AUTH_SESSION_SECRET_DEV__ = env.GOOGLE_AUTH_SESSION_SECRET_DEV;
+  globalThis.__CHESSRIOT_GOOGLE_AUTH_SESSION_SECRET_PROD__ = env.GOOGLE_AUTH_SESSION_SECRET_PROD;
+  globalThis.__CHESSRIOT_OBSERVABILITY_HASH_SECRET__ = env.OBSERVABILITY_HASH_SECRET;
+  globalThis.__CHESSRIOT_OPS_READ_SECRET__ = env.OPS_READ_SECRET;
+  globalThis.__CHESSRIOT_ACCOUNT_ID_SECRET__ = env.ACCOUNT_ID_SECRET;
+  globalThis.__CHESSRIOT_VIDEO_REGEN_SHARED_SECRET__ = env.VIDEO_REGEN_SHARED_SECRET;
+  globalThis.__CHESSRIOT_VAPID_PUBLIC_KEY__ = env.VAPID_PUBLIC_KEY;
+  globalThis.__CHESSRIOT_VAPID_PRIVATE_JWK__ = env.VAPID_PRIVATE_JWK;
+  globalThis.__CHESSRIOT_VAPID_SUBJECT__ = env.VAPID_SUBJECT;
+}
+
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    globalThis.__CHESSRIOT_DB__ = env.DB;
-    globalThis.__CHESSRIOT_ENV__ = env.CHESSRIOT_ENV;
-    globalThis.__CHESSRIOT_APP_ORIGIN__ = env.APP_ORIGIN;
-    globalThis.__CHESSRIOT_CONTROL_ORIGIN__ = env.CONTROL_ORIGIN;
-    globalThis.__CHESSRIOT_DEMO_BUCKET__ = env.BUCKET;
-    globalThis.__CHESSRIOT_OPENAI_API_KEY__ = env.OPENAI_API_KEY;
-    globalThis.__CHESSRIOT_OBSERVABILITY_HASH_SECRET__ = env.OBSERVABILITY_HASH_SECRET;
-    globalThis.__CHESSRIOT_OPS_READ_SECRET__ = env.OPS_READ_SECRET;
-    globalThis.__CHESSRIOT_ACCOUNT_ID_SECRET__ = env.ACCOUNT_ID_SECRET;
-    globalThis.__CHESSRIOT_VIDEO_REGEN_SHARED_SECRET__ = env.VIDEO_REGEN_SHARED_SECRET;
-    globalThis.__CHESSRIOT_VAPID_PUBLIC_KEY__ = env.VAPID_PUBLIC_KEY;
-    globalThis.__CHESSRIOT_VAPID_PRIVATE_JWK__ = env.VAPID_PRIVATE_JWK;
-    globalThis.__CHESSRIOT_VAPID_SUBJECT__ = env.VAPID_SUBJECT;
+    bindRuntimeEnvironment(env);
     const url = new URL(request.url);
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
@@ -95,20 +180,38 @@ const worker = {
       return hardenResponse(imageResponse, url);
     }
     const startedAt = performance.now();
+    const readOnlyHealth = url.pathname === "/api/health";
+    if (env.DB && request.method === "GET" && url.pathname === "/") {
+      ctx.waitUntil(initializeRuntimeInvariants().catch((error) => {
+        console.error(JSON.stringify({
+          type: "chessriot_runtime_continuity_failure",
+          errorType: error instanceof Error ? error.name.slice(0, 80) : "UnknownError",
+        }));
+      }));
+    }
+    if (env.DB && url.pathname.startsWith("/api/") && !readOnlyHealth) {
+      ctx.waitUntil(enforceDataRetention().catch((error) => {
+        console.error(JSON.stringify({
+          type: "chessriot_retention_failure",
+          errorType: error instanceof Error ? error.name.slice(0, 80) : "UnknownError",
+        }));
+      }));
+    }
     const observation = url.pathname.startsWith("/api/")
+      && !readOnlyHealth
       && url.pathname !== "/api/demo-video/publish"
       ? prepareRequestObservation(request)
       : null;
     try {
-      const response = hardenResponse(await handler.fetch(request, env, ctx), url);
-      if (response.headers.get("x-chessriot-turn-committed") === "1") {
-        ctx.waitUntil(deliverCommittedTurnNotification(response.clone()));
-      }
+      const hardened = hardenResponse(await handler.fetch(request, env, ctx), url);
+      const response = await renewActiveGoogleSession(request, hardened, url);
+      if (env.DB && url.pathname.startsWith("/api/") && !readOnlyHealth) schedulePushDrain(ctx);
       if (observation) {
         ctx.waitUntil(observeHttpRequest(request, response, startedAt, observation));
       }
       return response;
     } catch (error) {
+      if (env.DB && url.pathname.startsWith("/api/") && !readOnlyHealth) schedulePushDrain(ctx);
       ctx.waitUntil(recordEvent({
         event: "error.unhandled",
         outcome: "failure",
@@ -120,6 +223,14 @@ const worker = {
       }));
       throw error;
     }
+  },
+  async scheduled(
+    _controller: { scheduledTime: number; cron: string },
+    env: Env,
+    ctx: ExecutionContext,
+  ): Promise<void> {
+    bindRuntimeEnvironment(env);
+    schedulePushDrain(ctx);
   },
 };
 

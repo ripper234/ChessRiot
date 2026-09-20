@@ -8,9 +8,9 @@ import {
 } from "./themes";
 
 describe("visual themes", () => {
-  it("offers eleven unique, original theme choices", () => {
-    expect(THEMES).toHaveLength(11);
-    expect(new Set(THEMES.map((theme) => theme.id)).size).toBe(11);
+  it("offers twelve unique, original theme choices", () => {
+    expect(THEMES).toHaveLength(12);
+    expect(new Set(THEMES.map((theme) => theme.id)).size).toBe(12);
     expect(THEMES.every((theme) => theme.preview.length === 4)).toBe(true);
     expect(THEMES.map((theme) => theme.name)).not.toEqual(
       expect.arrayContaining([
@@ -32,6 +32,11 @@ describe("visual themes", () => {
     }
     expect(THEMES.find((theme) => theme.id === DEFAULT_THEME)).toMatchObject({
       name: "Riot",
+      art: null,
+    });
+    expect(THEMES.find((theme) => theme.id === "mythic-beasts")).toMatchObject({
+      name: "Mythic Beasts",
+      description: "Dragon court and phoenix fire",
       art: null,
     });
   });

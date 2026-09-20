@@ -27,9 +27,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en" suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }} /></head>
       <body>
+        <a className="skip-link" href="#route-content">Skip to main content</a>
         <ClientTelemetry />
-        <RouteChrome />
-        {children}
+        <div id="main-content">
+          <RouteChrome />
+          <div id="route-content" tabIndex={-1}>{children}</div>
+        </div>
       </body>
     </html>
   );

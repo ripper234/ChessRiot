@@ -16,18 +16,25 @@ export function TurnDeadline({
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
-    return () => window.clearInterval(timer);
+    const refresh = () => setNow(Date.now());
+    const timer = window.setInterval(refresh, 30_000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
   }, []);
 
   return (
-    <div className={`turn-deadline${yourTurn ? " mine" : ""}`} role="timer" aria-live="off">
+    <div className={`turn-deadline${yourTurn ? " mine" : ""}`} dir="rtl" role="timer" aria-live="off">
       <span aria-hidden="true">⌛</span>
       <div>
-        <small>{yourTurn ? "YOUR MOVE DEADLINE" : "OPPONENT MOVE DEADLINE"}</small>
-        <strong>{formatTurnTimeLeft(deadlineAt, now)}</strong>
+        <small>{yourTurn ? "המועד האחרון למהלך שלך" : "המועד האחרון למהלך היריב"}</small>
+        <strong>{formatTurnTimeLeft(deadlineAt, now, "he")}</strong>
       </div>
-      <b>{turnPaceDays} {turnPaceDays === 1 ? "DAY" : "DAYS"} / MOVE</b>
+      <b>{turnPaceDays} {turnPaceDays === 1 ? "יום" : "ימים"} / מהלך</b>
     </div>
   );
 }

@@ -7,25 +7,28 @@ import {
 } from "./game-deadlines";
 
 describe("multiplayer turn deadlines", () => {
-  it("sets a deadline exactly three days after the last game mutation", () => {
-    expect(turnDeadlineAt("2026-07-24T12:00:00.000Z", 3))
-      .toBe("2026-07-27T12:00:00.000Z");
-    expect(turnWindowMs(3)).toBe(259_200_000);
-  });
-
-  it("expires at the deadline, not before it", () => {
+  it.each([
+    [1, "2026-07-25T12:00:00.000Z", 86_400_000],
+    [3, "2026-07-27T12:00:00.000Z", 259_200_000],
+    [5, "2026-07-29T12:00:00.000Z", 432_000_000],
+  ] as const)(
+    "sets and enforces the %i-day deadline at the exact millisecond",
+    (pace, deadline, windowMs) => {
     const updatedAt = "2026-07-24T12:00:00.000Z";
+    expect(turnDeadlineAt(updatedAt, pace)).toBe(deadline);
+    expect(turnWindowMs(pace)).toBe(windowMs);
     expect(turnDeadlineExpired(
       updatedAt,
-      3,
-      Date.parse("2026-07-27T11:59:59.999Z"),
+      pace,
+      Date.parse(deadline) - 1,
     )).toBe(false);
     expect(turnDeadlineExpired(
       updatedAt,
-      3,
-      Date.parse("2026-07-27T12:00:00.000Z"),
+      pace,
+      Date.parse(deadline),
     )).toBe(true);
-  });
+    },
+  );
 
   it("does not expire malformed legacy timestamps", () => {
     expect(turnDeadlineAt("not-a-date", 3)).toBeNull();
@@ -39,5 +42,7 @@ describe("multiplayer turn deadlines", () => {
     expect(formatTurnTimeLeft("2026-07-24T12:42:00.000Z", now)).toBe("42M LEFT");
     expect(formatTurnTimeLeft("2026-07-24T11:59:00.000Z", now)).toBe("TIME EXPIRED");
     expect(formatTurnTimeLeft("not-a-deadline", now)).toBe("DEADLINE UNAVAILABLE");
+    expect(formatTurnTimeLeft("2026-07-27T12:00:00.000Z", now, "he")).toBe("נותרו 3 ימים");
+    expect(formatTurnTimeLeft("2026-07-24T11:59:00.000Z", now, "he")).toBe("הזמן נגמר");
   });
 });

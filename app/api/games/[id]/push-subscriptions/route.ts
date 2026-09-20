@@ -38,7 +38,10 @@ export async function GET(
   const { id } = await context.params;
   const access = await authorizedAccount(request, id);
   if ("response" in access) return access.response;
-  if (access.authorization.game.game_mode !== "multiplayer") {
+  if (
+    access.authorization.game.game_mode !== "multiplayer"
+    || access.authorization.game.status !== "active"
+  ) {
     return json({ available: false, enabled: false });
   }
   const endpointHash = request.headers.get("x-push-endpoint-hash");
@@ -74,6 +77,9 @@ export async function PUT(
   if (access.authorization.game.game_mode !== "multiplayer") {
     return apiError(409, "multiplayer_only", "Turn alerts are only available in multiplayer games");
   }
+  if (access.authorization.game.status !== "active") {
+    return apiError(409, "game_not_active", "Turn alerts are only available in active games");
+  }
   const rate = await enforceAccountRateLimit(
     access.authorization.account.id,
     "push_subscription_write",
@@ -92,12 +98,15 @@ export async function PUT(
   if (!isUuid(requestId) || !subscription) {
     return apiError(400, "invalid_request", "Turn alert subscription is invalid");
   }
-  await upsertPushSubscription(
+  const registration = await upsertPushSubscription(
     id,
     access.authorization.color,
     access.authorization.account.id,
     subscription,
   );
+  if (registration === "stale") {
+    return apiError(409, "stale_subscription", "Create a fresh browser notification subscription");
+  }
   return json({ enabled: true });
 }
 

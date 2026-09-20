@@ -180,6 +180,41 @@
   --display: Georgia, "Times New Roman", serif;
 }
 
+:root[data-theme="mythic-beasts"] {
+  --riot-navy: #2b203b;
+  --riot-black: #120d1a;
+  --surface: #443354;
+  --surface-raised: #5b4168;
+  --surface-soft: #765a7c;
+  --electric-blue: #78d9d2;
+  --chess-gold: #f0a34b;
+  --neon-purple: #ad74ce;
+  --riot-pink: #e35d63;
+  --teal-spark: #7fd58f;
+  --text: #fff0cf;
+  --muted: #d9c5d4;
+  --board-light: #f0d89a;
+  --board-dark: #754968;
+  --theme-page:
+    radial-gradient(circle at 18% 12%, rgba(120,217,210,.16), transparent 27rem),
+    radial-gradient(circle at 84% 80%, rgba(240,163,75,.17), transparent 30rem),
+    linear-gradient(150deg, #2a1c38, #120d1a 66%, #2b1825);
+  --theme-page-size: auto;
+  --theme-page-position: 0 0;
+  --theme-page-attachment: scroll;
+  --theme-topbar: rgba(18,13,26,.95);
+  --theme-card: linear-gradient(145deg, rgba(75,53,88,.98), rgba(31,22,42,.98));
+  --theme-card-border: #8e647d;
+  --theme-frame: #5c3543;
+  --theme-frame-border: #25131e;
+  --theme-piece-white: #fff0cf;
+  --theme-piece-white-stroke: #754968;
+  --theme-piece-black: #1b1327;
+  --theme-piece-black-stroke: #f0a34b;
+  --mythic-accent: #f0a34b;
+  --display: Georgia, "Times New Roman", serif;
+}
+
 :root[data-theme="arcane-cards"] {
   --riot-navy: #2c1725;
   --riot-black: #160d16;
@@ -375,6 +410,19 @@ html[data-theme] .game-shell .piece-b,
 html[data-theme] .game-shell .player-piece.piece-b {
   color: var(--theme-piece-black);
   -webkit-text-stroke-color: var(--theme-piece-black-stroke);
+}
+
+.chess-piece-svg[data-piece-theme="mythic-beasts"] .mythic-accent {
+  fill: var(--mythic-accent, #f0a34b);
+  stroke: var(--piece-outline);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.chess-piece-svg[data-piece-theme="mythic-beasts"] .mythic-eye {
+  fill: var(--electric-blue, #78d9d2);
+  stroke: var(--piece-outline);
+  stroke-width: 1.5;
 }
 
 /* Every public and setup surface follows the active skin. */

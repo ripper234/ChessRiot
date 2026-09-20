@@ -1,8 +1,9 @@
 "use client";
 
-import { Chess, type Move, type Square } from "chess.js";
+import { Chess, type Move, type PieceSymbol, type Square } from "chess.js";
 import Link from "next/link";
 import {
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
@@ -21,14 +22,23 @@ import {
   readTacticalCelebrationsPreference,
   type CoachWarning,
 } from "@/lib/chess-coach";
-import { apiErrorMessage, requestHeaders } from "@/lib/client-http";
+import { publishAuthSessionInvalidated } from "@/lib/auth-session-client";
+import {
+  fetchJsonWithReadTimeout,
+  gamePollingIntervalMs,
+  recoveryDelayMs,
+  type NetworkInformationLike,
+} from "@/lib/client-recovery";
+import { readApiJson, requestHeaders } from "@/lib/client-http";
 import {
   generateUuid,
   hasSeatTokenInHash,
   inviteKey,
   playerKey,
   privateGamePath,
+  readInvitationUrlFromHash,
   readSeatTokenFromHash,
+  removeInvitationFromHash,
   rememberGame,
 } from "@/lib/client-storage";
 import {
@@ -44,9 +54,9 @@ import { copyInvitationLink } from "@/lib/invitation-copy";
 import {
   actionEndpointSquares,
   capturedPiecesByVictimColor,
-  CHESS_PIECE_NAMES,
+  HEBREW_CHESS_PIECE_NAMES,
+  HEBREW_DIFFICULTY_LABELS,
   checkedKingSquare as findCheckedKingSquare,
-  DIFFICULTY_LABELS,
   gameStatusText,
   illegalDestinationMessage,
   isDarkSquare,
@@ -54,12 +64,6 @@ import {
   pieceCannotAnswerCheckMessage,
 } from "@/lib/game-presentation";
 import { classifyGameFinisher, type GameFinisher } from "@/lib/game-finishers";
-import {
-  postGameReactionWindowOpen,
-  type PublicReaction,
-  type ReactionKey,
-  reactionPreset,
-} from "@/lib/game-reactions";
 import {
   optimisticMoveSnapshot,
   optimisticSoloTurnSnapshot,
@@ -70,20 +74,27 @@ import {
   nextHistoryCursor,
   previousHistoryCursor,
   replayFrameLabel,
+  replayFrameLabelParts,
   resolvedHistoryPly,
   type HistoryCursor,
 } from "@/lib/game-replay";
-import { legalMagicMoves, magicSecondStep } from "@/lib/game-rules";
-import { hasMagicRule, type DoubleMovePiece } from "@/lib/magic-rules";
+import { legalMagicMoves, magicContinuationStep } from "@/lib/game-rules";
+import { magicMoveLimit, magicRuleLabel, type MagicPiece } from "@/lib/magic-rules";
 import { magicDraftTapDecision } from "@/lib/magic-turn-ui";
 import {
-  describeMoveIntent,
+  describeMoveIntentParts,
   moveIntentStillValid,
   readMoveConfirmationPreference,
   type MoveIntent,
 } from "@/lib/move-confirmation";
+import { mayClearTurnNotification } from "@/lib/pwa";
 import type { DrawClaim, GameSnapshot, Promotion } from "@/lib/game-types";
-import { gameVariant } from "@/lib/game-variants";
+import { gameVariant, type GameVariantId } from "@/lib/game-variants";
+import {
+  consumeGameEntryNotice,
+  waitingUiBecameStale,
+  type GameEntryNotice,
+} from "@/lib/game-room-entry";
 import {
   boardActionDuration,
   BoardActionAnimation,
@@ -94,14 +105,35 @@ import { ChessPiece } from "./ChessPiece";
 import { CheckmateFinisher } from "./CheckmateFinisher";
 import { HistoryControls } from "./HistoryControls";
 import { MoveHistoryPanel } from "./MoveHistoryPanel";
-import { ReactionPanel } from "./ReactionPanel";
+import { PlayerClock } from "./PlayerClock";
+import { PostGamePanel } from "./PostGamePanel";
 import { ResignationFinisher } from "./ResignationFinisher";
 import { TurnDeadline } from "./TurnDeadline";
+import { PERFORMANCE_MODE_EVENT } from "./PerformanceMode";
 
-const CONNECTION_MESSAGE = "Connection interrupted. We’ll keep trying.";
-const REACTION_HIDDEN_KEY_PREFIX = "chessriot:reactions:hidden:";
-const FINISHER_DURATION_MS = 1_300;
+const CONNECTION_MESSAGE = "החיבור נותק. נמשיך לנסות.";
+const FINISHER_DURATION_MS = 2_200;
+const REDUCED_FINISHER_DURATION_MS = 700;
 const OPENING_INTRO_DURATION_MS = 360;
+const HEBREW_VARIANTS: Record<GameVariantId, { name: string; loadout: string }> = {
+  standard: { name: "שחמט קלאסי", loadout: "מערך מלא" },
+  "pawn-riot": { name: "מרד החיילים", loadout: "מלך ושמונה חיילים" },
+  "half-army": { name: "חצי צבא", loadout: "מחצית מהכלים" },
+  "pawn-duel": { name: "דו-קרב חיילים", loadout: "מלך ושלושה חיילים" },
+  "mate-pawn": { name: "הכתרת חייל", loadout: "מלך וחייל מול מלך" },
+  "mate-rook": { name: "מט עם צריח", loadout: "מלך וצריח מול מלך" },
+  "mate-two-bishops": { name: "מט עם שני רצים", loadout: "מלך ושני רצים מול מלך" },
+};
+const HEBREW_SIDE_PANEL_LABELS: Record<SidePanel, string> = {
+  invite: "הזמנה",
+  captures: "כלים שנלקחו",
+  history: "מהלכים",
+  info: "מידע",
+};
+
+function samePieceAgain(piece: PieceSymbol): string {
+  return `הזז שוב את ה${HEBREW_CHESS_PIECE_NAMES[piece]}, או סיים את התור.`;
+}
 
 interface DragState {
   pointerId: number;
@@ -117,10 +149,27 @@ interface DragState {
 interface MagicDraft {
   from: Square;
   to: Square;
+  promotion?: Promotion;
   pieceSquare: Square;
-  piece: DoubleMovePiece;
+  piece: MagicPiece;
+  initialPiece: MagicPiece;
+  continuation: Array<{
+    from: Square;
+    to: Square;
+    promotion?: Promotion;
+  }>;
+  maxMoves: number;
   fen: string;
 }
+
+interface PendingPromotion {
+  from: Square;
+  to: Square;
+  continuation?: boolean;
+}
+
+type SidePanel = "invite" | "captures" | "history" | "info";
+type LoadGameResult = "ready" | "unchanged" | "denied" | "error";
 
 export function GameRoom({ gameId }: { gameId: string }) {
   const [serverGame, setServerGame] = useState<GameSnapshot | null>(null);
@@ -128,7 +177,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const game = optimisticGame ?? serverGame;
   const variant = gameVariant(game?.variantId);
   const [selected, setSelected] = useState<Square | null>(null);
-  const [promotionMove, setPromotionMove] = useState<{ from: Square; to: Square } | null>(null);
+  const [promotionMove, setPromotionMove] = useState<PendingPromotion | null>(null);
   const [magicDraft, setMagicDraft] = useState<MagicDraft | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -150,15 +199,15 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [ending, setEnding] = useState(false);
   const [surrendering, setSurrendering] = useState(false);
-  const [reactions, setReactions] = useState<PublicReaction[]>([]);
-  const [reactionQueue, setReactionQueue] = useState<PublicReaction[]>([]);
-  const [reactionBurst, setReactionBurst] = useState<PublicReaction | null>(null);
-  const [reactionOpen, setReactionOpen] = useState(false);
-  const [reactionSending, setReactionSending] = useState<ReactionKey | null>(null);
-  const [reactionMessage, setReactionMessage] = useState("");
-  const [reactionsHidden, setReactionsHidden] = useState(false);
   const [finisher, setFinisher] = useState<GameFinisher | null>(null);
+  const [postGameDismissed, setPostGameDismissed] = useState(false);
+  const [sidePanel, setSidePanel] = useState<SidePanel | null>(null);
+  const [mobileToolsActive, setMobileToolsActive] = useState(false);
+  const [pollIntervalMs, setPollIntervalMs] = useState(3_000);
+  const [focusedSquare, setFocusedSquare] = useState<Square>("a1");
   const latestVersion = useRef(-1);
+  const authoritativeStatus = useRef<GameSnapshot["status"] | null>(null);
+  const entryNotice = useRef<GameEntryNotice | null>(null);
   const previousGame = useRef<GameSnapshot | null>(null);
   const previousEffectGame = useRef<GameSnapshot | null>(null);
   const activeToken = useRef<string | null>(null);
@@ -166,16 +215,48 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const suppressClick = useRef(false);
   const effectTimer = useRef<number | null>(null);
   const openingIntroTimer = useRef<number | null>(null);
-  const reactionCursor = useRef<number | null>(null);
   const previousFinisherGame = useRef<GameSnapshot | null>(null);
   const finisherTimer = useRef<number | null>(null);
-  const reactionTrigger = useRef<HTMLButtonElement | null>(null);
   const moveConfirmDialog = useRef<HTMLDialogElement | null>(null);
   const surrenderDialog = useRef<HTMLDialogElement | null>(null);
+  const promotionDialog = useRef<HTMLDialogElement | null>(null);
   const surrenderKeepPlaying = useRef<HTMLButtonElement | null>(null);
   const moveConfirmReturnFocus = useRef<HTMLElement | null>(null);
   const moveConfirmFallback = useRef<HTMLDivElement | null>(null);
+  const sidePanelClose = useRef<HTMLButtonElement | null>(null);
+  const sidePanelTrigger = useRef<HTMLButtonElement | null>(null);
   const moveCommitInFlight = useRef(false);
+  const gameReadInFlight = useRef<Promise<LoadGameResult> | null>(null);
+
+  const closeSidePanel = useCallback(() => {
+    setSidePanel(null);
+    window.requestAnimationFrame(() => {
+      sidePanelTrigger.current?.focus({ preventScroll: true });
+      sidePanelTrigger.current = null;
+    });
+  }, []);
+
+  const openSidePanel = useCallback((panel: SidePanel, trigger: HTMLButtonElement) => {
+    sidePanelTrigger.current = trigger;
+    setSidePanel(panel);
+  }, []);
+
+  const trapSidePanelFocus = useCallback((event: ReactKeyboardEvent<HTMLElement>) => {
+    if (!mobileToolsActive || event.key !== "Tab") return;
+    const focusable = [...event.currentTarget.querySelectorAll<HTMLElement>(
+      "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+    )].filter((element) => element.offsetParent !== null);
+    const first = focusable[0];
+    const last = focusable.at(-1);
+    if (!first || !last) return;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }, [mobileToolsActive]);
   const activeEffect = effectQueue[0] ?? null;
   const activeEffectFinalSquare = activeEffect
     ? effectQueue.filter((effect) => effect.ply === activeEffect.ply).at(-1)?.to
@@ -185,20 +266,35 @@ export function GameRoom({ gameId }: { gameId: string }) {
     tacticalCelebrationsOn
     && activeEffect?.attacker?.color === game?.you.color,
   );
-  const postGameReactionsOpen = Boolean(
-    game?.status === "completed"
-    && postGameReactionWindowOpen(game.updatedAt),
-  );
 
   useEffect(() => {
     if (!game) return;
     window.dispatchEvent(new CustomEvent("chessriot:game-menu-state", {
-      detail: { status: game.status },
+      detail: { status: game.status, mode: game.mode },
     }));
     return () => {
       window.dispatchEvent(new CustomEvent("chessriot:game-menu-state", { detail: null }));
     };
   }, [game]);
+
+  useEffect(() => {
+    if (!serverGame) return;
+    const publishVisibleSnapshot = () => {
+      if (!mayClearTurnNotification(document.visibilityState, document.hasFocus())) return;
+      window.dispatchEvent(new CustomEvent("chessriot:authoritative-game-visible", {
+        detail: { gameId, version: serverGame.version },
+      }));
+    };
+    publishVisibleSnapshot();
+    window.addEventListener("focus", publishVisibleSnapshot);
+    window.addEventListener("pageshow", publishVisibleSnapshot);
+    document.addEventListener("visibilitychange", publishVisibleSnapshot);
+    return () => {
+      window.removeEventListener("focus", publishVisibleSnapshot);
+      window.removeEventListener("pageshow", publishVisibleSnapshot);
+      document.removeEventListener("visibilitychange", publishVisibleSnapshot);
+    };
+  }, [gameId, serverGame]);
 
   useEffect(() => {
     const syncAudio = (event: Event) => {
@@ -224,12 +320,24 @@ export function GameRoom({ gameId }: { gameId: string }) {
 
   const acceptGame = useCallback((nextGame: GameSnapshot) => {
     if (!shouldAcceptGameSnapshot(latestVersion.current, nextGame.version)) return false;
+    const waitingUiIsStale = waitingUiBecameStale(
+      authoritativeStatus.current,
+      nextGame.status,
+      entryNotice.current !== null,
+    );
     latestVersion.current = nextGame.version;
+    authoritativeStatus.current = nextGame.status;
     setServerGame(nextGame);
     setOptimisticGame(null);
     rememberGame(nextGame);
     setAccess("ready");
-    setMessage((current) => current === CONNECTION_MESSAGE ? "" : current);
+    if (waitingUiIsStale) {
+      entryNotice.current = null;
+      setMessage("");
+      setSidePanel((current) => current === "invite" ? null : current);
+    } else {
+      setMessage((current) => current === CONNECTION_MESSAGE ? "" : current);
+    }
     return true;
   }, []);
 
@@ -260,12 +368,12 @@ export function GameRoom({ gameId }: { gameId: string }) {
     }, OPENING_INTRO_DURATION_MS);
   }, [gameId]);
 
-  const loadGame = useCallback(async (sinceVersion?: number) => {
+  const loadGameUnsafe = useCallback(async (sinceVersion?: number): Promise<LoadGameResult> => {
     const hash = window.location.hash;
     const hashHasSeat = hasSeatTokenInHash(hash);
     const linkedToken = readSeatTokenFromHash(hash);
     let usingSavedAccess = hashHasSeat && !linkedToken;
-    if (hashHasSeat && !linkedToken) setMessage("The private seat key in this link is invalid. Trying saved access instead.");
+    if (hashHasSeat && !linkedToken) setMessage("מפתח הגישה הפרטי בקישור אינו תקין. מנסים גישה שמורה במקום זאת.");
     const previousToken = activeToken.current;
     let savedToken: string | null = null;
     try {
@@ -279,7 +387,12 @@ export function GameRoom({ gameId }: { gameId: string }) {
     }
     candidates.push(null);
     try {
+      type GameReadPayload = {
+        game?: GameSnapshot;
+        error?: { code?: string };
+      };
       let response: Response | null = null;
+      let data: GameReadPayload | null = null;
       let token: string | null = null;
       for (let index = 0; index < candidates.length; index += 1) {
         token = candidates[index];
@@ -287,54 +400,53 @@ export function GameRoom({ gameId }: { gameId: string }) {
         const suffix = sinceVersion === undefined || seatCandidateChanged
           ? ""
           : `?sinceVersion=${sinceVersion}`;
-        response = await fetch(`/api/games/${gameId}${suffix}`, {
+        const result = await fetchJsonWithReadTimeout<GameReadPayload>(`/api/games/${gameId}${suffix}`, {
           headers: requestHeaders(token),
           cache: "no-store",
         });
-        const canTrySavedAccess = (response.status === 401 || response.status === 404)
+        response = result.response;
+        data = result.data;
+        const canTrySavedAccess = response.status === 404
           && index < candidates.length - 1;
         if (!canTrySavedAccess) break;
         if (token === linkedToken && linkedToken !== previousToken) {
           usingSavedAccess = true;
-          setMessage("That private seat link did not match. Trying saved access instead.");
+          setMessage("קישור הגישה הפרטי לא התאים. מנסים גישה שמורה במקום זאת.");
         }
       }
       if (!response) {
         setAccess("error");
-        return;
+        return "error";
       }
       if (response.status === 204) {
         setMessage((current) =>
           usingSavedAccess || current === CONNECTION_MESSAGE ? "" : current);
-        return;
+        return "unchanged";
       }
-      const data = (await response.json()) as {
-        game?: GameSnapshot;
-        error?: { code?: string };
-      };
       if (response.status === 401) {
-        setAccess("denied");
-        return;
+        publishAuthSessionInvalidated();
+        setAccess("error");
+        return "error";
       }
-      if (!response.ok || !data.game) {
-        if (response.status === 404) setAccess("denied");
-        else if (latestVersion.current < 0) setAccess("error");
+      if (!response.ok || !data?.game) {
+        if (response.status === 404) {
+          setAccess("denied");
+          return "denied";
+        }
+        if (latestVersion.current < 0) setAccess("error");
         else setMessage(CONNECTION_MESSAGE);
-        return;
+        return "error";
       }
       const seatChanged = previousToken !== token;
       if (seatChanged) {
         latestVersion.current = -1;
+        authoritativeStatus.current = null;
         setOptimisticGame(null);
         previousGame.current = null;
         previousEffectGame.current = null;
         setSelected(null);
         setPromotionMove(null);
         setEffectQueue([]);
-        setReactions([]);
-        setReactionQueue([]);
-        setReactionBurst(null);
-        reactionCursor.current = null;
         previousFinisherGame.current = null;
         dragRef.current = null;
         setDrag(null);
@@ -356,60 +468,68 @@ export function GameRoom({ gameId }: { gameId: string }) {
       if (latestVersion.current < 0) beginOpeningIntro(data.game);
       if (usingSavedAccess) setMessage("");
       acceptGame(data.game);
+      return "ready";
     } catch {
       if (latestVersion.current < 0) setAccess("error");
       else setMessage(CONNECTION_MESSAGE);
+      return "error";
     }
   }, [
     acceptGame,
     beginOpeningIntro,
     gameId,
+    setHistoryPly,
     setPendingMove,
     setPromotionMove,
   ]);
 
-  const loadReactions = useCallback(async () => {
-    const token = activeToken.current;
-    try {
-      const response = await fetch(`/api/games/${gameId}/reactions`, {
-        headers: requestHeaders(token),
-        cache: "no-store",
-      });
-      if (!response.ok) return;
-      const data = (await response.json()) as { reactions?: PublicReaction[] };
-      if (!Array.isArray(data.reactions)) return;
-      const next = [...data.reactions].sort((a, b) => a.sequence - b.sequence);
-      setReactions(next);
-      const newest = next.at(-1)?.sequence ?? 0;
-      if (reactionCursor.current === null) {
-        reactionCursor.current = newest;
-        return;
-      }
-      const unseen = next.filter((reaction) =>
-        reaction.sequence > reactionCursor.current!
-        && reaction.senderColor !== serverGame?.you.color);
-      reactionCursor.current = Math.max(reactionCursor.current, newest);
-      if (!reactionsHidden && unseen.length > 0) {
-        setReactionQueue((current) => {
-          const known = new Set(current.map((reaction) => reaction.sequence));
-          return [...current, ...unseen.filter((reaction) => !known.has(reaction.sequence))]
-            .sort((a, b) => a.sequence - b.sequence)
-            .slice(-6);
-        });
-      }
-    } catch {
-      // Game polling remains the connection-status source of truth.
-    }
-  }, [gameId, reactionsHidden, serverGame?.you.color]);
+  const loadGame = useCallback((sinceVersion?: number): Promise<LoadGameResult> => {
+    if (gameReadInFlight.current) return gameReadInFlight.current;
+    const operation = loadGameUnsafe(sinceVersion);
+    gameReadInFlight.current = operation;
+    void operation.finally(() => {
+      if (gameReadInFlight.current === operation) gameReadInFlight.current = null;
+    });
+    return operation;
+  }, [loadGameUnsafe]);
+
+  const refreshAfterMutation = useCallback(async (sinceVersion?: number) => {
+    if (gameReadInFlight.current) await gameReadInFlight.current;
+    return loadGame(sinceVersion);
+  }, [loadGame]);
 
   useEffect(() => {
+    let storedInvite = "";
+    const transientInvite = readInvitationUrlFromHash(
+      window.location.hash,
+      window.location.origin,
+    ) ?? "";
     try {
-      setInviteUrl(localStorage.getItem(inviteKey(gameId)) ?? "");
-      setReactionsHidden(
-        localStorage.getItem(`${REACTION_HIDDEN_KEY_PREFIX}${gameId}`) === "true",
-      );
+      storedInvite = localStorage.getItem(inviteKey(gameId)) ?? "";
+      if (transientInvite) localStorage.setItem(inviteKey(gameId), transientInvite);
     } catch {
-      setInviteUrl("");
+      // The fragment keeps the just-created invitation copyable in this view.
+    }
+    const resolvedInvite = storedInvite || transientInvite;
+    setInviteUrl(resolvedInvite);
+    const currentUrl = new URL(window.location.href);
+    const consumed = consumeGameEntryNotice(currentUrl);
+    const cleanUrl = new URL(consumed.path, window.location.origin);
+    if (transientInvite) cleanUrl.hash = removeInvitationFromHash(cleanUrl.hash);
+    const cleanPath = `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`;
+    const currentPath = `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`;
+    if (cleanPath !== currentPath) {
+      window.history.replaceState(window.history.state, "", cleanPath);
+    }
+    entryNotice.current = consumed.notice;
+    if (consumed.notice === "challenge-sent") {
+      setMessage("האתגר נשלח. מחכים שהחבר יאשר.");
+    } else if (consumed.notice === "invitation-created") {
+      setMessage("ההזמנה נוצרה. יש לשתף את הקישור הפרטי. המשחק יתחיל רק לאחר ששחקן נוסף יאשר.");
+      if (resolvedInvite) {
+        sidePanelTrigger.current = null;
+        setSidePanel("invite");
+      }
     }
     setSoundOn(readSoundPreference());
     setConfirmEveryMove(readMoveConfirmationPreference());
@@ -422,11 +542,61 @@ export function GameRoom({ gameId }: { gameId: string }) {
   }, [gameId, loadGame]);
 
   useEffect(() => {
+    if (access !== "error" || latestVersion.current >= 0) return;
+    let cancelled = false;
+    let attempt = 0;
+    let timer: number | null = null;
+    let recovering = false;
+    const schedule = () => {
+      timer = window.setTimeout(() => void recover(), recoveryDelayMs(attempt));
+    };
+    const recover = async () => {
+      if (cancelled || recovering || document.visibilityState === "hidden") return;
+      recovering = true;
+      if (timer !== null) window.clearTimeout(timer);
+      timer = null;
+      try {
+        const result = await loadGame();
+        if (!cancelled && result === "error") {
+          attempt += 1;
+          schedule();
+        }
+      } finally {
+        recovering = false;
+      }
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void recover();
+    };
+    schedule();
+    window.addEventListener("online", recover);
+    window.addEventListener("focus", recover);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      if (timer !== null) window.clearTimeout(timer);
+      window.removeEventListener("online", recover);
+      window.removeEventListener("focus", recover);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [access, loadGame]);
+
+  useEffect(() => {
+    const connection = (navigator as Navigator & {
+      connection?: NetworkInformationLike;
+    }).connection;
+    const update = () => setPollIntervalMs(gamePollingIntervalMs(connection));
+    update();
+    window.addEventListener(PERFORMANCE_MODE_EVENT, update);
+    return () => window.removeEventListener(PERFORMANCE_MODE_EVENT, update);
+  }, []);
+
+  useEffect(() => {
     if (!game || game.status === "completed") return;
     const refresh = () => {
       if (document.visibilityState === "visible") void loadGame(latestVersion.current);
     };
-    const timer = window.setInterval(refresh, 3_000);
+    const timer = window.setInterval(refresh, pollIntervalMs);
     window.addEventListener("focus", refresh);
     window.addEventListener("online", refresh);
     document.addEventListener("visibilitychange", refresh);
@@ -436,29 +606,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       window.removeEventListener("online", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [game, loadGame]);
-
-  useEffect(() => {
-    if (
-      !game
-      || game.mode !== "multiplayer"
-      || game.status === "waiting"
-      || !game.players.black
-    ) return;
-    void loadReactions();
-    if (game.status === "completed" && !postGameReactionsOpen) return;
-    const refresh = () => {
-      if (document.visibilityState === "visible") void loadReactions();
-    };
-    const timer = window.setInterval(refresh, 3_000);
-    window.addEventListener("focus", refresh);
-    document.addEventListener("visibilitychange", refresh);
-    return () => {
-      window.clearInterval(timer);
-      window.removeEventListener("focus", refresh);
-      document.removeEventListener("visibilitychange", refresh);
-    };
-  }, [game, loadReactions, postGameReactionsOpen]);
+  }, [game, loadGame, pollIntervalMs]);
 
   useEffect(() => {
     if (
@@ -512,7 +660,6 @@ export function GameRoom({ gameId }: { gameId: string }) {
       setEffectQueue([]);
       return;
     }
-    if (reducedMotion) return;
     if (!nextEffects.length) {
       if (previous && game.plyCount < previous.plyCount) {
         if (effectTimer.current !== null) window.clearTimeout(effectTimer.current);
@@ -522,10 +669,12 @@ export function GameRoom({ gameId }: { gameId: string }) {
       return;
     }
     if (document.visibilityState !== "visible") return;
+    const newestPly = nextEffects.at(-1)?.ply;
+    const latestTurnEffects = nextEffects.filter((effect) => effect.ply === newestPly);
     setEffectQueue((current) => {
       const queued = new Set(current.map((effect) => effect.id));
-      const unseen = nextEffects.filter((effect) => !queued.has(effect.id));
-      return [...current, ...unseen].slice(-12);
+      const unseen = latestTurnEffects.filter((effect) => !queued.has(effect.id));
+      return [...current, ...unseen].slice(-6);
     });
   }, [game, historyPly, reducedMotion]);
 
@@ -540,10 +689,6 @@ export function GameRoom({ gameId }: { gameId: string }) {
     effectTimer.current = null;
     setEffectQueue([]);
   }, []);
-
-  useEffect(() => {
-    if (reducedMotion) dismissBoardEffects();
-  }, [dismissBoardEffects, reducedMotion]);
 
   useEffect(() => {
     if (!activeEffect) return;
@@ -567,6 +712,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
   }, []);
 
   useEffect(() => {
+    const compactLayout = window.matchMedia("(max-width: 980px)");
+    const updateLayout = () => setMobileToolsActive(compactLayout.matches);
+    updateLayout();
+    compactLayout.addEventListener("change", updateLayout);
+    return () => compactLayout.removeEventListener("change", updateLayout);
+  }, []);
+
+  useEffect(() => {
     const stopHiddenAnimation = () => {
       if (document.visibilityState === "hidden") dismissBoardEffects();
     };
@@ -580,23 +733,6 @@ export function GameRoom({ gameId }: { gameId: string }) {
   }, []);
 
   useEffect(() => {
-    if (reactionsHidden) {
-      setReactionQueue([]);
-      setReactionBurst(null);
-      return;
-    }
-    if (reactionBurst || reactionQueue.length === 0) return;
-    setReactionBurst(reactionQueue[0]);
-    setReactionQueue((current) => current.slice(1));
-  }, [reactionBurst, reactionQueue, reactionsHidden]);
-
-  useEffect(() => {
-    if (!reactionBurst) return;
-    const timer = window.setTimeout(() => setReactionBurst(null), 3_200);
-    return () => window.clearTimeout(timer);
-  }, [reactionBurst]);
-
-  useEffect(() => {
     if (!serverGame) return;
     const previous = previousFinisherGame.current;
     previousFinisherGame.current = serverGame;
@@ -604,26 +740,45 @@ export function GameRoom({ gameId }: { gameId: string }) {
     if (!nextFinisher) return;
     if (finisherTimer.current !== null) window.clearTimeout(finisherTimer.current);
     setFinisher(nextFinisher);
+  }, [serverGame]);
+
+  useEffect(() => {
+    if (!finisher || activeEffect) return;
+    if (finisherTimer.current !== null) window.clearTimeout(finisherTimer.current);
     finisherTimer.current = window.setTimeout(() => {
       finisherTimer.current = null;
       setFinisher(null);
-    }, FINISHER_DURATION_MS);
-  }, [serverGame]);
+    }, reducedMotion ? REDUCED_FINISHER_DURATION_MS : FINISHER_DURATION_MS);
+    return () => {
+      if (finisherTimer.current !== null) window.clearTimeout(finisherTimer.current);
+      finisherTimer.current = null;
+    };
+  }, [activeEffect, finisher, reducedMotion]);
 
   useEffect(() => () => {
     if (finisherTimer.current !== null) window.clearTimeout(finisherTimer.current);
   }, []);
 
   useEffect(() => {
-    if (!reactionOpen) return;
+    if (game?.status === "completed") setPostGameDismissed(false);
+  }, [game?.id, game?.status]);
+
+  useEffect(() => {
+    if (!sidePanel) return;
+    const focusFrame = window.requestAnimationFrame(() => {
+      sidePanelClose.current?.focus({ preventScroll: true });
+    });
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      setReactionOpen(false);
-      reactionTrigger.current?.focus();
+      event.preventDefault();
+      closeSidePanel();
     };
     window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [reactionOpen]);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [closeSidePanel, sidePanel]);
 
   useEffect(() => {
     setSelected(null);
@@ -657,12 +812,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
   }, [confirmEnd]);
 
   useEffect(() => {
-    if (!promotionMove) return;
-    const cancelOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setPromotionMove(null);
-    };
-    window.addEventListener("keydown", cancelOnEscape);
-    return () => window.removeEventListener("keydown", cancelOnEscape);
+    const dialog = promotionDialog.current;
+    if (!dialog) return;
+    if (promotionMove && !dialog.open) dialog.showModal();
+    if (!promotionMove && dialog.open) dialog.close();
   }, [promotionMove]);
 
   const history = useMemo(() => {
@@ -721,8 +874,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
     [game?.initialFen, presentedMoves],
   );
   const checkedKingSquare = useMemo(
-    () => chess ? findCheckedKingSquare(chess) : null,
-    [chess],
+    () => chess && (viewingHistory || game?.status !== "completed")
+      ? findCheckedKingSquare(chess)
+      : null,
+    [chess, game?.status, viewingHistory],
   );
 
   const squares = useMemo(
@@ -754,6 +909,32 @@ export function GameRoom({ gameId }: { gameId: string }) {
     ? actionEndpointSquares(lastMove)
     : [];
 
+  function focusBoardSquare(square: Square) {
+    setFocusedSquare(square);
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLButtonElement>(`[data-square="${square}"]`)
+        ?.focus({ preventScroll: true });
+    });
+  }
+
+  function handleSquareKeyDown(
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    square: Square,
+  ) {
+    const index = squares.indexOf(square);
+    if (index < 0) return;
+    let nextIndex = index;
+    if (event.key === "ArrowLeft") nextIndex = Math.max(0, index - 1);
+    else if (event.key === "ArrowRight") nextIndex = Math.min(63, index + 1);
+    else if (event.key === "ArrowUp") nextIndex = Math.max(0, index - 8);
+    else if (event.key === "ArrowDown") nextIndex = Math.min(63, index + 8);
+    else if (event.key === "Home") nextIndex = Math.floor(index / 8) * 8;
+    else if (event.key === "End") nextIndex = Math.floor(index / 8) * 8 + 7;
+    else return;
+    event.preventDefault();
+    focusBoardSquare(squares[nextIndex]);
+  }
+
   function playInvalidSound() {
     if (!soundOn) return;
     void unlockGameSounds().then((unlocked) => {
@@ -765,7 +946,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
     from: Square,
     to: Square,
     promotion?: Promotion,
-    second?: { from: Square; to: Square },
+    continuation?: Array<{
+      from: Square;
+      to: Square;
+      promotion?: Promotion;
+    }>,
   ): void {
     if (!game || !canMove || moveCommitInFlight.current) return;
     dismissBoardEffects();
@@ -774,11 +959,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
       from,
       to,
       ...(promotion ? { promotion } : {}),
-      ...(second ? { second } : {}),
+      ...(continuation && continuation.length > 0 ? { continuation } : {}),
       expectedVersion: game.version,
       piece,
     };
-    const warning = chessCoachOn ? analyzeMoveRisk(game.fen, intent) : null;
+    const warning = chessCoachOn ? analyzeMoveRisk(game.fen, intent, "he") : null;
     if (!confirmEveryMove && !warning) {
       void commitMove(intent);
       return;
@@ -811,7 +996,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       || !moveIntentStillValid(intent, currentGame)
     ) {
       closeMoveConfirmation();
-      setMessage("The position changed. Choose your move again.");
+      setMessage("העמדה השתנתה. יש לבחור שוב את המהלך.");
       return;
     }
     moveCommitInFlight.current = true;
@@ -823,7 +1008,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       intent.from,
       intent.to,
       intent.promotion,
-      { second: intent.second },
+      { continuation: intent.continuation },
     );
     const authoritativeVersion = intent.expectedVersion;
     let botPreviewTimer: number | null = null;
@@ -845,7 +1030,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
             requestId,
             intent.promotion,
             {
-              ...(intent.second ? { second: intent.second } : {}),
+              ...(intent.continuation
+                ? { continuation: intent.continuation }
+                : {}),
               createdAt: humanPreview.updatedAt,
             },
           );
@@ -868,7 +1055,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
           from: intent.from,
           to: intent.to,
           ...(intent.promotion ? { promotion: intent.promotion } : {}),
-          ...(intent.second ? { second: intent.second } : {}),
+          ...(intent.continuation ? { continuation: intent.continuation } : {}),
           expectedVersion: intent.expectedVersion,
           requestId,
         }),
@@ -879,7 +1066,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
       };
       if (response.status === 401) {
         setOptimisticGame(null);
-        setAccess("denied");
+        publishAuthSessionInvalidated();
+        setAccess("error");
         return;
       }
       if (data.game) {
@@ -890,18 +1078,18 @@ export function GameRoom({ gameId }: { gameId: string }) {
         if (!data.game) setOptimisticGame(null);
         setMessage(
           data.error?.code === "must_answer_check"
-            ? illegalDestinationMessage(true)
-            : apiErrorMessage(data, "That move did not work"),
+            ? illegalDestinationMessage(true, "he")
+            : "המהלך לא הצליח.",
         );
         if (data.error?.code !== "stale_position") playInvalidSound();
       } else if (!data.game) {
-        setMessage("The move response was incomplete. Refreshing the board…");
-        await loadGame(latestVersion.current);
+        setMessage("תשובת המהלך לא הייתה שלמה. מרעננים את הלוח…");
+        await refreshAfterMutation(latestVersion.current);
         if (latestVersion.current <= authoritativeVersion) setOptimisticGame(null);
       }
     } catch {
-      setMessage("Could not send the move. Refreshing the board…");
-      await loadGame(latestVersion.current);
+      setMessage("לא הצלחנו לשלוח את המהלך. מרעננים את הלוח…");
+      await refreshAfterMutation(latestVersion.current);
       if (latestVersion.current <= authoritativeVersion) setOptimisticGame(null);
     } finally {
       window.clearTimeout(timeout);
@@ -932,12 +1120,12 @@ export function GameRoom({ gameId }: { gameId: string }) {
       };
       if (data.game) acceptGame(data.game);
       if (!response.ok) {
-        setMessage(apiErrorMessage(data, "That draw cannot be claimed now"));
+        setMessage("אי אפשר לדרוש תיקו כרגע.");
         playInvalidSound();
       }
     } catch {
-      setMessage("Could not claim the draw. Refreshing the board…");
-      await loadGame(latestVersion.current);
+      setMessage("לא הצלחנו לדרוש תיקו. מרעננים את הלוח…");
+      await refreshAfterMutation(latestVersion.current);
     } finally {
       setBusy(false);
     }
@@ -954,8 +1142,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
       setSelected(from);
       setMessage(
         magicDraft
-          ? `Move the same ${CHESS_PIECE_NAMES[magicDraft.piece]} again, or finish the turn.`
-          : illegalDestinationMessage(game.check),
+          ? samePieceAgain(magicDraft.piece)
+          : illegalDestinationMessage(game.check, "he"),
       );
       playInvalidSound();
       return;
@@ -963,49 +1151,136 @@ export function GameRoom({ gameId }: { gameId: string }) {
     if (magicDraft) {
       if (from !== magicDraft.pieceSquare) {
         setSelected(magicDraft.pieceSquare);
-        setMessage(`Move the same ${CHESS_PIECE_NAMES[magicDraft.piece]} again, or finish the turn.`);
+        setMessage(samePieceAgain(magicDraft.piece));
         playInvalidSound();
         return;
       }
-      requestMove(
-        magicDraft.from,
-        magicDraft.to,
-        undefined,
-        { from, to },
-      );
+      if (targetMoves.some((move) => Boolean(move.promotion))) {
+        setPromotionMove({ from, to, continuation: true });
+        return;
+      }
+      advanceMagicDraft(from, to);
       return;
     }
     if (targetMoves.some((move) => Boolean(move.promotion))) {
       setPromotionMove({ from, to });
       return;
     }
-    const firstMove = targetMoves[0];
-    if (
-      (firstMove?.piece === "r" || firstMove?.piece === "n")
-      && hasMagicRule(game.magicRules, "double_move", firstMove.piece)
-    ) {
-      const afterFirst = new Chess(game.fen);
-      afterFirst.move(firstMove);
-      const continuation = magicSecondStep(
-        afterFirst,
-        firstMove.to,
-        firstMove.color,
-        game.magicRules ?? null,
-      );
-      if (continuation) {
-        setMagicDraft({
-          from,
-          to,
-          pieceSquare: firstMove.to,
-          piece: continuation.piece,
-          fen: continuation.chess.fen(),
-        });
-        setSelected(firstMove.to);
-        setMessage(`Move that ${CHESS_PIECE_NAMES[continuation.piece]} again, or finish the turn.`);
-        return;
-      }
+    stageFirstMove(from, to);
+  }
+
+  function stageFirstMove(
+    from: Square,
+    to: Square,
+    promotion?: Promotion,
+  ): void {
+    if (!game) return;
+    const start = new Chess(game.fen);
+    const firstMove = legalMagicMoves(
+      start,
+      game.magicRules ?? null,
+      from,
+    ).find((move) =>
+      move.to === to && (move.promotion ?? undefined) === promotion);
+    if (!firstMove) {
+      setMessage("המהלך אינו חוקי.");
+      playInvalidSound();
+      return;
     }
-    requestMove(from, to);
+    start.move(firstMove);
+    const sequence = {
+      initialPiece: firstMove.piece,
+      maxMoves: magicMoveLimit(game.magicRules, firstMove.piece),
+    };
+    const next = magicContinuationStep(
+      start,
+      firstMove.to,
+      firstMove.color,
+      game.magicRules ?? null,
+      1,
+      sequence,
+    );
+    if (!next) {
+      requestMove(from, to, promotion);
+      return;
+    }
+    setMagicDraft({
+      from,
+      to,
+      ...(promotion ? { promotion } : {}),
+      pieceSquare: firstMove.to,
+      piece: next.piece,
+      initialPiece: sequence.initialPiece,
+      continuation: [],
+      maxMoves: sequence.maxMoves,
+      fen: next.chess.fen(),
+    });
+    setSelected(firstMove.to);
+    setPromotionMove(null);
+    setMessage(
+      samePieceAgain(next.piece),
+    );
+  }
+
+  function advanceMagicDraft(
+    from: Square,
+    to: Square,
+    promotion?: Promotion,
+  ): void {
+    if (!magicDraft || !game) return;
+    const staged = new Chess(magicDraft.fen);
+    const selectedMove = legalMagicMoves(
+      staged,
+      game.magicRules ?? null,
+      from,
+    ).find((move) =>
+      move.to === to && (move.promotion ?? undefined) === promotion);
+    if (!selectedMove) {
+      setMessage("מהלך הקסם אינו חוקי.");
+      playInvalidSound();
+      return;
+    }
+    staged.move(selectedMove);
+    const nextContinuation = [
+      ...magicDraft.continuation,
+      {
+        from,
+        to,
+        ...(promotion ? { promotion } : {}),
+      },
+    ];
+    const next = magicContinuationStep(
+      staged,
+      selectedMove.to,
+      selectedMove.color,
+      game.magicRules ?? null,
+      nextContinuation.length + 1,
+      {
+        initialPiece: magicDraft.initialPiece,
+        maxMoves: magicDraft.maxMoves,
+      },
+    );
+    if (!next) {
+      requestMove(
+        magicDraft.from,
+        magicDraft.to,
+        magicDraft.promotion,
+        nextContinuation,
+      );
+      return;
+    }
+    setMagicDraft({
+      ...magicDraft,
+      pieceSquare: selectedMove.to,
+      piece: next.piece,
+      continuation: nextContinuation,
+      fen: next.chess.fen(),
+    });
+    setSelected(selectedMove.to);
+    setPromotionMove(null);
+    setMessage(
+      `מהלך קסם ${nextContinuation.length + 1} מתוך ${next.maxMoves}. ${samePieceAgain(next.piece)}`,
+    );
   }
 
   function tapSquare(square: Square) {
@@ -1034,7 +1309,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       }
       setSelected(magicDraft.pieceSquare);
       if (decision === "reject") {
-        setMessage(`Move the same ${CHESS_PIECE_NAMES[magicDraft.piece]} again, or finish the turn.`);
+        setMessage(samePieceAgain(magicDraft.piece));
         playInvalidSound();
       }
       return;
@@ -1047,14 +1322,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
     if (piece?.color === game.you.color) {
       if (game.check && chess.moves({ square, verbose: true }).length === 0) {
         setSelected(null);
-        setMessage(pieceCannotAnswerCheckMessage());
+        setMessage(pieceCannotAnswerCheckMessage("he"));
         playInvalidSound();
         return;
       }
       setSelected(square);
       setMessage("");
     } else if (selected) {
-      setMessage(illegalDestinationMessage(game.check));
+      setMessage(illegalDestinationMessage(game.check, "he"));
       playInvalidSound();
     } else {
       setSelected(null);
@@ -1128,8 +1403,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
     else {
       setSelected(current.from);
       setMessage(game?.check
-        ? illegalDestinationMessage(true)
-        : "Drop the piece on a highlighted square.");
+        ? illegalDestinationMessage(true, "he")
+        : "יש להניח את הכלי על משבצת מסומנת.");
       playInvalidSound();
     }
   }
@@ -1177,50 +1452,38 @@ export function GameRoom({ gameId }: { gameId: string }) {
       markCopied();
       return;
     }
-    setMessage("Clipboard access is unavailable. Select and copy the invitation link below.");
+    setMessage("אין גישה ללוח ההעתקה. אפשר לבחור ולהעתיק את קישור ההזמנה שלמטה.");
   }
 
-  async function sendReaction(key: ReactionKey) {
-    const token = activeToken.current;
-    if (reactionSending) return;
-    setReactionSending(key);
-    setReactionMessage("");
+  async function answerWaitingChallenge(action: "accept" | "decline") {
+    if (!game || game.status !== "waiting" || game.you.color !== "b") return;
+    setBusy(true);
+    setMessage("");
     try {
-      const response = await fetch(`/api/games/${gameId}/reactions`, {
-        method: "POST",
-        headers: requestHeaders(token, true),
-        body: JSON.stringify({ reaction: key, requestId: generateUuid() }),
+      const response = await fetch(`/api/games/${encodeURIComponent(game.id)}/challenge`, {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: requestHeaders(activeToken.current, true),
+        body: JSON.stringify({ action, requestId: generateUuid() }),
       });
-      const data = (await response.json()) as {
-        reaction?: PublicReaction;
-        error?: { message?: string };
-      };
-      if (!response.ok || !data.reaction) {
-        setReactionMessage(apiErrorMessage(data, "Could not send that reaction"));
+      const payload = await readApiJson(response) as {
+        game?: GameSnapshot;
+        error?: { message?: unknown };
+      } | null;
+      if (!response.ok || !payload?.game) {
+        throw new Error("לא הצלחנו לעדכן את האתגר.");
+      }
+      if (action === "decline") {
+        window.location.assign("/app");
         return;
       }
-      setReactions((current) => {
-        if (current.some((reaction) => reaction.id === data.reaction!.id)) return current;
-        return [...current, data.reaction!]
-          .sort((a, b) => a.sequence - b.sequence)
-          .slice(-20);
-      });
-      setReactionOpen(false);
-      reactionTrigger.current?.focus();
+      acceptGame(payload.game);
+      setSidePanel(null);
+      setMessage("האתגר אושר. המשחק התחיל.");
     } catch {
-      setReactionMessage("Could not send that reaction");
+      setMessage("לא הצלחנו לעדכן את האתגר.");
     } finally {
-      setReactionSending(null);
-    }
-  }
-
-  function toggleReactionsHidden() {
-    const next = !reactionsHidden;
-    setReactionsHidden(next);
-    try {
-      localStorage.setItem(`${REACTION_HIDDEN_KEY_PREFIX}${gameId}`, String(next));
-    } catch {
-      // The setting still applies in this tab when browser storage is blocked.
+      setBusy(false);
     }
   }
 
@@ -1245,7 +1508,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
         error?: { message?: string };
       };
       if (!response.ok || !data.game) {
-        setMessage(apiErrorMessage(data, "Could not end the game"));
+        setMessage("לא הצלחנו לסיים את המשחק.");
         return;
       }
       // Remove the modal/top-layer backdrop before mounting the board finisher.
@@ -1257,8 +1520,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
       }
       acceptGame(data.game);
     } catch {
-      setMessage("Could not end the game. Refreshing the board…");
-      await loadGame(latestVersion.current);
+      setMessage("לא הצלחנו לסיים את המשחק. מרעננים את הלוח…");
+      await refreshAfterMutation(latestVersion.current);
     } finally {
       if (finisherStartedAt !== null) {
         const minimum = reducedMotion ? 120 : 1_000;
@@ -1273,55 +1536,58 @@ export function GameRoom({ gameId }: { gameId: string }) {
   }
 
   if (access === "loading") {
-    return <main className="game-shell"><header className="topbar"><Brand /></header><div className="loading-block">ASSEMBLING BOARD…</div></main>;
+    return <main className="game-shell" lang="he" dir="rtl" translate="no"><header className="topbar"><Brand locale="he" /></header><div className="loading-block"><span>מסדרים את הלוח…</span><Link className="secondary-button" href="/">חזרה למשחקים</Link></div></main>;
   }
   if (access === "error") {
     return (
-      <main className="join-shell"><header className="topbar"><Brand /></header><section className="join-stage">
-        <div className="voxel-card state-card"><span className="big-glyph">↻</span><h1>CONNECTION INTERRUPTED</h1>
-          <p>The arena could not load yet. Check your connection and try again.</p>
+      <main className="join-shell" lang="he" dir="rtl" translate="no"><header className="topbar"><Brand locale="he" /></header><section className="join-stage">
+        <div className="voxel-card state-card"><span className="big-glyph">↻</span><h1>החיבור נותק</h1>
+          <p>עדיין לא הצלחנו לטעון את הזירה. ChessRiot ימשיך לנסות אוטומטית.</p>
           <button className="secondary-button" type="button" onClick={() => {
             setAccess("loading");
             void loadGame();
-          }}>TRY AGAIN</button>
+          }}>נסה שוב</button>
+          <Link className="quiet-button" href="/">חזרה למשחקים</Link>
         </div>
       </section></main>
     );
   }
   if (access === "denied") {
     return (
-      <main className="join-shell"><header className="topbar"><Brand /></header><section className="join-stage">
-        <div className="voxel-card state-card"><span className="big-glyph">⌁</span><h1>PRIVATE SEAT LINK NEEDED</h1>
-          <p>Open the private game link for your seat, or ask the other player for a new invitation.</p>
-          <Link className="secondary-button" href="/app">GO TO PLAY</Link>
+      <main className="join-shell" lang="he" dir="rtl" translate="no"><header className="topbar"><Brand locale="he" /></header><section className="join-stage">
+        <div className="voxel-card state-card"><span className="big-glyph">⌁</span><h1>המשחק לא נמצא בחשבון שלך</h1>
+          <p>יש להשתמש בהזמנה שנשלחה לחשבון Google הזה, או לבקש מהחבר לפתוח אתגר חדש.</p>
+          <Link className="secondary-button" href="/">חזרה למשחקים שלך</Link>
         </div>
       </section></main>
     );
   }
   if (!game || !chess) return null;
 
-  const displayCheck = viewingHistory ? chess.isCheck() : game.check;
+  // Keep clocks tied to the latest server snapshot. Optimistic board moves may
+  // change the displayed turn before the authoritative elapsed totals arrive.
+  const clockGame = serverGame ?? game;
+  const displayCheck = viewingHistory
+    ? chess.isCheck()
+    : game.status !== "completed" && game.check;
   const statusText = gameStatusText({
     game,
     viewingHistory,
-    historyLabel: replayFrameLabel(historyFrame),
+    historyLabel: replayFrameLabel(historyFrame, "he"),
     openingIntro,
     magicPiece: magicDraft?.piece,
     displayCheck,
+    locale: "he",
   });
+  const historyStatusParts = replayFrameLabelParts(historyFrame, "he");
+  const pendingMoveDescription = pendingMove
+    ? describeMoveIntentParts(pendingMove, "he")
+    : null;
   const draggedPiece = drag ? chess.get(drag.from) : null;
-  const burstPreset = reactionBurst ? reactionPreset(reactionBurst.key) : null;
-  const reactionsAvailable = Boolean(
-    game.mode === "multiplayer"
-    && game.status !== "waiting"
-    && game.players.black
-    && (game.status === "active" || postGameReactionsOpen),
-  );
-
   return (
-    <main className="game-shell">
+    <main className="game-shell" lang="he" dir="rtl" translate="no">
       <header className="topbar game-topbar">
-        <Brand />
+        <Brand locale="he" />
       </header>
       <dialog
         className="surrender-confirm-backdrop"
@@ -1339,12 +1605,12 @@ export function GameRoom({ gameId }: { gameId: string }) {
       >
           <section className="surrender-confirm">
             <span aria-hidden="true">⚑</span>
-            <h2 id="surrender-title">{game.status === "waiting" ? "Cancel game?" : "Surrender?"}</h2>
+            <h2 id="surrender-title">{game.status === "waiting" ? "לבטל את המשחק?" : "להיכנע?"}</h2>
             <p id="surrender-description">{game.status === "waiting"
-              ? "The invitation will stop working."
-              : "Your king will raise the white flag and your opponent wins."}</p>
+              ? "קישור ההזמנה יפסיק לעבוד."
+              : "המלך שלך יניף דגל לבן והיריב ינצח."}</p>
             <button className="danger-button" type="button" disabled={busy} onClick={() => void endGame()}>
-              {busy ? "ENDING…" : game.status === "waiting" ? "CANCEL GAME" : "RAISE WHITE FLAG"}
+              {busy ? "מסיימים…" : game.status === "waiting" ? "בטל משחק" : "הנף דגל לבן"}
             </button>
             <button
               className="quiet-button"
@@ -1353,43 +1619,38 @@ export function GameRoom({ gameId }: { gameId: string }) {
               disabled={busy}
               onClick={() => setConfirmEnd(false)}
             >
-              KEEP PLAYING
+              המשך לשחק
             </button>
           </section>
       </dialog>
-      <section className="game-layout">
-        <div className="board-column">
-          <div className="match-banner">
-            <div className={`player-card white-player${game.you.color === "w" ? " you-player" : ""}`}>
+      <section className="game-layout" dir="ltr">
+        <div
+          className="board-column"
+          dir="rtl"
+          aria-hidden={mobileToolsActive && sidePanel ? true : undefined}
+          inert={mobileToolsActive && sidePanel ? true : undefined}
+        >
+          <div className="match-banner" dir="ltr">
+            <div className={`player-card white-player${game.you.color === "w" ? " you-player" : ""}`} dir="ltr">
               <span className="player-piece" aria-hidden="true">
                 <ChessPiece type="p" color="w" />
               </span>
-              <div>
-                <small>WHITE{game.you.color === "w" ? " • YOU" : ""}</small>
-                <strong>{game.players.white.name}</strong>
+              <div className="player-card-copy" dir="rtl">
+                <small>לבן{game.you.color === "w" ? " • אתה" : ""}</small>
+                <strong><bdi dir="auto">{game.players.white.name}</bdi></strong>
               </div>
-              <span className="status-lamp" data-active={game.status === "active" && game.turn === "w" ? "true" : "false"} />
-              {!reactionsHidden && reactionBurst?.senderColor === "w" && burstPreset ? (
-                <span className="reaction-bubble" role="status" aria-live="polite">
-                  <i aria-hidden="true">{burstPreset.icon}</i>{burstPreset.label}
-                </span>
-              ) : null}
+              {!game.turnPaceDays ? <PlayerClock game={clockGame} color="w" /> : null}
             </div>
-            <div className="versus">VS</div>
-            <div className={`player-card black-player${game.you.color === "b" ? " you-player" : ""}`}>
+            <div className="versus">נגד</div>
+            <div className={`player-card black-player${game.you.color === "b" ? " you-player" : ""}`} dir="ltr">
               <span className="player-piece" aria-hidden="true">
                 <ChessPiece type="p" color="b" />
               </span>
-              <div>
-                <small>BLACK{game.you.color === "b" ? " • YOU" : ""}</small>
-                <strong>{game.players.black?.name ?? "Waiting…"}</strong>
+              <div className="player-card-copy" dir="rtl">
+                <small>שחור{game.you.color === "b" ? " • אתה" : ""}</small>
+                <strong>{game.players.black ? <bdi dir="auto">{game.players.black.name}</bdi> : "ממתינים…"}</strong>
               </div>
-              <span className="status-lamp" data-active={game.status === "active" && game.turn === "b" ? "true" : "false"} />
-              {!reactionsHidden && reactionBurst?.senderColor === "b" && burstPreset ? (
-                <span className="reaction-bubble" role="status" aria-live="polite">
-                  <i aria-hidden="true">{burstPreset.icon}</i>{burstPreset.label}
-                </span>
-              ) : null}
+              {!game.turnPaceDays ? <PlayerClock game={clockGame} color="b" /> : null}
             </div>
           </div>
 
@@ -1405,10 +1666,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
               aria-atomic="true"
               tabIndex={-1}
             >
-              <small>{viewingHistory ? "MOVE HISTORY" : magicDraft ? "MAGIC MOVE" : displayCheck && game.status !== "completed" ? "CHECK" : "MATCH STATUS"}</small>
-              <strong>{statusText}</strong>
+              <small>{viewingHistory ? "היסטוריית מהלכים" : magicDraft ? "מהלך קסם" : displayCheck && game.status !== "completed" ? "שח" : "מצב המשחק"}</small>
+              <strong>{viewingHistory
+                ? historyStatusParts.map((part, index) => part.dir === "ltr"
+                  ? <bdi dir="ltr" key={`${index}:${part.text}`}>{part.text}</bdi>
+                  : <span key={`${index}:${part.text}`}>{part.text}</span>)
+                : statusText}</strong>
             </div>
-            {!viewingHistory && (ending || openingIntro || botThinking) ? <b>{ending ? "ENDING GAME…" : openingIntro ? "WHITE OPENING…" : "RIOT BOT THINKING…"}</b> : null}
+            {!viewingHistory && (ending || openingIntro || botThinking) ? <b>{ending ? "מסיימים את המשחק…" : openingIntro ? "לבן פותח…" : "Riot Bot חושב…"}</b> : null}
             <HistoryControls
               currentPly={visibleHistoryPly}
               viewingHistory={viewingHistory}
@@ -1422,19 +1687,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
             <div className="variant-game-banner" role="note">
               <span aria-hidden="true">{variant.icon}</span>
               <div>
-                <strong>{variant.group === "mating-set" ? "MATING SET" : "MINI GAME"} · {variant.name.toUpperCase()}</strong>
+                <strong>{variant.group === "mating-set" ? "תרגיל מט" : "מיני-משחק"} · {HEBREW_VARIANTS[variant.id].name}</strong>
                 <small>{variant.group === "mating-set"
-                  ? `${variant.loadout} · You command White · Checkmate wins`
-                  : `${variant.loadout} · Normal chess moves · Checkmate wins`}</small>
-              </div>
-            </div>
-          ) : null}
-          {game.magicRules ? (
-            <div className="magic-game-banner" role="note">
-              <span aria-hidden="true">✦</span>
-              <div>
-                <strong>MAGIC RULES</strong>
-                <small>{game.magicRules.labels.join(" · ")}</small>
+                  ? `${HEBREW_VARIANTS[variant.id].loadout} · אתה משחק בלבן · מט מנצח`
+                  : `${HEBREW_VARIANTS[variant.id].loadout} · מהלכי שחמט רגילים · מט מנצח`}</small>
               </div>
             </div>
           ) : null}
@@ -1442,15 +1698,20 @@ export function GameRoom({ gameId }: { gameId: string }) {
             <div
               className="magic-turn-actions"
               role="group"
-              aria-label={`Finish or cancel the ${CHESS_PIECE_NAMES[magicDraft.piece]} magic move`}
+              aria-label={`סיום או ביטול מהלך הקסם של ה${HEBREW_CHESS_PIECE_NAMES[magicDraft.piece]}`}
             >
               <button
                 type="button"
                 className="primary-button"
                 disabled={busy || viewingHistory}
-                onClick={() => requestMove(magicDraft.from, magicDraft.to)}
+                onClick={() => requestMove(
+                  magicDraft.from,
+                  magicDraft.to,
+                  magicDraft.promotion,
+                  magicDraft.continuation,
+                )}
               >
-                FINISH TURN
+                סיים תור
               </button>
               <button
                 type="button"
@@ -1462,7 +1723,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                   setMessage("");
                 }}
               >
-                CANCEL
+                בטל
               </button>
             </div>
           ) : null}
@@ -1475,8 +1736,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
           ) : null}
 
           {game.claimableDraws.length > 0 ? (
-            <div className="draw-claims" role="group" aria-label="Available draw claims">
-              <span>DRAW AVAILABLE</span>
+            <div className="draw-claims" role="group" aria-label="דרישות תיקו זמינות">
+              <span>אפשר לדרוש תיקו</span>
               {game.claimableDraws.map((claim) => (
                 <button
                   type="button"
@@ -1485,8 +1746,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
                   onClick={() => void claimDraw(claim)}
                 >
                   {claim === "threefold_repetition"
-                    ? "CLAIM REPETITION"
-                    : "CLAIM 50-MOVE DRAW"}
+                    ? "דרוש תיקו בחזרה משולשת"
+                    : "דרוש תיקו בכלל 50 המהלכים"}
                 </button>
               ))}
             </div>
@@ -1499,13 +1760,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
             data-history={viewingHistory ? "true" : "false"}
           >
             {surrendering && !viewingHistory
-              ? <ResignationFinisher color={game.you.color} />
+              ? <ResignationFinisher color={game.you.color} locale="he" />
               : null}
             {finisher && !viewingHistory && !activeEffect
-              ? <CheckmateFinisher finisher={finisher} />
+              ? <CheckmateFinisher finisher={finisher} locale="he" />
               : null}
             <div
               className="chessboard"
+              dir="ltr"
               role="grid"
               onPointerDownCapture={() => {
                 if (canMove && activeEffect) dismissBoardEffects();
@@ -1514,8 +1776,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 if (canMove && activeEffect) dismissBoardEffects();
               }}
               aria-label={viewingHistory
-                ? `Historical chess board, ${replayFrameLabel(historyFrame)}`
-                : "Chess board"}
+                ? `לוח שחמט היסטורי, ${replayFrameLabel(historyFrame, "he")}`
+                : "לוח שחמט"}
             >
               {squares.map((square, index) => {
                 const piece = chess.get(square);
@@ -1538,12 +1800,15 @@ export function GameRoom({ gameId }: { gameId: string }) {
                   <button
                     type="button"
                     role="gridcell"
-                    aria-label={`${square}${piece ? ` ${piece.color === "w" ? "white" : "black"} ${CHESS_PIECE_NAMES[piece.type]}` : " empty"}${isCheckedKing ? ", in check" : ""}${legal ? ", legal destination" : ""}`}
+                    aria-label={`${square}${piece ? ` ${piece.color === "w" ? "לבן" : "שחור"} ${HEBREW_CHESS_PIECE_NAMES[piece.type]}` : " ריקה"}${isCheckedKing ? ", בשח" : ""}${legal ? ", יעד חוקי" : ""}`}
                     aria-disabled={!canMove}
                     aria-selected={isSelected}
+                    tabIndex={focusedSquare === square ? 0 : -1}
                     data-square={square}
                     className={`square ${isDarkSquare(square) ? "dark-square" : "light-square"}${isSelected ? " selected" : ""}${isLast ? " last-move" : ""}${isCheckedKing ? " king-in-check" : ""}${legal ? capture ? " capture-target" : " legal-target" : ""}${isDragOver ? " drag-over" : ""}`}
                     key={square}
+                    onFocus={() => setFocusedSquare(square)}
+                    onKeyDown={(event) => handleSquareKeyDown(event, square)}
                     onClick={() => tapSquare(square)}
                     disabled={busy || botThinking || viewingHistory}
                   >
@@ -1568,61 +1833,168 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 <BoardActionAnimation
                   effect={activeEffect}
                   squares={squares}
+                  locale="he"
                   reducedMotion={reducedMotion}
                   tacticalCelebrations={celebrateActiveEffect}
                   onComplete={() => finishBoardEffect(activeEffect.id)}
                 />
               ) : null}
             </div>
+            {game.status === "completed"
+              && !viewingHistory
+              && !activeEffect
+              && !finisher
+              && !surrendering
+              && !postGameDismissed ? (
+                <PostGamePanel
+                  game={game}
+                  onDismiss={() => {
+                    setPostGameDismissed(true);
+                    focusBoardSquare(focusedSquare);
+                  }}
+                  onReview={() => {
+                    setHistoryPly(Math.max(0, game.plyCount - 1));
+                    sidePanelTrigger.current = null;
+                    setSidePanel("history");
+                  }}
+                />
+              ) : null}
           </div>
           {message ? <p className="board-message" role="status">{message}</p> : null}
         </div>
 
-        <aside className="game-sidebar">
+        <nav
+          className="mobile-game-tools"
+          dir="rtl"
+          aria-label="פרטי המשחק"
+          aria-hidden={mobileToolsActive && sidePanel ? true : undefined}
+          inert={mobileToolsActive && sidePanel ? true : undefined}
+        >
           {game.status === "waiting" ? (
-            <section className="side-card invite-card">
-              <span className="side-icon">⌁</span><h2>INVITE PLAYER 2</h2>
-              <p>Send this private link. The first person to submit it claims Black.</p>
-              {inviteUrl ? <><button className="primary-button" onClick={() => void copyInvite()}>{inviteShared ? "COPIED ✓" : "COPY INVITATION LINK"}</button>
-                <input className="invite-field" value={inviteUrl} readOnly onFocus={(event) => event.currentTarget.select()} aria-label="Invitation link" /></> :
-                <p className="form-error">The invitation link is no longer stored on this device.</p>}
-            </section>
+            <button
+              type="button"
+              aria-controls="game-detail-panel"
+              aria-expanded={sidePanel === "invite"}
+              onClick={(event) => openSidePanel("invite", event.currentTarget)}
+            >
+              <span aria-hidden="true">⌁</span>{game.players.black ? "אתגר" : "הזמנה"}
+            </button>
           ) : null}
-          <CapturedPiecesPanel
-            whiteCaptured={lostPieces.w}
-            blackCaptured={lostPieces.b}
-          />
-          {reactionsAvailable ? (
-            <ReactionPanel
-              playerColor={game.you.color}
-              whiteName={game.players.white.name}
-              blackName={game.players.black?.name ?? "BLACK"}
-              reactions={reactions}
-              hidden={reactionsHidden}
-              open={reactionOpen}
-              busy={reactionSending}
-              message={reactionMessage}
-              postGame={game.status === "completed"}
-              triggerRef={reactionTrigger}
-              onToggleHidden={toggleReactionsHidden}
-              onToggleOpen={() => setReactionOpen((current) => !current)}
-              onSend={(key) => void sendReaction(key)}
-            />
+          <button
+            type="button"
+            aria-controls="game-detail-panel"
+            aria-expanded={sidePanel === "captures"}
+            onClick={(event) => openSidePanel("captures", event.currentTarget)}
+          ><span aria-hidden="true">♟</span>כלים</button>
+          <button
+            type="button"
+            aria-controls="game-detail-panel"
+            aria-expanded={sidePanel === "history"}
+            onClick={(event) => openSidePanel("history", event.currentTarget)}
+          ><span aria-hidden="true">↶</span>מהלכים</button>
+          <button
+            type="button"
+            aria-controls="game-detail-panel"
+            aria-expanded={sidePanel === "info"}
+            onClick={(event) => openSidePanel("info", event.currentTarget)}
+          ><span aria-hidden="true">{game.magicRules ? "✦" : "i"}</span>{game.magicRules ? "עולם" : "מידע"}</button>
+        </nav>
+        <button
+          className="game-sidebar-backdrop"
+          type="button"
+          data-open={sidePanel && mobileToolsActive ? "true" : "false"}
+          aria-label="סגירת פרטי המשחק"
+          tabIndex={-1}
+          onClick={closeSidePanel}
+        />
+        <aside
+          id="game-detail-panel"
+          className="game-sidebar"
+          dir="rtl"
+          data-open={sidePanel ? "true" : "false"}
+          role={mobileToolsActive && sidePanel ? "dialog" : undefined}
+          aria-modal={mobileToolsActive && sidePanel ? true : undefined}
+          aria-label={mobileToolsActive && sidePanel
+            ? game.magicRules && sidePanel === "info" ? "פרטי עולם המשחק" : `פרטי ${HEBREW_SIDE_PANEL_LABELS[sidePanel]}`
+            : undefined}
+          onKeyDown={trapSidePanelFocus}
+        >
+          <button ref={sidePanelClose} className="side-panel-close" type="button" onClick={closeSidePanel} aria-label="סגירת פרטי המשחק">×</button>
+          {game.status === "waiting" ? (
+            <div className="sidebar-panel" data-panel="invite" data-active={sidePanel === "invite"}><section className="side-card invite-card">
+              <span className="side-icon">⌁</span><h2>{game.players.black ? game.you.color === "w" ? "האתגר נשלח" : "התקבל אתגר" : "שיתוף הזמנה"}</h2>
+              <p>{game.players.black
+                ? game.you.color === "w"
+                  ? <>מחכים ש־<bdi dir="auto">@{game.players.black.name}</bdi> יאשר.</>
+                  : <><bdi dir="auto">@{game.players.white.name}</bdi> הזמין אותך לאתגר. המשחק יתחיל לאחר האישור שלך.</>
+                : "יש לשתף את הקישור הפרטי. המשחק יישאר בהמתנה ויתחיל רק לאחר ששחקן אחר יאשר וישחק בשחור."}</p>
+              {game.players.black && game.you.color === "b"
+                ? <div className="waiting-challenge-actions">
+                  <button className="primary-button" type="button" disabled={busy} onClick={() => void answerWaitingChallenge("accept")}>{busy ? "מאשרים…" : "אשר ושחק"}</button>
+                  <button className="secondary-button" type="button" disabled={busy} onClick={() => void answerWaitingChallenge("decline")}>דחה</button>
+                </div>
+                : inviteUrl ? <><button className="primary-button" onClick={() => void copyInvite()}>{inviteShared ? "הועתק ✓" : "העתק קישור הזמנה"}</button>
+                <input className="invite-field" dir="ltr" value={inviteUrl} readOnly onFocus={(event) => event.currentTarget.select()} aria-label="קישור הזמנה" /></> :
+                game.players.black ? null : <p className="form-error">קישור ההזמנה כבר אינו שמור במכשיר הזה.</p>}
+            </section></div>
           ) : null}
-          <MoveHistoryPanel
-            moves={game.moves}
-            currentPly={visibleHistoryPly}
-          />
-          <section className="side-card rules-card"><span aria-hidden="true">i</span><div><strong>GAME INFO</strong><small>
-            {game.magicRules
-              ? `Magic chess • ${game.magicRules.labels.join(" • ")} • `
-              : `${variant.name} • ${game.variantId === "standard" ? "Standard setup" : "Mini Game"} • `}
-            {game.mode === "solo" && game.aiDifficulty
-              ? `Riot Bot level ${game.aiDifficulty} • ${DIFFICULTY_LABELS[game.aiDifficulty]}`
-              : `${game.turnPaceDays
-                ? `${game.turnPaceDays} ${game.turnPaceDays === 1 ? "day" : "days"} per move`
-                : "No turn deadline"} • Drag or tap • Every move saved`}
-          </small></div></section>
+          <div className="sidebar-panel" data-panel="captures" data-active={sidePanel === "captures"}><CapturedPiecesPanel
+              whiteCaptured={lostPieces.w}
+              blackCaptured={lostPieces.b}
+            /></div>
+          <div className="sidebar-panel" data-panel="history" data-active={sidePanel === "history"}><MoveHistoryPanel
+              moves={game.moves}
+              currentPly={visibleHistoryPly}
+              locale="he"
+            /></div>
+          <div className="sidebar-panel" data-panel="info" data-active={sidePanel === "info"}>
+            {game.magicRules ? (
+              <section className="side-card world-game-card" role="note">
+                <span aria-hidden="true">✦</span>
+                <div>
+                  <strong>{game.world ? <>עולם <bdi dir="ltr">{game.world.displayCode}</bdi></> : "חוקי קסם ישנים"}</strong>
+                  <small>{game.magicRules.rules.map((rule) => magicRuleLabel(rule, "he")).join(" • ")}</small>
+                  {game.world ? (
+                    <p>
+                      {game.world.creatorUsername
+                        ? <>נוצר בידי <bdi dir="auto">@{game.world.creatorUsername}</bdi></>
+                        : "נוצר בידי שחקן לשעבר"}
+                      <Link href={`/worlds/${game.world.code}`}>הצג עולם</Link>
+                    </p>
+                  ) : null}
+                </div>
+              </section>
+            ) : null}
+            <section className="side-card rules-card"><span aria-hidden="true">i</span><div><strong>פרטי המשחק</strong><small>
+              {game.magicRules
+                ? "שחמט קסם • "
+                : `${HEBREW_VARIANTS[variant.id].name} • ${game.variantId === "standard" ? "מערך רגיל" : "מיני-משחק"} • `}
+              {game.mode === "solo" && game.aiDifficulty
+                ? `Riot Bot רמה ${game.aiDifficulty} • ${HEBREW_DIFFICULTY_LABELS[game.aiDifficulty]}`
+                : `${game.turnPaceDays
+                  ? `${game.turnPaceDays} ${game.turnPaceDays === 1 ? "יום" : "ימים"} למהלך`
+                  : "ללא מגבלת זמן לתור"} • גרירה או הקשה • כל מהלך נשמר`}
+            </small></div></section>
+            <div className="mobile-only-game-info">
+              {game.claimableDraws.length > 0 ? (
+                <div className="draw-claims" role="group" aria-label="דרישות תיקו זמינות">
+                  <span>אפשר לדרוש תיקו</span>
+                  {game.claimableDraws.map((claim) => (
+                    <button
+                      type="button"
+                      key={claim}
+                      disabled={busy || viewingHistory}
+                      onClick={() => void claimDraw(claim)}
+                    >
+                      {claim === "threefold_repetition"
+                        ? "דרוש תיקו בחזרה משולשת"
+                        : "דרוש תיקו בכלל 50 המהלכים"}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </div>
         </aside>
       </section>
 
@@ -1636,22 +2008,40 @@ export function GameRoom({ gameId }: { gameId: string }) {
         </span>
       ) : null}
 
-      {promotionMove ? (
-        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Choose promotion piece">
-          <div className="promotion-card"><p>PROMOTE YOUR PAWN</p><div>
+      <dialog
+        className="modal-backdrop"
+        ref={promotionDialog}
+        aria-label="בחירת כלי להכתרת החייל"
+        onCancel={(event) => {
+          event.preventDefault();
+          setPromotionMove(null);
+        }}
+        onClose={() => setPromotionMove(null)}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) setPromotionMove(null);
+        }}
+      >
+        {promotionMove ? (
+          <div className="promotion-card"><p>הכתר את החייל</p><div dir="ltr">
             {(["q", "r", "b", "n"] as Promotion[]).map((piece) => (
               <button
                 key={piece}
-                aria-label={`Promote to ${CHESS_PIECE_NAMES[piece]}`}
+                aria-label={`הכתרה ל${HEBREW_CHESS_PIECE_NAMES[piece]}`}
                 autoFocus={piece === "q"}
-                onClick={() => requestMove(promotionMove.from, promotionMove.to, piece)}
+                onClick={() => {
+                  if (promotionMove.continuation) {
+                    advanceMagicDraft(promotionMove.from, promotionMove.to, piece);
+                  } else {
+                    stageFirstMove(promotionMove.from, promotionMove.to, piece);
+                  }
+                }}
               >
                 <ChessPiece type={piece} color={game.you.color} />
               </button>
             ))}
-          </div><button className="cancel-promotion" onClick={() => setPromotionMove(null)}>CANCEL</button></div>
-        </div>
-      ) : null}
+          </div><button className="cancel-promotion" onClick={() => setPromotionMove(null)}>בטל</button></div>
+        ) : null}
+      </dialog>
 
       <dialog
         className="move-confirm-dialog"
@@ -1682,10 +2072,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
         }}
       >
         <div className="move-confirm-card">
-          <small>{coachWarning ? "CHESS COACH" : "MOVE CONFIRMATION"}</small>
-          <h2 id="move-confirm-title">ARE YOU SURE?</h2>
+          <small>{coachWarning ? "מאמן השחמט" : "אישור מהלך"}</small>
+          <h2 id="move-confirm-title">בטוח?</h2>
           <p id="move-confirm-description">
-            {pendingMove ? describeMoveIntent(pendingMove) : "Confirm this move?"}
+            {pendingMoveDescription
+              ? pendingMoveDescription.map((part, index) => part.dir === "ltr"
+                ? <bdi dir="ltr" key={`${index}:${part.text}`}>{part.text}</bdi>
+                : <span key={`${index}:${part.text}`}>{part.text}</span>)
+              : "לאשר את המהלך?"}
           </p>
           {coachWarning ? (
             <div className="coach-warning">
@@ -1695,7 +2089,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 aria-controls="coach-risk-explanation"
                 onClick={() => setCoachExplanationOpen((current) => !current)}
               >
-                {coachExplanationOpen ? "HIDE EXPLANATION" : "WHY IS THIS RISKY?"}
+                {coachExplanationOpen ? "הסתר הסבר" : "למה זה מסוכן?"}
               </button>
               {coachExplanationOpen ? (
                 <p id="coach-risk-explanation" role="status">{coachWarning.explanation}</p>
@@ -1709,7 +2103,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
               autoFocus
               onClick={cancelMoveConfirmation}
             >
-              KEEP THINKING
+              המשך לחשוב
             </button>
             <button
               className="primary-button"
@@ -1719,7 +2113,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 if (pendingMove) void commitMove(pendingMove);
               }}
             >
-              CONFIRM MOVE
+              אשר מהלך
             </button>
           </div>
         </div>

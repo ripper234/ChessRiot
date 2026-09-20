@@ -1,15 +1,13 @@
-Ron and Omri love chess. The problem is finding an hour when both are free. ChessRiot turns spare minutes into a game that keeps moving.
+Ron and Omri want chess that fits real life. ChessRiot begins with a clear look at the product before login. To play, Ron signs in with Google. There is no guest mode. He claims one permanent username. If he wants a quick tour, an optional forty-five-second tutorial is waiting in Settings.
 
-Ron opens the browser, enters his name, and starts. No account. No CAPTCHA. Solo is ready for a warm-up. He chooses one of five Riot Bot levels and moves by drag, tap, click, or keyboard.
+His signed-in home is built for action: continue a game, answer a friend request, or see whose turn it is. Solo has five Riot Bot levels. Each skin changes the board, pieces, soundscape, and richer music without losing its identity.
 
-But their game should feel like theirs. He opens Themes and transforms the board into Blockfield.
+Ron finds Omri by username. After Omri accepts, Ron chooses the variant and pace, then sends a direct challenge. Activity keeps the request, challenge, turns, and result in one inbox.
 
-Now the real match. Ron switches to Multiplayer, chooses three days per move, and creates a game. ChessRiot gives him one private invitation for Omri.
+On the board, live clocks, status, deadline, and essential controls fit one screen. Move by drag, tap, click, or keyboard. Every legal move is checked and saved. Clear capture, great-move, checkmate, and result moments let the game breathe.
 
-It waits safely until Omri is ready. When Omri claims Black, Ron has White, so he moves first. Every move is saved immediately.
+Ron closes the browser. Later, both players return to the exact position. When the game ends, either player can share a read-only recap and replay link. History keeps every game. Privacy and Data lets each player download their data, manage blocks, or delete the account after Google verification.
 
-Ron closes the browser. Later, each player returns through a private seat link, moves, and leaves. The same saved board and full history are waiting whenever either comes back. Step back, replay the position, then return live.
+Magic Rules stay Coming Soon for most players, with server-controlled access for invited testers.
 
-No scheduling. No setup. Just real chess that survives real life.
-
-ChessRiot. Two people. One game, still moving.
+Real chess that survives real life. ChessRiot. One game, still moving.

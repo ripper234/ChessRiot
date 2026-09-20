@@ -3,6 +3,7 @@ import type { Color } from "@/lib/game-types";
 import { ChessPiece } from "./ChessPiece";
 
 const BACK_RANK: PieceSymbol[] = ["r", "n", "b", "q", "k", "b", "n", "r"];
+const FILES = "abcdefgh";
 const PUBLIC_POSITION: Array<{ type: PieceSymbol; color: Color; motion?: string } | null> = [
   ...BACK_RANK.map((type, index) => ({
     type,
@@ -27,11 +28,15 @@ const PUBLIC_POSITION: Array<{ type: PieceSymbol; color: Color; motion?: string 
   })),
 ];
 
+function squareAt(index: number) {
+  return `${FILES[index % 8]}${8 - Math.floor(index / 8)}`;
+}
+
 export function AnimatedPublicBoard() {
   return (
     <div className="public-board" aria-label="Animated chess opening preview" role="img">
       {PUBLIC_POSITION.map((piece, index) => (
-        <span key={index}>
+        <span data-square={squareAt(index)} key={index}>
           {piece ? (
             <i className={piece.motion ?? undefined}>
               <ChessPiece type={piece.type} color={piece.color} />

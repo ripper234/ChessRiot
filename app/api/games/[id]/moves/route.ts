@@ -18,6 +18,7 @@ import {
   expireMultiplayerTurn,
   findGameById,
   gameMagicRules,
+  multiplayerTurnDeadline,
   readMoves,
   snapshot,
   type GameRow,
@@ -28,12 +29,28 @@ import { apiError, json, readJson } from "@/lib/http";
 import type { Promotion, StoredMove } from "@/lib/game-types";
 import { isUuid, requestIsSameOrigin } from "@/lib/validation";
 import { recordEvent } from "@/lib/observability";
+import { markMagicWorldPlayed } from "@/lib/magic-worlds";
 import { hasMagicRule } from "@/lib/magic-rules";
+import { serializeMoveContinuation } from "@/lib/move-continuation";
+import { queueTurnNotifications } from "@/lib/push-notifications";
 
 export const dynamic = "force-dynamic";
 
 function changes(result: D1Result<unknown> | undefined): number {
   return result?.meta.changes ?? 0;
+}
+
+async function reconcileMagicWorldPlay(gameId: string): Promise<void> {
+  try {
+    await markMagicWorldPlayed(gameId);
+  } catch (error) {
+    await recordEvent({
+      event: "magic.world_play_reconcile",
+      outcome: "failure",
+      subjectId: gameId,
+      errorCode: error instanceof Error ? error.name : "unknown_error",
+    });
+  }
 }
 
 function isSecondMove(value: unknown): value is { from: string; to: string } {
@@ -42,22 +59,51 @@ function isSecondMove(value: unknown): value is { from: string; to: string } {
   return isSquare(candidate.from) && isSquare(candidate.to);
 }
 
+interface RequestedContinuation {
+  from: string;
+  to: string;
+  promotion?: Promotion;
+}
+
+function isContinuation(value: unknown): value is RequestedContinuation[] {
+  return Array.isArray(value)
+    && value.length > 0
+    && value.length <= 5
+    && value.every((leg) => {
+      if (!leg || typeof leg !== "object" || Array.isArray(leg)) return false;
+      const candidate = leg as {
+        from?: unknown;
+        to?: unknown;
+        promotion?: unknown;
+      };
+      return isSquare(candidate.from)
+        && isSquare(candidate.to)
+        && (candidate.promotion === undefined || isPromotion(candidate.promotion))
+        && Object.keys(candidate).every((key) =>
+          key === "from" || key === "to" || key === "promotion");
+    });
+}
+
 function sameMoveRequest(
   move: Awaited<ReturnType<typeof readMoves>>[number] | undefined,
   color: "w" | "b",
   from: string,
   to: string,
   promotion: Promotion | undefined,
-  second: { from: string; to: string } | undefined,
+  continuation: RequestedContinuation[],
 ): boolean {
+  const storedContinuation = move?.continuation ?? [];
   return Boolean(
     move
     && move.color === color
     && move.from === from
     && move.to === to
     && (move.promotion ?? undefined) === promotion
-    && (move.second?.from ?? undefined) === second?.from
-    && (move.second?.to ?? undefined) === second?.to
+    && storedContinuation.length === continuation.length
+    && storedContinuation.every((leg, index) =>
+      leg.from === continuation[index]?.from
+      && leg.to === continuation[index]?.to
+      && (leg.promotion ?? undefined) === continuation[index]?.promotion)
   );
 }
 
@@ -76,6 +122,12 @@ function storedMove(
     to: outcome.move.to,
     promotion: candidate.promotion ?? null,
     san: outcome.move.san,
+    continuation: outcome.continuationMoves.map((move) => ({
+      from: move.from,
+      to: move.to,
+      promotion: move.promotion as Promotion | undefined,
+      san: move.san,
+    })),
     second: outcome.secondMove
       ? {
         from: outcome.secondMove.from,
@@ -120,6 +172,7 @@ export async function POST(
   const to = body?.to;
   const promotion = body?.promotion;
   const second = body?.second;
+  const continuation = body?.continuation;
   const expectedVersion = body?.expectedVersion;
   const requestId = body?.requestId;
   if (
@@ -127,6 +180,8 @@ export async function POST(
     !isSquare(to) ||
     (promotion !== undefined && !isPromotion(promotion)) ||
     (second !== undefined && !isSecondMove(second)) ||
+    (continuation !== undefined && !isContinuation(continuation)) ||
+    (second !== undefined && continuation !== undefined) ||
     !Number.isInteger(expectedVersion) ||
     (expectedVersion as number) < 0 ||
     !isUuid(requestId)
@@ -134,6 +189,9 @@ export async function POST(
     return apiError(400, "invalid_request", "Move request is invalid");
   }
   const secondMove = second as { from: string; to: string } | undefined;
+  const continuationMoves = continuation !== undefined
+    ? continuation as RequestedContinuation[]
+    : secondMove ? [secondMove] : [];
 
   const { color } = authorization;
   let game: GameRow | null = authorization.game;
@@ -148,10 +206,11 @@ export async function POST(
       from,
       to,
       promotion as Promotion | undefined,
-      secondMove,
+      continuationMoves,
     )) {
       return apiError(409, "idempotency_conflict", "This move request id was already used");
     }
+    if (game.world_code) await reconcileMagicWorldPlay(id);
     return json({ game: snapshot(game, storedMoves, color) });
   }
   if (game.status !== "active") return apiError(409, "game_not_active", "The game is not active");
@@ -187,14 +246,11 @@ export async function POST(
     from,
     to,
     ...(promotion ? { promotion: promotion as Promotion } : {}),
-    ...(secondMove ? {
-      second: {
-        from: secondMove.from,
-        to: secondMove.to,
-      },
-    } : {}),
+    ...(continuationMoves.length > 0
+      ? { continuation: continuationMoves }
+      : {}),
   };
-  let humanOutcome;
+  let humanOutcome: MoveOutcome;
   const wasInCheck = replayed.isCheck();
   try {
     humanOutcome = applyCandidate(
@@ -217,6 +273,7 @@ export async function POST(
   }
 
   const now = new Date().toISOString();
+  const deadlineAt = multiplayerTurnDeadline(game);
   const attemptNonce = crypto.randomUUID();
   const humanPly = game.ply_count + 1;
   const humanMove = storedMove(
@@ -275,6 +332,7 @@ export async function POST(
       status = ?, current_fen = ?, turn_color = ?, version = ?, ply_count = ?,
       winner_color = ?, termination = ?, last_mutation_nonce = ?, updated_at = ?, finished_at = ?
       WHERE id = ? AND version = ? AND status = 'active' AND turn_color = ?
+        AND (? IS NULL OR julianday('now') < julianday(?))
         AND EXISTS (
           SELECT 1 FROM game_memberships
           WHERE game_memberships.game_id = games.id
@@ -295,6 +353,8 @@ export async function POST(
       id,
       expectedVersion,
       color,
+      deadlineAt,
+      deadlineAt,
       authorization.account.id,
       color,
     );
@@ -302,8 +362,8 @@ export async function POST(
     .prepare(`INSERT INTO moves (
       game_id, ply, request_id, color, from_square, to_square, promotion,
       san, second_from_square, second_to_square, second_san,
-      fen_before, fen_after, created_at
-    ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      continuation_json, fen_before, fen_after, created_at
+    ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       FROM games WHERE id = ? AND version = ? AND last_mutation_nonce = ?`)
     .bind(
       id,
@@ -314,9 +374,10 @@ export async function POST(
       to,
       promotion ?? null,
       humanOutcome.move.san,
-      secondMove?.from ?? null,
-      secondMove?.to ?? null,
+      continuationMoves[0]?.from ?? null,
+      continuationMoves[0]?.to ?? null,
       humanOutcome.secondMove?.san ?? null,
+      serializeMoveContinuation(humanOutcome.continuationMoves),
       humanOutcome.fenBefore,
       humanOutcome.fenAfter,
       now,
@@ -331,8 +392,8 @@ export async function POST(
         .prepare(`INSERT INTO moves (
           game_id, ply, request_id, color, from_square, to_square, promotion,
           san, second_from_square, second_to_square, second_san,
-          fen_before, fen_after, created_at
-        ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          continuation_json, fen_before, fen_after, created_at
+        ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
           FROM games WHERE id = ? AND version = ? AND last_mutation_nonce = ?`)
         .bind(
           id,
@@ -346,6 +407,7 @@ export async function POST(
           botMove.second?.from ?? null,
           botMove.second?.to ?? null,
           botMove.second?.san ?? null,
+          serializeMoveContinuation(botOutcome?.continuationMoves ?? []),
           botMove.fenBefore,
           botMove.fenAfter,
           now,
@@ -355,12 +417,26 @@ export async function POST(
         ),
     );
   }
+  const requiredWriteCount = writes.length;
+  const shouldNotifyOpponent = game.game_mode === "multiplayer"
+    && status === "active"
+    && finalOutcome.turn !== color;
+  if (shouldNotifyOpponent) {
+    writes.push(...queueTurnNotifications(db, {
+      gameId: id,
+      gameVersion: nextVersion,
+      targetColor: finalOutcome.turn,
+      mutationNonce: attemptNonce,
+      createdAt: now,
+    }));
+  }
 
   let results: D1Result<unknown>[];
   try {
     results = await db.batch(writes);
   } catch {
     game = await findGameById(id);
+    if (game) game = await expireMultiplayerTurn(game);
     storedMoves = await readMoves(id);
     const wonRace = storedMoves.find((move) => move.requestId === requestId);
     if (game && wonRace) {
@@ -370,8 +446,9 @@ export async function POST(
         from,
         to,
         promotion as Promotion | undefined,
-        secondMove,
+        continuationMoves,
       )) {
+        if (game.world_code) await reconcileMagicWorldPlay(id);
         return json({ game: snapshot(game, storedMoves, color) });
       }
       return apiError(409, "idempotency_conflict", "This move request id was already used");
@@ -385,8 +462,9 @@ export async function POST(
     return apiError(404, "not_found", "Game not found");
   }
 
-  if (!results.every((result) => changes(result) === 1)) {
+  if (!results.slice(0, requiredWriteCount).every((result) => changes(result) === 1)) {
     game = await findGameById(id);
+    if (game) game = await expireMultiplayerTurn(game);
     storedMoves = await readMoves(id);
     const wonRace = storedMoves.find((move) => move.requestId === requestId);
     if (game && wonRace) {
@@ -396,8 +474,9 @@ export async function POST(
         from,
         to,
         promotion as Promotion | undefined,
-        secondMove,
+        continuationMoves,
       )) {
+        if (game.world_code) await reconcileMagicWorldPlay(id);
         return json({ game: snapshot(game, storedMoves, color) });
       }
       return apiError(409, "idempotency_conflict", "This move request id was already used");
@@ -429,6 +508,7 @@ export async function POST(
     humanMove,
     ...(botMove ? [botMove] : []),
   ];
+  if (committedGame.world_code) await reconcileMagicWorldPlay(id);
   if (committedGame.status === "completed") {
     await recordEvent({
       event: "game.completed",
@@ -443,7 +523,7 @@ export async function POST(
     });
   }
   const responseHeaders: Record<string, string> = {};
-  if (committedGame.game_mode === "multiplayer" && committedGame.status === "active") {
+  if (shouldNotifyOpponent) {
     responseHeaders["x-chessriot-turn-committed"] = "1";
   }
   if (botMove && botColor) {

@@ -8,8 +8,8 @@
 | CR-002 | In-app feedback and GitHub contribution path | Shipped with isolated per-environment storage. |
 | CR-003 | Short move and capture animation | Expanded in v0.17.0 to roughly one-second, non-blocking, piece-specific combat plus special chess-event effects. |
 | CR-004 | Textless picker for visual themes | Expanded in v0.17.0 to 11 whole-app skins inside Settings, available before a game. |
-| CR-005 | Portable user login | Guest private-seat links are live. Provider login remains disabled until it can add portability without blocking play. |
-| CR-006 | All games for the logged-in user | The account-backed history remains in storage but is not exposed in guest mode. The current device shows recent private-seat games. |
+| CR-005 | Portable user login | Shipped in v0.18.0 as optional Google sign-in with isolated Dev and Production credentials. |
+| CR-006 | All games for the logged-in user | Shipped in v0.18.0 through account-backed recent games across devices. |
 | CR-007 | Step-by-step game replay | Shipped as Back/Forward live-board navigation and a collapsible full move table in the game sidebar. |
 | CR-008 | Desktop install, move alerts, and time limits | Shipped. Install support, selectable one, three, or five-day move deadlines, and opt-in per-game closed-app turn notifications are live. |
 | CR-009 | A winning piece defeats the king on checkmate | Shipped as a short, theme-aware, reduced-motion-safe finisher. |
@@ -26,9 +26,14 @@
 | CR-021 | Schema authority and migrations | Replace runtime table creation and duplicated schema definitions with one migration-owned source of truth and a deploy-time migration check. |
 | CR-022 | Riot Bot work ownership | Move bot computation behind a durable lease/queue boundary so concurrent Worker invocations cannot duplicate expensive search. |
 | CR-023 | Durable push outbox | Commit notification intent with the game mutation and deliver it asynchronously with bounded retry and cleanup. |
-| CR-024 | Privacy deletion and retention | Add explicit player-data deletion plus scheduled retention for games, feedback, telemetry, and notification records. |
+| CR-024 | Privacy deletion and retention | Self-service export and deletion, 30-day telemetry expiry, and 90-day deletion-related moderation retention shipped in v0.21.0. Scheduled retention for games and feedback remains. |
 | CR-025 | GameRoom decomposition | Split transport, optimistic state, history, effects, and controls into testable hooks/components without changing rules. |
 | CR-026 | Content Security Policy | Add a nonce- or hash-based CSP after verifying Sites preview/hosting frames, service workers, media, and image optimization. |
+| CR-027 | Evaluate additional ChatGPT Sites project separation | Backlog only. Development, Production, and Control already use distinct Sites project IDs. Evaluate whether legacy previews or future services need further project-level isolation, and compare access, secrets, D1/R2 bindings, custom domains, release promotion, rollback, operational overhead, and migration risk before changing the current topology. |
+| CR-028 | Google Analytics 4 launch instrumentation | **High priority.** Add consent-aware GA4 only after measurement IDs are configured. Start on signed-out acquisition surfaces, use no Google identity or usernames, and document every event and retention setting. |
+| CR-029 | Hotjar behavior research | **High priority.** Start only on signed-out `/` and `/demo` with explicit consent, full text/input masking, URL sanitization, and complete exclusion of game, invitation, referral, account, settings, and history routes. |
+| CR-030 | Extended guided first-game lesson | Backlog. The optional 45-second essentials tutorial is available from Settings and is never shown automatically. Consider a deeper lesson only if launch-funnel data shows players still fail before their first legal move. |
+| CR-031 | Self-service whitelist invitation requests | Shipped in v0.22.0 with a durable player request state, exact Control notification count, environment-isolated owner queue, atomic individual approval, dismissal, and privacy lifecycle coverage. |
 
 This is the durable product backlog recovered from
 [GitHub issue #11](https://github.com/ripper234/ChessRiot/issues/11) and
@@ -42,7 +47,7 @@ This is the durable product backlog recovered from
 | 4 | Limited-time holiday and seasonal skins | Blocked | Define the skin catalog, event calendar, availability policy, and original art pipeline. |
 | 5 | Wacky random board modifiers such as fog, slippery pieces, and portals | Needs design | Define deterministic rules and build a variant engine separate from Standard Chess. |
 | 6 | Earned one-time power cards such as shield, double move preview, and chaos swap | Needs design | Define exact card rules, balance, persistence, and strict separation from Standard Chess. |
-| 7 | Kid-safe preset emote and reaction wheel | Shipped in v0.4.0 | Six authenticated presets, no free text, rate limiting, bounded history, hide control, privacy-safe telemetry, and a 15-minute post-game courtesy window. |
+| 7 | Kid-safe preset emote and reaction wheel | Removed in v0.25.1 | The game UI, polling, bubbles, and controls were removed after player testing. The deprecated server endpoint and historical records remain only for backward compatibility. |
 | 8 | Victory poses and finishers per skin or theme | First version shipped in v0.4.0 | The theme-aware victory finisher is live. Unique finishers can grow with the future skin catalog. |
 | 9 | Daily and weekly missions for soft currency | Blocked | Define currency, reset rules, mission definitions, and anti-abuse handling. |
 | 10 | Friend challenges with custom rule toggles and shared streaks | Partial foundation | Account-bound invitations and five safe per-game Magic Rules exist. A friend graph, broader rule catalog, and shared-streak rules remain undefined. |

@@ -12,16 +12,27 @@ const moves: PublicMove[] = [
 
 describe("MoveHistoryPanel", () => {
   it("summarizes the currently viewed move and marks captures with swords", () => {
-    expect(currentMoveLabel(moves, 3)).toBe("2. White ⚔ exd5");
-    const html = renderToStaticMarkup(createElement(MoveHistoryPanel, { moves, currentPly: 3 }));
-    expect(html).toContain("MOVE HISTORY");
+    expect(currentMoveLabel(moves, 3, "he")).toBe("2. לבן ⚔ exd5");
+    const html = renderToStaticMarkup(createElement(MoveHistoryPanel, { moves, currentPly: 3, locale: "he" }));
+    expect(html).toContain("היסטוריית מהלכים");
     expect(html).toContain("⚔ exd5");
     expect(html).toContain("data-current=\"true\"");
+    expect(html).toContain('class="move-history-table-wrap" dir="ltr"');
+    expect(html).toContain('<bdi dir="rtl">2. לבן</bdi>');
+    expect(html).toContain('<bdi dir="ltr">⚔ exd5</bdi>');
   });
 
   it("stays collapsed by default", () => {
-    const html = renderToStaticMarkup(createElement(MoveHistoryPanel, { moves, currentPly: 1 }));
-    expect(html).toContain("<details class=\"side-card move-history-panel\">");
+    const html = renderToStaticMarkup(createElement(MoveHistoryPanel, { moves, currentPly: 1, locale: "he" }));
+    expect(html).toContain("<details class=\"side-card move-history-panel\" dir=\"rtl\">");
     expect(html).not.toContain("<details open");
+  });
+
+  it("keeps the public recap default in English", () => {
+    const html = renderToStaticMarkup(createElement(MoveHistoryPanel, { moves, currentPly: 3 }));
+    expect(currentMoveLabel(moves, 3)).toBe("2. White ⚔ exd5");
+    expect(html).toContain("MOVE HISTORY");
+    expect(html).toContain(">White<");
+    expect(html).not.toContain("היסטוריית מהלכים");
   });
 });

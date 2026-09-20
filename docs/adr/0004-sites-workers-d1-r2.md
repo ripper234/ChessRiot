@@ -4,6 +4,10 @@
 
 Accepted
 
+The hosting, storage, and promotion decision remains current.
+[ADR 0006](0006-required-google-accounts-and-social-identity.md) supersedes
+only this record's guest-identity consequences beginning with v0.19.0.
+
 ## Context
 
 The early plan targeted Vercel, Supabase, mandatory accounts, and Standard-only

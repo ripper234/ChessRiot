@@ -1,51 +1,48 @@
 # ChessRiot Product Brief
 
-## Historical product direction
+## Current promise
 
-This brief records the original account-based product direction. It is not the
-current implementation contract. `MVP.md` and `SPEC.md` are authoritative for
-the released product.
+ChessRiot is a mobile-first web app for solo and asynchronous chess. Players
+sign in with Google, claim one permanent username, become friends by username,
+start configured challenges, make server-validated moves over time, and return
+to the same automatic history on any device.
 
-ChessRiot is a mobile-first web app for asynchronous standard chess between people who already know each other. The original MVP was intentionally smaller than the long-term playful chess vision.
+The signed-out homepage introduces the game. The signed-in dashboard centers
+the player's current games, friends, requests, and history. A common active
+game keeps the board, player state, deadline, and primary controls within one
+desktop/laptop viewport while remaining mobile friendly.
 
-The current implementation has since adopted lightweight, original visual
-themes and short move animations. These remain cosmetic only and do not change
-the standard chess rules or introduce collectible assets.
+## Released experience
 
-## Original MVP promise
+- Google account required for play, with one immutable globally unique
+  username and no guest fallback.
+- Username-based friend requests, accepted-friend challenges with explicit
+  accept or decline controls, and registered player invitation links.
+- Solo Riot Bot, asynchronous Multiplayer, fixed Mini Games, and Mating Set
+  practice, all with server-authoritative rules and immutable history.
+- One-, three-, and five-day multiplayer deadlines, without a separate live
+  chess clock in day-based games.
+- Twelve original whole-app skins, including Mythic Beasts, each with richer
+  distinct music, themed effects, and reduced-motion-safe animation.
+- A server-side Magic Rules whitelist controlled by the owner. Ordinary users
+  see Coming Soon; enabled accounts can create only supported deterministic
+  rules.
+- Separate sound-effect and music volumes, clear checkbox settings, account
+  history, a direct per-game Android turn-alert opt-in, and local move-risk coaching.
 
-Two known players can sign in with Google, choose usernames, become friends, start an asynchronous standard chess game, make legal moves over time, receive turn notifications, and review the persistent move history.
+## Current exclusions
 
-## Originally proposed for MVP
-
-- Mobile-first responsive web app.
-- Node-based application deployable on Vercel.
-- Google login.
-- Required globally unique username.
-- Known-user friend flow by username and private email lookup.
-- Asynchronous standard chess only.
-- Server-authoritative move validation.
-- Persistent current game state and full move history.
-- Turn pace options of 1, 3, or 5 days per move.
-- Notifications when it becomes a player's turn.
-- Basic active and completed game lists.
-
-## Originally out of MVP
-
-- Coach.
-- Animations.
-- Powers or variants.
-- Matchmaking.
-- Real-time play.
-- Collectible skins and account-bound cosmetics.
-- Points and rewards.
-- Open chat.
-- Native Android build.
+- Matchmaking, ratings, points, rewards, payments, and collectible ownership.
+- Open chat, email notifications, and real-time transport.
+- LLM coaching or arbitrary executable Magic code.
+- Username changes, multi-account switching, native app packaging, and guest
+  play.
 
 ## Product guardrails
 
 - Real chess integrity comes first.
-- Known users only; no random strangers in MVP.
+- Known users remain the primary multiplayer model; no random matchmaking.
 - No open chat between minors or strangers.
-- Do not expose email addresses unless necessary for the current user to recognize their own account.
-- Keep future coach, variants, rewards, and collectible skins out of MVP milestones.
+- Never expose Google email addresses through friend discovery.
+- Keep chess validation server-authoritative even when presentation and Magic
+  rules vary.

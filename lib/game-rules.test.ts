@@ -6,6 +6,7 @@ import {
   analyzeTerminal,
   applyCandidate,
   claimableDraws,
+  legalMagicMoves,
   replayGame,
   replayWithRepetition,
   type CandidateMove,
@@ -20,6 +21,14 @@ const DOUBLE_ROOK: CompiledMagicRules = {
 const DOUBLE_KNIGHT: CompiledMagicRules = {
   version: 2,
   rules: [{ kind: "double_move", piece: "n" }],
+};
+const TRIPLE_KNIGHT: CompiledMagicRules = {
+  version: 3,
+  rules: [{ kind: "move_sequence", pieces: ["n"], maxMoves: 3 }],
+};
+const TRIPLE_PAWN: CompiledMagicRules = {
+  version: 3,
+  rules: [{ kind: "move_sequence", pieces: ["p"], maxMoves: 3 }],
 };
 const NO_PROMOTION: CompiledMagicRules = {
   version: 1,
@@ -50,6 +59,14 @@ describe("ChessRiot rules adapter", () => {
   it("starts with twenty legal moves and rejects an illegal pawn leap", () => {
     expect(replayGame(INITIAL_FEN, []).moves()).toHaveLength(20);
     expect(() => applyCandidate(INITIAL_FEN, [], { from: "e2", to: "e5" })).toThrow(IllegalMoveError);
+  });
+
+  it("returns capture-only legal destinations for a knight", () => {
+    const chess = new Chess("4k3/8/2P1P3/1P3p2/3N4/1P3p2/2P1P3/4K3 w - - 0 1");
+    const moves = legalMagicMoves(chess, null, "d4");
+
+    expect(moves.map((move) => move.to).sort()).toEqual(["f3", "f5"]);
+    expect(moves.every((move) => move.isCapture())).toBe(true);
   });
 
   it("handles castling through chess.js", () => {
@@ -297,6 +314,86 @@ describe("ChessRiot rules adapter", () => {
       },
       DOUBLE_KNIGHT,
     )).toThrow(IllegalMoveError);
+  });
+
+  it("allows a three-move rule to stop after one, two, or three legal legs", () => {
+    const fen = "4k3/8/8/8/8/8/1N6/4K3 w - - 0 1";
+    const one = applyCandidate(fen, [], { from: "b2", to: "c4" }, TRIPLE_KNIGHT);
+    expect(one.continuationMoves).toHaveLength(0);
+    expect(one.turn).toBe("b");
+
+    const two = applyCandidate(fen, [], {
+      from: "b2",
+      to: "c4",
+      continuation: [{ from: "c4", to: "a5" }],
+    }, TRIPLE_KNIGHT);
+    expect(two.continuationMoves).toHaveLength(1);
+    expect(two.turn).toBe("b");
+
+    const three = applyCandidate(fen, [], {
+      from: "b2",
+      to: "c4",
+      continuation: [
+        { from: "c4", to: "a5" },
+        { from: "a5", to: "b7" },
+      ],
+    }, TRIPLE_KNIGHT);
+    expect(three.continuationMoves).toHaveLength(2);
+    expect(new Chess(three.fenAfter).get("b7")).toMatchObject({
+      color: "w",
+      type: "n",
+    });
+    expect(three.turn).toBe("b");
+  });
+
+  it("rejects a fourth leg, switching pieces, and continuing after check", () => {
+    const fen = "4k3/8/8/8/8/8/1N6/4K1N1 w - - 0 1";
+    expect(() => applyCandidate(fen, [], {
+      from: "b2",
+      to: "c4",
+      continuation: [
+        { from: "c4", to: "a5" },
+        { from: "a5", to: "b7" },
+        { from: "b7", to: "d8" },
+      ],
+    }, TRIPLE_KNIGHT)).toThrow(IllegalMoveError);
+    expect(() => applyCandidate(fen, [], {
+      from: "b2",
+      to: "c4",
+      continuation: [{ from: "g1", to: "f3" }],
+    }, TRIPLE_KNIGHT)).toThrow(IllegalMoveError);
+
+    const checkingFen = "4k3/8/8/8/8/8/1N6/4K3 w - - 0 1";
+    expect(() => applyCandidate(checkingFen, [], {
+      from: "b2",
+      to: "c4",
+      continuation: [
+        { from: "c4", to: "d6" },
+        { from: "d6", to: "f7" },
+      ],
+    }, TRIPLE_KNIGHT)).toThrow(IllegalMoveError);
+  });
+
+  it("fixes Magic eligibility and limit at turn start across promotion", () => {
+    const result = applyCandidate(
+      "4k3/P7/8/8/8/8/8/4K3 w - - 0 1",
+      [],
+      {
+        from: "a7",
+        to: "a8",
+        promotion: "n",
+        continuation: [
+          { from: "a8", to: "b6" },
+          { from: "b6", to: "a4" },
+        ],
+      },
+      TRIPLE_PAWN,
+    );
+    expect(result.continuationMoves).toHaveLength(2);
+    expect(new Chess(result.fenAfter).get("a4")).toMatchObject({
+      color: "w",
+      type: "n",
+    });
   });
 
   it("blocks all pawn moves onto the final rank", () => {

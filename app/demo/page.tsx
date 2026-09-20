@@ -6,6 +6,7 @@ import { DemoPlayer } from "../ui/DemoPlayer";
 export const metadata = {
   title: "90-second demo | ChessRiot",
   description: "See Ron and Omri keep one private chess match moving across a real day.",
+  robots: { index: false, follow: false },
 };
 
 export default function DemoPage() {

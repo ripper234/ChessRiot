@@ -14,9 +14,10 @@ describe("HistoryControls", () => {
       onForward: noop,
     }));
 
-    expect(html).toContain('aria-label="Move history"');
-    expect(html).toContain('aria-label="Previous position"');
-    expect(html).toContain('aria-label="Next position"');
+    expect(html).toContain('dir="ltr"');
+    expect(html).toContain('aria-label="היסטוריית מהלכים"');
+    expect(html).toContain('aria-label="העמדה הקודמת"');
+    expect(html).toContain('aria-label="העמדה הבאה"');
     expect(html).not.toContain("GO LIVE");
   });
 
@@ -28,7 +29,7 @@ describe("HistoryControls", () => {
       onForward: noop,
     }));
 
-    expect(html).toContain('aria-label="Next position"');
+    expect(html).toContain('aria-label="העמדה הבאה"');
     expect(html).not.toContain("GO LIVE");
   });
 
@@ -42,7 +43,7 @@ describe("HistoryControls", () => {
     }));
 
     const previousButton = html.match(
-      /<button[^>]*aria-label="Previous position"[^>]*>/,
+      /<button[^>]*aria-label="העמדה הקודמת"[^>]*>/,
     )?.[0];
 
     expect(previousButton).toBeDefined();

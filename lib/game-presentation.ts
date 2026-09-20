@@ -3,6 +3,7 @@ import type {
   AiDifficulty,
   Color,
   GameSnapshot,
+  Promotion,
   PublicMove,
 } from "./game-types";
 
@@ -22,6 +23,14 @@ export const CHESS_PIECE_NAMES: Record<PieceSymbol, string> = {
   q: "queen",
   k: "king",
 };
+export const HEBREW_CHESS_PIECE_NAMES: Record<PieceSymbol, string> = {
+  p: "חייל",
+  n: "פרש",
+  b: "רץ",
+  r: "צריח",
+  q: "מלכה",
+  k: "מלך",
+};
 export const DIFFICULTY_LABELS: Record<AiDifficulty, string> = {
   1: "Easy",
   2: "Relaxed",
@@ -29,6 +38,14 @@ export const DIFFICULTY_LABELS: Record<AiDifficulty, string> = {
   4: "Tough",
   5: "Brutal",
 };
+export const HEBREW_DIFFICULTY_LABELS: Record<AiDifficulty, string> = {
+  1: "קל",
+  2: "רגוע",
+  3: "בינוני",
+  4: "קשה",
+  5: "אכזרי",
+};
+export type GamePresentationLocale = "en" | "he";
 const CAPTURE_ORDER: Record<PieceSymbol, number> = {
   q: 0,
   r: 1,
@@ -51,7 +68,10 @@ export function orientedBoardSquares(orientation: Color): Square[] {
   );
 }
 
-export function outcomeText(game: GameSnapshot): string {
+export function outcomeText(
+  game: GameSnapshot,
+  locale: GamePresentationLocale = "en",
+): string {
   if (!game.outcome) return "";
   if (
     game.outcome.reason === "checkmate"
@@ -61,12 +81,34 @@ export function outcomeText(game: GameSnapshot): string {
     const winner = game.outcome.winner === "w"
       ? game.players.white.name
       : game.players.black?.name;
+    if (locale === "he") {
+      const ending = game.outcome.reason === "timeout"
+        ? "לאחר שנגמר הזמן"
+        : game.outcome.reason === "resignation"
+          ? "לאחר כניעה"
+          : "במט";
+      return `${winner ?? "המנצח"} ניצח ${ending}`;
+    }
     const ending = game.outcome.reason === "timeout"
       ? "on time"
       : `by ${game.outcome.reason}`;
     return `${winner ?? "Winner"} wins ${ending}`;
   }
-  if (game.outcome.reason === "cancelled") return "Game cancelled";
+  if (game.outcome.reason === "cancelled") {
+    return locale === "he" ? "המשחק בוטל" : "Game cancelled";
+  }
+  if (locale === "he") {
+    const labels: Record<string, string> = {
+      stalemate: "תיקו בפט",
+      threefold_repetition: "תיקו בחזרה משולשת",
+      insufficient_material: "תיקו בגלל חוסר בכלים",
+      fifty_move: "תיקו בכלל 50 המהלכים",
+      fivefold_repetition: "תיקו אוטומטי בחזרה מחומשת",
+      seventy_five_move: "תיקו בכלל 75 המהלכים",
+      draw: "תיקו",
+    };
+    return labels[game.outcome.reason] ?? "המשחק הסתיים";
+  }
   const labels: Record<string, string> = {
     stalemate: "Draw by stalemate",
     threefold_repetition: "Draw by repetition",
@@ -86,6 +128,7 @@ interface GameStatusTextInput {
   openingIntro: boolean;
   magicPiece?: PieceSymbol | null;
   displayCheck: boolean;
+  locale?: GamePresentationLocale;
 }
 
 export function gameStatusText(input: GameStatusTextInput): string {
@@ -96,31 +139,55 @@ export function gameStatusText(input: GameStatusTextInput): string {
     openingIntro,
     magicPiece,
     displayCheck,
+    locale = "en",
   } = input;
   if (viewingHistory) return historyLabel;
-  if (game.status === "waiting") return "Waiting for Player 2";
-  if (openingIntro) return "White opens";
-  if (game.status === "completed") return outcomeText(game);
+  if (game.status === "waiting") {
+    return locale === "he" ? "ממתינים לשחקן שני" : "Waiting for Player 2";
+  }
+  if (openingIntro) return locale === "he" ? "לבן פותח" : "White opens";
+  if (game.status === "completed") return outcomeText(game, locale);
   if (magicPiece) {
+    if (locale === "he") {
+      return `תור קסם: יש להזיז שוב את ה${HEBREW_CHESS_PIECE_NAMES[magicPiece]} או לסיים`;
+    }
     return `Magic turn: move that ${CHESS_PIECE_NAMES[magicPiece]} again or finish`;
   }
   const turnName = game.turn === "w"
     ? game.players.white.name
-    : game.players.black?.name ?? "Black";
+    : game.players.black?.name ?? (locale === "he" ? "שחור" : "Black");
   if (displayCheck) {
+    if (locale === "he") {
+      return game.turn === game.you.color
+        ? "שח! יש להגן על המלך"
+        : `${turnName} בשח`;
+    }
     return game.turn === game.you.color
       ? "CHECK! Protect your king"
       : `${turnName} is in check`;
   }
-  return game.turn === game.you.color
-    ? "Your turn"
-    : `${turnName}’s turn`;
+  if (locale === "he") {
+    return game.turn === game.you.color ? "תורך" : `התור של ${turnName}`;
+  }
+  return game.turn === game.you.color ? "Your turn" : `${turnName}’s turn`;
 }
 
 export function actionEndpointSquares(
-  move: Pick<PublicMove, "from" | "to" | "second">,
+  move: Pick<PublicMove, "from" | "to" | "second" | "continuation">,
 ): [string, string] {
-  return [move.from, move.second?.to ?? move.to];
+  return [
+    move.from,
+    move.continuation?.at(-1)?.to ?? move.second?.to ?? move.to,
+  ];
+}
+
+export function actionSanSequence(
+  move: Pick<PublicMove, "san" | "second" | "continuation">,
+): string {
+  const continuation = move.continuation?.length
+    ? move.continuation
+    : move.second ? [move.second] : [];
+  return [move.san, ...continuation.map((leg) => leg.san)].join(" → ");
 }
 
 export function capturedPiecesByVictimColor(
@@ -142,20 +209,26 @@ export function capturedPiecesByVictimColor(
         const capturedColor: Color = first.color === "w" ? "b" : "w";
         captured[capturedColor].push(first.captured);
       }
-      if (stored.second) {
+      const continuation = stored.continuation
+        ?? (stored.second ? [stored.second] : []);
+      for (const leg of continuation) {
+        const promotion = "promotion" in leg && typeof leg.promotion === "string"
+          ? leg.promotion as Promotion
+          : undefined;
         const fields = chess.fen().split(" ");
         fields[1] = first.color;
         if (first.color === "b") {
           fields[5] = String(Math.max(1, Number(fields[5] ?? "1") - 1));
         }
         chess = new Chess(fields.join(" "));
-        const second = chess.move({
-          from: stored.second.from as Square,
-          to: stored.second.to as Square,
+        const continued = chess.move({
+          from: leg.from as Square,
+          to: leg.to as Square,
+          ...(promotion ? { promotion } : {}),
         });
-        if (second.captured) {
-          const capturedColor: Color = second.color === "w" ? "b" : "w";
-          captured[capturedColor].push(second.captured);
+        if (continued.captured) {
+          const capturedColor: Color = continued.color === "w" ? "b" : "w";
+          captured[capturedColor].push(continued.captured);
         }
       }
       if (stored.fenAfter) chess = new Chess(stored.fenAfter);
@@ -179,12 +252,24 @@ export function checkedKingSquare(chess: Chess): Square | null {
   return null;
 }
 
-export function illegalDestinationMessage(inCheck: boolean): string {
+export function illegalDestinationMessage(
+  inCheck: boolean,
+  locale: GamePresentationLocale = "en",
+): string {
+  if (locale === "he") {
+    return inCheck
+      ? "המלך בשח. יש להזיז אותו, לקחת את הכלי התוקף או לחסום את ההתקפה."
+      : "יש לבחור אחת מהמשבצות המסומנות.";
+  }
   return inCheck
     ? "You are in check. Move the king, capture the attacker, or block the attack."
     : "Choose one of the highlighted squares.";
 }
 
-export function pieceCannotAnswerCheckMessage(): string {
-  return "That piece cannot stop the check. Move the king, capture the attacker, or block the attack.";
+export function pieceCannotAnswerCheckMessage(
+  locale: GamePresentationLocale = "en",
+): string {
+  return locale === "he"
+    ? "הכלי הזה לא יכול לעצור את השח. יש להזיז את המלך, לקחת את הכלי התוקף או לחסום את ההתקפה."
+    : "That piece cannot stop the check. Move the king, capture the attacker, or block the attack.";
 }

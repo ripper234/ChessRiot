@@ -4,12 +4,14 @@ import type { BoardEffect } from "@/lib/game-effects";
 import { ChessPiece } from "./ChessPiece";
 
 export const MOVE_ACTION_MS = 220;
-export const CAPTURE_ACTION_MS = 1_000;
-export const REDUCED_ACTION_MS = 120;
+export const CAPTURE_ACTION_MS = 1_400;
+export const CELEBRATION_ACTION_MS = 1_750;
+export const REDUCED_ACTION_MS = 520;
 
 interface BoardActionAnimationProps {
   effect: BoardEffect;
   squares: Square[];
+  locale?: "en" | "he";
   reducedMotion?: boolean;
   tacticalCelebrations?: boolean;
   onComplete?: () => void;
@@ -40,12 +42,15 @@ export function boardActionDuration(
   tacticalCelebrations = true,
 ): number {
   if (reducedMotion) return REDUCED_ACTION_MS;
+  if (
+    Boolean(effect.special.greatMove && tacticalCelebrations)
+    || Boolean(effect.special.promotion)
+  ) return CELEBRATION_ACTION_MS;
   const celebrated = effect.capture
     || effect.special.castle
     || effect.special.check
     || effect.special.queenCapture
-    || Boolean(effect.special.promotion)
-    || Boolean(effect.special.greatMove && tacticalCelebrations);
+    || effect.special.queenCapture;
   return celebrated ? CAPTURE_ACTION_MS : MOVE_ACTION_MS;
 }
 
@@ -89,20 +94,51 @@ function actionStyle(
 
 const CHIP_ANGLES = [-78, -42, -8, 28, 66, 104, 146, 184];
 const PROMOTION_CELEBRATION = {
-  q: "QUEEN RISES",
-  r: "ROOK RISES",
-  b: "BISHOP RISES",
-  n: "KNIGHT RISES",
+  en: {
+    q: "QUEEN RISES",
+    r: "ROOK RISES",
+    b: "BISHOP RISES",
+    n: "KNIGHT RISES",
+  },
+  he: {
+    q: "המלכה עולה",
+    r: "הצריח עולה",
+    b: "הרץ עולה",
+    n: "הפרש עולה",
+  },
+} as const;
+
+const SPECIAL_COPY = {
+  en: {
+    castle: "CASTLE",
+    check: "CHECK!",
+    queenCapture: "QUEEN DOWN",
+    fork: "FORK!",
+    material: "GREAT WIN",
+    forkDetail: "DOUBLE ATTACK",
+    materialDetail: "MATERIAL WON",
+  },
+  he: {
+    castle: "הצרחה",
+    check: "שח!",
+    queenCapture: "המלכה נפלה",
+    fork: "מזלג!",
+    material: "זכייה גדולה",
+    forkDetail: "התקפה כפולה",
+    materialDetail: "זכייה בחומר",
+  },
 } as const;
 
 export function BoardActionAnimation({
   effect,
   squares,
+  locale = "en",
   reducedMotion = false,
   tacticalCelebrations = true,
   onComplete,
 }: BoardActionAnimationProps) {
   if (!effect.attacker) return null;
+  const copy = SPECIAL_COPY[locale];
 
   return (
     <div
@@ -110,6 +146,8 @@ export function BoardActionAnimation({
       data-attacker={effect.attacker.type}
       data-effect-id={effect.id}
       data-victim={effect.victim?.type ?? undefined}
+      lang={locale}
+      dir={locale === "he" ? "rtl" : "ltr"}
       style={actionStyle(effect, squares, reducedMotion, tacticalCelebrations)}
       aria-hidden="true"
       onAnimationEnd={(event) => {
@@ -146,24 +184,24 @@ export function BoardActionAnimation({
       ) : null}
 
       {effect.special.castle ? (
-        <span className="action-special action-castle"><i /><i /><b>CASTLE</b></span>
+        <span className="action-special action-castle"><i /><i /><b>{copy.castle}</b></span>
       ) : null}
       {effect.special.check ? (
-        <span className="action-special action-check"><b>CHECK!</b></span>
+        <span className="action-special action-check"><b>{copy.check}</b></span>
       ) : null}
       {effect.special.queenCapture ? (
-        <span className="action-special action-queen-fall"><b><ChessPiece type="q" color={effect.victim?.color ?? "b"} /></b><i>QUEEN DOWN</i></span>
+        <span className="action-special action-queen-fall"><b><ChessPiece type="q" color={effect.victim?.color ?? "b"} /></b><i>{copy.queenCapture}</i></span>
       ) : null}
       {effect.special.promotion ? (
         <span className="action-special action-promotion" data-promotion={effect.special.promotion}>
           <b><ChessPiece type={effect.special.promotion} color={effect.attacker.color} /></b>
-          <i>{PROMOTION_CELEBRATION[effect.special.promotion]}</i>
+          <i>{PROMOTION_CELEBRATION[locale][effect.special.promotion]}</i>
         </span>
       ) : null}
       {effect.special.greatMove && tacticalCelebrations ? (
         <span className="action-special action-fork" data-kind={effect.special.greatMove.kind}>
-          <b>✦ {effect.special.greatMove.label} ✦</b>
-          <i>{effect.special.greatMove.kind === "fork" ? "DOUBLE ATTACK" : "MATERIAL WON"}</i>
+          <b>✦ {locale === "he" ? copy[effect.special.greatMove.kind] : effect.special.greatMove.label} ✦</b>
+          <i>{effect.special.greatMove.kind === "fork" ? copy.forkDetail : copy.materialDetail}</i>
         </span>
       ) : null}
 

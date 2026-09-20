@@ -1,6 +1,6 @@
 {
   "name": "chessriot",
-  "version": "0.17.0",
+  "version": "0.27.7",
   "private": true,
   "type": "module",
   "engines": {
@@ -29,10 +29,13 @@
   },
   "dependencies": {
     "chess.js": "1.4.0",
+    "confusables": "1.1.1",
     "drizzle-orm": "0.45.2",
+    "jose": "6.2.7",
     "next": "16.2.12",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "unicode-case-folding": "1.1.1",
     "web-push-neo": "0.1.2"
   },
   "overrides": {

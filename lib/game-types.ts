@@ -20,6 +20,13 @@ export type Termination =
   | "timeout"
   | "draw";
 
+export interface MoveContinuation {
+  from: string;
+  to: string;
+  promotion?: Promotion | null;
+  san: string;
+}
+
 export interface StoredMove {
   ply: number;
   requestId: string;
@@ -33,6 +40,7 @@ export interface StoredMove {
     to: string;
     san: string;
   } | null;
+  continuation?: MoveContinuation[];
   fenBefore: string;
   fenAfter: string;
   createdAt: string;
@@ -50,18 +58,34 @@ export interface PublicMove {
     to: string;
     san: string;
   } | null;
+  continuation?: MoveContinuation[];
   fenBefore?: string;
   fenAfter?: string;
   createdAt: string;
 }
 
-export interface GameSnapshot {
+export interface GameClockSnapshot {
+  /** Cumulative elapsed thinking time through clockAsOf, in milliseconds. */
+  elapsedMs: Record<Color, number>;
+  /** Start of the currently running turn, or null while waiting/after completion. */
+  turnStartedAt: string | null;
+  /** Authoritative instant through which elapsedMs has been measured. */
+  clockAsOf: string;
+}
+
+export interface GameSnapshot extends GameClockSnapshot {
   id: string;
   mode: GameMode;
   variantId: GameVariantId;
   aiDifficulty: AiDifficulty | null;
   turnPaceDays?: TurnPaceDays | null;
   magicRules?: PublicMagicRules | null;
+  world?: {
+    code: string;
+    displayCode: string;
+    creatorUsername: string | null;
+    createdAt: string;
+  } | null;
   status: "waiting" | "active" | "completed";
   version: number;
   initialFen: string;

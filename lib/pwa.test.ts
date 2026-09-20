@@ -1,13 +1,18 @@
 import { describe, expect, it } from "vitest";
 import type { GameSnapshot, PublicMove } from "./game-types";
 import {
+  accountNotificationTogglePresentation,
   gameIdFromPathname,
   hasUnseenRelease,
+  mayClearTurnNotification,
   newestOpponentMoveAfter,
+  notificationOfferDecisionKey,
   opponentMovedSince,
   parseEnabledPreference,
   releaseTarget,
+  shouldOfferTurnAlerts,
   shouldNotifyForOpponentMove,
+  shouldBadgeAccountNotificationSettings,
   type WatchedAccountGame,
 } from "./pwa";
 
@@ -46,6 +51,101 @@ describe("PWA release state", () => {
     expect(parseEnabledPreference(null)).toBe(false);
     expect(parseEnabledPreference("false")).toBe(false);
     expect(parseEnabledPreference("true")).toBe(true);
+  });
+
+  it("clears a turn alert only while its game is both visible and focused", () => {
+    expect(mayClearTurnNotification("visible", true)).toBe(true);
+    expect(mayClearTurnNotification("visible", false)).toBe(false);
+    expect(mayClearTurnNotification("hidden", true)).toBe(false);
+  });
+
+  it("offers turn alerts only for an eligible unseen game", () => {
+    const ready = {
+      hasActiveGame: true,
+      gameMode: "multiplayer" as const,
+      gameStatus: "active" as const,
+      pushReady: true,
+      pushConfigured: true,
+      turnAlertsEnabled: false,
+      offerSeen: false,
+    };
+    expect(shouldOfferTurnAlerts(ready)).toBe(true);
+    expect(shouldOfferTurnAlerts({ ...ready, offerSeen: true })).toBe(false);
+    expect(shouldOfferTurnAlerts({ ...ready, turnAlertsEnabled: true })).toBe(false);
+    expect(shouldOfferTurnAlerts({ ...ready, gameMode: "solo" })).toBe(false);
+    expect(shouldOfferTurnAlerts({ ...ready, gameStatus: "waiting" })).toBe(false);
+    expect(shouldOfferTurnAlerts({ ...ready, pushReady: false })).toBe(false);
+    expect(shouldOfferTurnAlerts({ ...ready, pushConfigured: false })).toBe(false);
+  });
+
+  it("badges Settings for a direct mobile offer or device recovery", () => {
+    const ready = {
+      activeGameId: "game-1",
+      mobile: true,
+      signedInUsername: "שחמטאי123",
+      pushReady: true,
+      pushConfigured: true,
+      pushSupported: true,
+      permission: "default" as const,
+      enabled: false,
+      decision: null,
+    };
+    expect(shouldBadgeAccountNotificationSettings(ready)).toBe(true);
+    expect(shouldBadgeAccountNotificationSettings({ ...ready, activeGameId: null })).toBe(false);
+    expect(shouldBadgeAccountNotificationSettings({ ...ready, mobile: false })).toBe(false);
+    expect(shouldBadgeAccountNotificationSettings({ ...ready, decision: "dismissed" })).toBe(false);
+    expect(shouldBadgeAccountNotificationSettings({ ...ready, decision: "setup-failed" })).toBe(true);
+    expect(shouldBadgeAccountNotificationSettings({ ...ready, decision: "onboarding" })).toBe(true);
+    expect(shouldBadgeAccountNotificationSettings({
+      ...ready,
+      activeGameId: null,
+      decision: "setup-failed",
+    })).toBe(true);
+    expect(shouldBadgeAccountNotificationSettings({
+      ...ready,
+      activeGameId: null,
+      pushConfigured: false,
+      decision: "setup-failed",
+    })).toBe(true);
+    expect(shouldBadgeAccountNotificationSettings({ ...ready, decision: "disabled" })).toBe(false);
+    expect(shouldBadgeAccountNotificationSettings({
+      ...ready,
+      activeGameId: null,
+      permission: "denied",
+      decision: "enabled",
+    })).toBe(true);
+    expect(shouldBadgeAccountNotificationSettings({
+      ...ready,
+      activeGameId: null,
+      permission: "denied",
+      decision: "setup-failed",
+    })).toBe(true);
+    expect(shouldBadgeAccountNotificationSettings({
+      ...ready,
+      permission: "denied",
+      decision: "disabled",
+    })).toBe(false);
+    expect(shouldBadgeAccountNotificationSettings({
+      ...ready,
+      permission: "denied",
+      decision: "dismissed",
+    })).toBe(false);
+    expect(notificationOfferDecisionKey("שחמטאי123")).toContain(
+      encodeURIComponent("שחמטאי123"),
+    );
+  });
+
+  it("presents legacy-only notification consent truthfully", () => {
+    expect(accountNotificationTogglePresentation(false, true)).toEqual({
+      checked: true,
+      detail: "Older game alerts only",
+      status: "LIMITED",
+    });
+    expect(accountNotificationTogglePresentation(true, true)).toEqual({
+      checked: true,
+      detail: "This device",
+      status: "ON",
+    });
   });
 });
 

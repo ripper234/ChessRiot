@@ -5,6 +5,7 @@ import {
   expireMultiplayerTurn,
   findGameById,
   gameMagicRules,
+  multiplayerTurnDeadline,
   readMoves,
   snapshot,
   type GameRow,
@@ -127,6 +128,7 @@ export async function POST(
   }
 
   const now = new Date().toISOString();
+  const deadlineAt = multiplayerTurnDeadline(game);
   const nextVersion = game.version + 1;
   const nonce = crypto.randomUUID();
   const payload = JSON.stringify({ claim, color });
@@ -138,6 +140,7 @@ export async function POST(
         status = 'completed', winner_color = NULL, termination = ?,
         version = ?, last_mutation_nonce = ?, updated_at = ?, finished_at = ?
         WHERE id = ? AND version = ? AND status = 'active' AND turn_color = ?
+          AND (? IS NULL OR julianday('now') < julianday(?))
           AND EXISTS (
             SELECT 1 FROM game_memberships
             WHERE game_memberships.game_id = games.id
@@ -153,6 +156,8 @@ export async function POST(
           id,
           expectedVersion,
           color,
+          deadlineAt,
+          deadlineAt,
           authorization.account.id,
           color,
         ),
@@ -164,6 +169,7 @@ export async function POST(
     ]);
   } catch {
     game = await findGameById(id);
+    if (game) game = await expireMultiplayerTurn(game);
     moves = await readMoves(id);
     const raced = await readAction(id, requestId);
     if (game && sameClaim(raced, claim, color)) {
@@ -181,6 +187,7 @@ export async function POST(
 
   if (changes(results[0]) !== 1 || changes(results[1]) !== 1) {
     game = await findGameById(id);
+    if (game) game = await expireMultiplayerTurn(game);
     moves = await readMoves(id);
     const raced = await readAction(id, requestId);
     if (game && sameClaim(raced, claim, color)) {

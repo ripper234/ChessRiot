@@ -1,0 +1,11 @@
+{
+  "storyVersion": 4,
+  "durationSeconds": 90,
+  "width": 1280,
+  "height": 720,
+  "mimeType": "video/mp4",
+  "sizeBytes": 3424289,
+  "sha256": "0cce31cb76770ba29c9c825b53d82f4a0f98099f4c9b2ef37d46bb1d1af49716",
+  "narrationSha256": "d1da6c46d5fe104cf4ff6eeb7c82ec6a365f498ed5cb2765ead44d04f3341054",
+  "captionsSha256": "221de7fe25ba0f4e4b5ad21d8e66af3e292653aec2183df853aa044f0f1a5d4b"
+}

@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { reportProductEvent } from "@/lib/client-telemetry";
 
 interface DemoStatus {
   source: "bundled" | "generated";
@@ -12,10 +14,10 @@ interface DemoStatus {
 
 export function DemoPlayer() {
   const [status, setStatus] = useState<DemoStatus | null>(null);
-  const [mediaSrc, setMediaSrc] = useState(
-    "/demo-assets/chessriot-demo.mp4",
-  );
+  const [mediaSrc, setMediaSrc] = useState("/demo-assets/chessriot-demo.mp4");
+  const [ended, setEnded] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const startedRef = useRef(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -29,14 +31,21 @@ export function DemoPlayer() {
       .then((value) => {
         setStatus(value);
         if (
+          !startedRef.current
+          &&
           value?.source === "generated"
-          && videoRef.current?.canPlayType(value.mimeType)
+          && document.createElement("video").canPlayType(value.mimeType)
         ) {
           const revision = encodeURIComponent(value.generatedAt ?? "latest");
           setMediaSrc(`/api/demo-video/media?v=${revision}`);
+        } else {
+          setMediaSrc("/demo-assets/chessriot-demo.mp4");
         }
       })
-      .catch(() => setStatus(null));
+      .catch(() => {
+        setStatus(null);
+        setMediaSrc("/demo-assets/chessriot-demo.mp4");
+      });
     return () => controller.abort();
   }, []);
 
@@ -50,9 +59,28 @@ export function DemoPlayer() {
           poster="/demo-assets/poster.jpg"
           ref={videoRef}
           src={mediaSrc}
+          onError={() => {
+            if (mediaSrc !== "/demo-assets/chessriot-demo.mp4") {
+              setStatus(null);
+              setMediaSrc("/demo-assets/chessriot-demo.mp4");
+            }
+          }}
+          onPlay={() => {
+            setEnded(false);
+            if (!startedRef.current) {
+              startedRef.current = true;
+              reportProductEvent("demo.started");
+            }
+          }}
+          onEnded={() => {
+            setEnded(true);
+            reportProductEvent("demo.completed");
+          }}
         >
+          <track kind="captions" src="/api/demo-video/captions" srcLang="en" label="English" default />
           Your browser does not support HTML video.
         </video>
+        {ended ? <div className="demo-video-finish"><strong>READY FOR YOUR FIRST MOVE?</strong><Link className="primary-button" href="/app">SIGN IN TO PLAY</Link></div> : null}
       </div>
       <div className="demo-player-meta">
         <span>1:30 STORY</span>

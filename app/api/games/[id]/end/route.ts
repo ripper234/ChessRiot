@@ -3,6 +3,7 @@ import {
   assertAuthoritativeState,
   expireMultiplayerTurn,
   findGameById,
+  multiplayerTurnDeadline,
   oppositeColor,
   readMoves,
   snapshot,
@@ -94,6 +95,13 @@ export async function POST(
     }
     return json({ game: snapshot(game, moves, color) });
   }
+  if (game.status === "waiting" && color !== "w") {
+    return apiError(
+      403,
+      "game_cancel_forbidden",
+      "Only the creator can cancel a waiting challenge",
+    );
+  }
   if (game.status === "completed") {
     return apiError(409, "game_not_active", "The game has already ended");
   }
@@ -114,6 +122,7 @@ export async function POST(
   const termination: Termination = game.status === "waiting" ? "cancelled" : "resignation";
   const winner = game.status === "active" ? oppositeColor(color) : null;
   const now = new Date().toISOString();
+  const deadlineAt = multiplayerTurnDeadline(game);
   const nextVersion = game.version + 1;
   const nonce = crypto.randomUUID();
   const payload = JSON.stringify({ color });
@@ -125,6 +134,7 @@ export async function POST(
         status = 'completed', winner_color = ?, termination = ?,
         version = ?, last_mutation_nonce = ?, updated_at = ?, finished_at = ?
         WHERE id = ? AND version = ? AND status IN ('waiting', 'active')
+          AND (? IS NULL OR julianday('now') < julianday(?))
           AND EXISTS (
             SELECT 1 FROM game_memberships
             WHERE game_memberships.game_id = games.id
@@ -140,6 +150,8 @@ export async function POST(
           now,
           id,
           expectedVersion,
+          deadlineAt,
+          deadlineAt,
           authorization.account.id,
           color,
         ),
@@ -151,6 +163,7 @@ export async function POST(
     ]);
   } catch {
     game = await findGameById(id);
+    if (game) game = await expireMultiplayerTurn(game);
     moves = await readMoves(id);
     const raced = await readAction(id, requestId);
     if (game && sameEnd(raced, color)) {
@@ -168,6 +181,7 @@ export async function POST(
 
   if (changes(results[0]) !== 1 || changes(results[1]) !== 1) {
     game = await findGameById(id);
+    if (game) game = await expireMultiplayerTurn(game);
     moves = await readMoves(id);
     const raced = await readAction(id, requestId);
     if (game && sameEnd(raced, color)) {

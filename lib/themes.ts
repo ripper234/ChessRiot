@@ -44,6 +44,13 @@ export const THEMES = [
     art: "/themes/high-fantasy.webp",
   },
   {
+    id: "mythic-beasts",
+    name: "Mythic Beasts",
+    description: "Dragon court and phoenix fire",
+    preview: ["#f0d89a", "#754968", "#1b1327", "#f0a34b"],
+    art: null,
+  },
+  {
     id: "arcane-cards",
     name: "Arcane Cards",
     description: "Parchment and spell gold",

@@ -4,6 +4,7 @@ import { isUuid } from "./validation";
 import { APP_VERSION } from "./version";
 import { appEnvironment, observabilityHashSecret } from "./runtime";
 import { readJson } from "./http";
+import { googleSessionAccountFromHeaders } from "./google-auth";
 
 export type EventOutcome = "success" | "rejected" | "failure";
 
@@ -12,6 +13,7 @@ export interface ObservabilityEvent {
   outcome: EventOutcome;
   requestId?: string | null;
   subjectId?: string | null;
+  actorId?: string | null;
   route?: string | null;
   method?: string | null;
   statusCode?: number | null;
@@ -64,6 +66,7 @@ export async function recordEvent(input: ObservabilityEvent): Promise<void> {
     outcome: input.outcome,
     requestId: isUuid(input.requestId) ? input.requestId : null,
     subjectHash: await hashOpaque(input.subjectId),
+    actorHash: await hashOpaque(input.actorId),
     route: input.route?.slice(0, 120) ?? null,
     method: input.method?.slice(0, 12) ?? null,
     statusCode: input.statusCode ?? null,
@@ -79,9 +82,9 @@ export async function recordEvent(input: ObservabilityEvent): Promise<void> {
     await getDatabase()
       .prepare(`INSERT INTO observability_events (
         id, occurred_at, environment, app_version, event_name, outcome,
-        request_id, subject_hash, route, method, status_code, error_code,
-        latency_ms, metadata_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        request_id, subject_hash, actor_hash, route, method, status_code,
+        error_code, latency_ms, metadata_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .bind(
         record.id,
         record.occurredAt,
@@ -91,6 +94,7 @@ export async function recordEvent(input: ObservabilityEvent): Promise<void> {
         record.outcome,
         record.requestId,
         record.subjectHash,
+        record.actorHash,
         record.route,
         record.method,
         record.statusCode,
@@ -99,14 +103,6 @@ export async function recordEvent(input: ObservabilityEvent): Promise<void> {
         record.metadataJson,
       )
       .run();
-
-    // Roughly one in sixteen events performs bounded retention maintenance.
-    if (Number.parseInt(record.id.at(-1) ?? "0", 16) === 0) {
-      await getDatabase()
-        .prepare("DELETE FROM observability_events WHERE occurred_at < ?")
-        .bind(new Date(Date.now() - 30 * 24 * 60 * 60 * 1_000).toISOString())
-        .run();
-    }
 
     console.log(JSON.stringify({
       type: "chessriot_event",
@@ -136,6 +132,7 @@ export async function recordEvent(input: ObservabilityEvent): Promise<void> {
 interface RequestDetails {
   requestId: string;
   subjectId: string | null;
+  actorId: string | null;
   metadata: Record<string, string | number | boolean | null>;
   clientEvent: string | null;
 }
@@ -157,8 +154,17 @@ function routeEvent(method: string, pathname: string): string | null {
   if (method === "POST" && /^\/api\/games\/[^/]+\/end$/.test(pathname)) {
     return "game.ended";
   }
+  if (method === "PATCH" && /^\/api\/games\/[^/]+\/challenge$/.test(pathname)) {
+    return "challenge.responded";
+  }
   if (method === "POST" && /^\/api\/games\/[^/]+\/reactions$/.test(pathname)) {
     return "reaction.sent";
+  }
+  if (method === "POST" && /^\/api\/games\/[^/]+\/recap-share$/.test(pathname)) {
+    return "recap.shared";
+  }
+  if (method === "DELETE" && /^\/api\/games\/[^/]+\/recap-share$/.test(pathname)) {
+    return "recap.revoked";
   }
   if (method === "PUT" && /^\/api\/games\/[^/]+\/push-subscriptions$/.test(pathname)) {
     return "push.subscription_enabled";
@@ -166,12 +172,36 @@ function routeEvent(method: string, pathname: string): string | null {
   if (method === "DELETE" && /^\/api\/games\/[^/]+\/push-subscriptions$/.test(pathname)) {
     return "push.subscription_disabled";
   }
+  if (method === "PUT" && pathname === "/api/me/push-devices") {
+    return "push.device_enabled";
+  }
+  if (method === "DELETE" && pathname === "/api/me/push-devices") {
+    return "push.device_disabled";
+  }
   if (method === "GET" && /^\/api\/games\/[^/]+\/reactions$/.test(pathname)) {
     return null;
   }
   if (method === "GET" && /^\/api\/games\/[^/]+$/.test(pathname)) return "game.loaded";
   if (method === "GET" && pathname === "/api/me/games") return null;
   if (method === "POST" && pathname === "/api/telemetry/client") return "client.telemetry";
+  if (method === "POST" && pathname === "/api/me/username") return "username.chosen";
+  if (method === "POST" && pathname === "/api/me/tutorial") return "tutorial.updated";
+  if (method === "POST" && pathname === "/api/me/feature-access") {
+    return "feature_access.requested";
+  }
+  if (method === "POST" && pathname === "/api/me/friend-requests") return "friend_request.sent";
+  if (method === "PATCH" && /^\/api\/me\/friend-requests\/[^/]+$/.test(pathname)) {
+    return "friend_request.responded";
+  }
+  if (method === "DELETE" && /^\/api\/me\/friend-requests\/[^/]+$/.test(pathname)) {
+    return "friend_request.cancelled";
+  }
+  if (method === "POST" && pathname === "/api/me/blocks") return "player.blocked";
+  if (method === "DELETE" && pathname === "/api/me/blocks") return "player.unblocked";
+  if (method === "POST" && pathname === "/api/me/reports") return "player.reported";
+  if (method === "POST" && pathname === "/api/me/activity") return "activity.read";
+  if (method === "GET" && pathname === "/api/me/export") return "privacy.exported";
+  if (method === "DELETE" && pathname === "/api/me/account") return "privacy.deleted";
   if (method === "POST" && pathname === "/api/feedback") return "feedback.submitted";
   if (
     method === "POST"
@@ -183,7 +213,14 @@ function routeEvent(method: string, pathname: string): string | null {
     (method === "GET" && pathname === "/api/health")
     || (method === "GET" && pathname === "/api/push/config")
     || (method === "GET" && /^\/api\/games\/[^/]+\/push-subscriptions$/.test(pathname))
+    || (method === "GET" && pathname === "/api/me/push-devices")
+    || (method === "POST" && pathname === "/api/ops/push-notifications")
+    || (method === "GET" && pathname === "/api/me/activity")
     || (method === "POST" && pathname === "/api/ops/overview")
+    || (method === "POST" && pathname === "/api/ops/analytics")
+    || (method === "POST" && pathname === "/api/ops/safety-reports")
+    || (method === "POST" && /^\/api\/ops\/safety-reports\/[^/]+\/status$/.test(pathname))
+    || (method === "POST" && pathname === "/api/ops/feature-access-requests")
   ) return null;
   if (pathname.startsWith("/api/")) return "api.request";
   return null;
@@ -201,6 +238,12 @@ export function sanitizeObservedRoute(pathname: string): string {
     /^\/api\/invitations\/[^/]+/,
     "/api/invitations/:token",
   ).replace(
+    /^\/api\/referrals\/[^/]+/,
+    "/api/referrals/:code",
+  ).replace(
+    /^\/api\/me\/friend-requests\/[^/]+/,
+    "/api/me/friend-requests/:id",
+  ).replace(
     /^\/api\/ops\/feedback\/[^/]+/,
     "/api/ops/feedback/:id",
   );
@@ -210,9 +253,11 @@ async function requestDetails(request: Request): Promise<RequestDetails> {
   const generated = crypto.randomUUID();
   const pathname = new URL(request.url).pathname;
   const headerRequestId = request.headers.get("x-request-id");
+  const sessionAccount = await googleSessionAccountFromHeaders(request.headers);
   const details: RequestDetails = {
     requestId: isUuid(headerRequestId) ? headerRequestId : generated,
     subjectId: subjectFromPath(pathname),
+    actorId: sessionAccount?.id ?? null,
     metadata: {},
     clientEvent: null,
   };
@@ -232,15 +277,24 @@ async function requestDetails(request: Request): Promise<RequestDetails> {
       details.metadata.turnPaceDays = payload.turnPaceDays;
     }
     if (typeof payload.claim === "string") details.metadata.claim = payload.claim.slice(0, 40);
-    if (
-      payload.event === "client.error"
-      || payload.event === "client.unhandled_rejection"
-      || payload.event === "client.network_error"
-    ) {
+    if (typeof payload.event === "string" && [
+      "client.error",
+      "client.unhandled_rejection",
+      "client.network_error",
+      "public.home_viewed",
+      "demo.started",
+      "demo.completed",
+      "auth.started",
+      "tutorial.started",
+      "tutorial.completed",
+      "tutorial.skipped",
+      "activity.opened",
+    ].includes(payload.event)) {
       details.clientEvent = payload.event;
     }
     if (typeof payload.gameId === "string") details.subjectId = payload.gameId;
     if (typeof payload.code === "string") details.metadata.code = payload.code.slice(0, 80);
+    if (payload.feature === "magic_rules") details.metadata.feature = payload.feature;
   } catch {
     // Invalid request bodies are still logged from their response status.
   }
@@ -343,6 +397,7 @@ export async function observeHttpRequest(
     outcome,
     requestId: requestInfo.requestId,
     subjectId: requestInfo.subjectId ?? responseInfo.subjectId,
+    actorId: requestInfo.actorId,
     route: sanitizeObservedRoute(url.pathname),
     method: request.method,
     statusCode: response.status,
@@ -361,6 +416,7 @@ export async function observeHttpRequest(
         outcome: "success",
         requestId: requestInfo.requestId,
         subjectId: requestInfo.subjectId ?? responseInfo.subjectId,
+        actorId: requestInfo.actorId,
         latencyMs: Number.isFinite(botLatency) ? botLatency : null,
         metadata: {
           color: response.headers.get("x-chessriot-bot-color") === "w" ? "w" : "b",

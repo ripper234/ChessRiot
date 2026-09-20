@@ -82,6 +82,20 @@ function FantasyPiece({ type }: { type: PieceSymbol }) {
   return <>{body}{base}</>;
 }
 
+function MythicBeastsPiece({ type }: { type: PieceSymbol }) {
+  const base = <><path className="piece-silhouette" d="M18 88 29 72h42l11 16Z" /><path className="piece-detail" d="M27 81h46" /></>;
+  let beast;
+  switch (type) {
+    case "p": beast = <g data-mythic-beast="salamander"><path className="piece-silhouette" d="M29 63c0-13 9-24 23-24 8 0 14 4 18 10 4 7 1 16-8 18H35Z" /><circle className="piece-silhouette" cx="39" cy="34" r="13" /><path className="piece-silhouette" d="M31 27 21 18l15 3Zm15-4 8-12 2 16Z" /><path className="piece-detail" d="M57 48c10 3 17 0 19-9 5 16-3 26-18 27M34 59l-9 8m33-8 9 8" /><circle className="mythic-eye" cx="43" cy="32" r="2.8" /></g>; break;
+    case "n": beast = <g data-mythic-beast="griffin"><path className="piece-silhouette" d="M28 69c3-17 10-28 22-34l-3-16 13 8 12-7 8 14-13 9 7 26Z" /><path className="piece-silhouette" d="M43 47 24 28c18-1 31 4 39 17Z" /><path className="mythic-accent" d="m68 31 17 5-16 7Z" /><path className="piece-detail" d="M35 35c8 0 15 4 22 12M47 53l-9 15" /><circle className="mythic-eye" cx="67" cy="32" r="2.8" /></g>; break;
+    case "b": beast = <g data-mythic-beast="basilisk"><path className="piece-silhouette" d="M50 12c13 8 20 18 18 29-2 8-8 13-17 15-7 2-10 6-7 11h23l7 8H32c-8-9-7-18 2-26 7-6 9-12 5-18-3-6 1-13 11-19Z" /><path className="mythic-accent" d="m40 25 10-16 5 17 14-9-4 18Z" /><path className="piece-detail" d="M43 39c11 2 15 8 11 17M39 67c9 5 19 5 28 0" /><circle className="mythic-eye" cx="54" cy="28" r="3" /></g>; break;
+    case "r": beast = <g data-mythic-beast="golem"><path className="piece-silhouette" d="M29 32h42l-5 40H34Z" /><path className="piece-silhouette" d="M22 18h17v18H22Zm21-5h14v23H43Zm18 5h17v18H61Z" /><path className="piece-detail" d="M38 48h24M42 59h16M50 36v36" /><path className="mythic-accent" d="m50 42 7 8-7 8-7-8Z" /><circle className="mythic-eye" cx="36" cy="29" r="2.4" /><circle className="mythic-eye" cx="64" cy="29" r="2.4" /></g>; break;
+    case "q": beast = <g data-mythic-beast="phoenix"><path className="piece-silhouette" d="M50 16c8 8 11 17 8 26 12-8 21-7 28 3-14 3-21 10-24 22H38c-3-12-10-19-24-22 7-10 16-11 28-3-3-9 0-18 8-26Z" /><path className="piece-silhouette" d="M39 67 28 30l22 17 22-17-11 37Z" /><path className="mythic-accent" d="m50 8 5 12-5 10-5-10Z" /><path className="piece-detail" d="M24 44c11 4 18 11 21 23m31-23C65 48 58 55 55 67M42 53h16" /><circle className="mythic-eye" cx="50" cy="34" r="2.8" /></g>; break;
+    case "k": beast = <g data-mythic-beast="dragon"><path className="piece-silhouette" d="M28 69c0-19 7-32 21-39l-5-16 13 10 12-9-1 16c8 8 10 21 4 38Z" /><path className="piece-silhouette" d="M40 48 17 35c3 17 11 28 25 33Zm20 0 23-13c-3 17-11 28-25 33Z" /><path className="mythic-accent" d="M39 25 50 8l11 17-11 10Z" /><path className="piece-detail" d="M39 49h22M50 35v33M34 60l-9 11m41-11 9 11" /><circle className="mythic-eye" cx="44" cy="35" r="2.7" /><circle className="mythic-eye" cx="56" cy="35" r="2.7" /></g>; break;
+  }
+  return <>{beast}{base}</>;
+}
+
 function CardPiece({ type }: { type: PieceSymbol }) {
   const symbols: Record<PieceSymbol, React.ReactNode> = {
     p: <><circle className="piece-detail" cx="50" cy="37" r="9" /><path className="piece-detail" d="M38 62c2-12 6-18 12-18s10 6 12 18Z" /></>,
@@ -153,6 +167,7 @@ export function ThemedPieceArtwork({ type, theme }: { type: PieceSymbol; theme: 
     case "toybox": return <ToyboxPiece type={type} />;
     case "arena-pop": return <ArenaPiece type={type} />;
     case "high-fantasy": return <FantasyPiece type={type} />;
+    case "mythic-beasts": return <MythicBeastsPiece type={type} />;
     case "arcane-cards": return <CardPiece type={type} />;
     case "iron-legions": return <IronPiece type={type} />;
     case "shadow-shogun": return <ShogunPiece type={type} />;

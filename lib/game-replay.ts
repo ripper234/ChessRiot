@@ -13,7 +13,7 @@ export interface ReplayFrame {
 
 type ReplayMove = Pick<
   PublicMove,
-  "ply" | "color" | "from" | "to" | "promotion" | "san" | "second" | "fenBefore" | "fenAfter"
+  "ply" | "color" | "from" | "to" | "promotion" | "san" | "second" | "continuation" | "fenBefore" | "fenAfter"
 >;
 
 /**
@@ -49,7 +49,11 @@ export function buildReplayFrames(
       if (stored.fenAfter) {
         chess = new Chess(stored.fenAfter);
         if (chess.turn() === stored.color) throw new Error("Turn did not advance");
-        if (stored.second) san = `${stored.san} → ${stored.second.san}`;
+        const continuation = stored.continuation
+          ?? (stored.second ? [stored.second] : []);
+        if (continuation.length > 0) {
+          san = [stored.san, ...continuation.map((move) => move.san)].join(" → ");
+        }
       } else {
         const move = chess.move({
           from: stored.from as Square,
@@ -65,7 +69,7 @@ export function buildReplayFrames(
         mover: stored.color,
         moveNumber: Math.ceil(stored.ply / 2),
         from: stored.from,
-        to: stored.second?.to ?? stored.to,
+        to: stored.continuation?.at(-1)?.to ?? stored.second?.to ?? stored.to,
       });
     } catch {
       throw new Error("Game history cannot be replayed");
@@ -75,10 +79,33 @@ export function buildReplayFrames(
   return frames;
 }
 
-export function replayFrameLabel(frame: ReplayFrame): string {
-  if (frame.ply === 0) return "Start position";
-  const side = frame.mover === "w" ? "White" : "Black";
-  return `Move ${frame.moveNumber}, ${side}: ${frame.san ?? "move"}`;
+export interface ReplayFrameLabelPart {
+  text: string;
+  dir?: "ltr";
+}
+
+export function replayFrameLabelParts(
+  frame: ReplayFrame,
+  locale: "en" | "he" = "en",
+): ReplayFrameLabelPart[] {
+  if (frame.ply === 0) {
+    return [{ text: locale === "he" ? "עמדת פתיחה" : "Start position" }];
+  }
+  const side = frame.mover === "w"
+    ? locale === "he" ? "לבן" : "White"
+    : locale === "he" ? "שחור" : "Black";
+  return [
+    {
+      text: locale === "he"
+        ? `מהלך ${frame.moveNumber}, ${side}: `
+        : `Move ${frame.moveNumber}, ${side}: `,
+    },
+    { text: frame.san ?? (locale === "he" ? "מהלך" : "move"), dir: "ltr" },
+  ];
+}
+
+export function replayFrameLabel(frame: ReplayFrame, locale: "en" | "he" = "en"): string {
+  return replayFrameLabelParts(frame, locale).map((part) => part.text).join("");
 }
 
 export type HistoryCursor = number | null;

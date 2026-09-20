@@ -49,11 +49,12 @@ describe("BoardActionAnimation", () => {
     },
   );
 
-  it("uses one-second non-blocking captures and a reduced-motion fallback", () => {
+  it("holds capture feedback long enough to read and keeps a reduced-motion marker", () => {
     expect(boardActionDuration(effect("p"))).toBe(CAPTURE_ACTION_MS);
     expect(boardActionDuration(effect("p", false))).toBe(MOVE_ACTION_MS);
     expect(boardActionDuration(effect("n"), true)).toBe(REDUCED_ACTION_MS);
-    expect(CAPTURE_ACTION_MS).toBe(1_000);
+    expect(CAPTURE_ACTION_MS).toBe(1_400);
+    expect(REDUCED_ACTION_MS).toBeGreaterThanOrEqual(400);
 
     const html = renderToStaticMarkup(
       <BoardActionAnimation
@@ -64,5 +65,42 @@ describe("BoardActionAnimation", () => {
     );
     expect(html).toContain("is-reduced");
     expect(html).toContain('class="action-reduced-marker"');
+  });
+
+  it("renders every special celebration in Hebrew for the protected game room", () => {
+    const special = effect("q");
+    special.special = {
+      castle: true,
+      check: true,
+      queenCapture: true,
+      promotion: "q",
+      greatMove: { kind: "fork", label: "FORK!" },
+    };
+    const hebrew = renderToStaticMarkup(
+      <BoardActionAnimation
+        effect={special}
+        squares={orientedBoardSquares("w")}
+        locale="he"
+      />,
+    );
+
+    expect(hebrew).toContain('lang="he"');
+    expect(hebrew).toContain('dir="rtl"');
+    for (const label of ["הצרחה", "שח!", "המלכה נפלה", "המלכה עולה", "מזלג!", "התקפה כפולה"]) {
+      expect(hebrew).toContain(label);
+    }
+    expect(hebrew).not.toMatch(/CASTLE|CHECK!|QUEEN DOWN|QUEEN RISES|FORK!|DOUBLE ATTACK/);
+
+    special.special.greatMove = { kind: "material", label: "GREAT WIN" };
+    const material = renderToStaticMarkup(
+      <BoardActionAnimation
+        effect={special}
+        squares={orientedBoardSquares("w")}
+        locale="he"
+      />,
+    );
+    expect(material).toContain("זכייה גדולה");
+    expect(material).toContain("זכייה בחומר");
+    expect(material).not.toContain("GREAT WIN");
   });
 });

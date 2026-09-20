@@ -10,16 +10,24 @@ interface RequiredTextInputProps extends Omit<
   id: string;
   label: string;
   error: string;
+  requiredLabel?: string;
 }
 
 export const RequiredTextInput = forwardRef<HTMLInputElement, RequiredTextInputProps>(
-  function RequiredTextInput({ id, label, error, className, ...inputProps }, ref) {
+  function RequiredTextInput({
+    id,
+    label,
+    error,
+    requiredLabel = "REQUIRED",
+    className,
+    ...inputProps
+  }, ref) {
     const errorId = `${id}-error`;
     return (
       <div className={`required-field${error ? " has-error" : ""}`}>
         <label htmlFor={id}>
           <span>{label}</span>
-          <small>REQUIRED</small>
+          <small>{requiredLabel}</small>
         </label>
         <input
           {...inputProps}

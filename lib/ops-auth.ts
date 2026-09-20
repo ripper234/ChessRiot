@@ -1,14 +1,28 @@
 import { appEnvironment, controlOrigin, opsReadSecret } from "./runtime";
 
-export type OpsScope = "observability:read" | "feedback:manage";
+export type OpsScope =
+  | "observability:read"
+  | "feedback:manage"
+  | "safety:manage"
+  | "feature-flags:manage"
+  | "feature-access-requests:manage"
+  | "push-notifications:manage"
+  | "llm:smoke";
 
-interface OpsGrant {
+export interface OpsGrant {
   v: 1;
   aud: string;
   scope: OpsScope;
   iat: number;
   exp: number;
   nonce: string;
+  targetUsername?: string;
+  enabled?: boolean;
+  featureKey?: string;
+  action?: "list" | "approve" | "dismiss";
+  requestId?: string;
+  pushAction?: "inspect" | "send";
+  pushMessage?: string;
 }
 
 function decodeBase64Url(value: string): Uint8Array {
@@ -61,26 +75,26 @@ export function opsCorsHeaders(origin: string | null): Headers {
   return headers;
 }
 
-export async function authorizeOpsGrant(
+export async function readAuthorizedOpsGrant(
   request: Request,
   scope: OpsScope,
-): Promise<boolean> {
+): Promise<OpsGrant | null> {
   const origin = request.headers.get("origin");
   const secret = opsReadSecret();
-  if (!secret || origin !== controlOrigin()) return false;
+  if (!secret || origin !== controlOrigin()) return null;
   const contentType = request.headers.get("content-type")?.split(";")[0].trim();
-  if (contentType !== "text/plain") return false;
+  if (contentType !== "text/plain") return null;
   const token = (await request.text()).trim();
-  if (token.length > 2_000) return false;
+  if (token.length > 2_000) return null;
   const [payloadPart, signaturePart, extra] = token.split(".");
-  if (!payloadPart || !signaturePart || extra) return false;
-  if (!(await verifySignature(payloadPart, signaturePart, secret))) return false;
+  if (!payloadPart || !signaturePart || extra) return null;
+  if (!(await verifySignature(payloadPart, signaturePart, secret))) return null;
   try {
     const payload = JSON.parse(
       new TextDecoder().decode(decodeBase64Url(payloadPart)),
     ) as Partial<OpsGrant>;
     const now = Math.floor(Date.now() / 1_000);
-    return payload.v === 1
+    const valid = payload.v === 1
       && payload.aud === appEnvironment()
       && payload.scope === scope
       && typeof payload.iat === "number"
@@ -90,9 +104,17 @@ export async function authorizeOpsGrant(
       && payload.exp - payload.iat <= 180
       && typeof payload.nonce === "string"
       && payload.nonce.length >= 16;
+    return valid ? payload as OpsGrant : null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+export async function authorizeOpsGrant(
+  request: Request,
+  scope: OpsScope,
+): Promise<boolean> {
+  return Boolean(await readAuthorizedOpsGrant(request, scope));
 }
 
 export function authorizeOpsRead(request: Request): Promise<boolean> {
@@ -101,4 +123,24 @@ export function authorizeOpsRead(request: Request): Promise<boolean> {
 
 export function authorizeFeedbackManage(request: Request): Promise<boolean> {
   return authorizeOpsGrant(request, "feedback:manage");
+}
+
+export function authorizeSafetyManage(request: Request): Promise<boolean> {
+  return authorizeOpsGrant(request, "safety:manage");
+}
+
+export function authorizeLlmSmoke(request: Request): Promise<boolean> {
+  return authorizeOpsGrant(request, "llm:smoke");
+}
+
+export function authorizeFeatureFlagsManage(request: Request): Promise<OpsGrant | null> {
+  return readAuthorizedOpsGrant(request, "feature-flags:manage");
+}
+
+export function authorizeFeatureAccessRequestsManage(request: Request): Promise<OpsGrant | null> {
+  return readAuthorizedOpsGrant(request, "feature-access-requests:manage");
+}
+
+export function authorizePushNotificationsManage(request: Request): Promise<OpsGrant | null> {
+  return readAuthorizedOpsGrant(request, "push-notifications:manage");
 }

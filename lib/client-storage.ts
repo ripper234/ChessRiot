@@ -8,6 +8,7 @@ import { isSecret } from "./validation";
 const RECENT_KEY = "chessriot:recent";
 const STORAGE_TEST_KEY = "chessriot:storage-test";
 const SEAT_FRAGMENT_KEY = "seat";
+const INVITE_FRAGMENT_KEY = "invite";
 const GUEST_IDENTITY_KEY = "chessriot:guest-identity";
 
 export function generateSecret(): string {
@@ -53,6 +54,49 @@ export function readSeatTokenFromHash(hash: string): string | null {
 
 export function hasSeatTokenInHash(hash: string): boolean {
   return hash.startsWith("#") && new URLSearchParams(hash.slice(1)).has(SEAT_FRAGMENT_KEY);
+}
+
+export function gamePathWithInvitation(
+  gameId: string,
+  inviteUrl: string,
+  search = "",
+): string {
+  const fragment = new URLSearchParams({ [INVITE_FRAGMENT_KEY]: inviteUrl });
+  return `/g/${encodeURIComponent(gameId)}${search}#${fragment.toString()}`;
+}
+
+export function readInvitationUrlFromHash(
+  hash: string,
+  origin: string,
+): string | null {
+  if (!hash.startsWith("#")) return null;
+  const value = new URLSearchParams(hash.slice(1)).get(INVITE_FRAGMENT_KEY);
+  if (!value) return null;
+  try {
+    const invite = new URL(value);
+    const expectedOrigin = new URL(origin).origin;
+    const match = invite.pathname.match(/^\/join\/([^/]+)$/);
+    if (
+      invite.origin !== expectedOrigin
+      || invite.username
+      || invite.password
+      || invite.search
+      || invite.hash
+      || !match
+      || !isSecret(match[1])
+    ) return null;
+    return invite.toString();
+  } catch {
+    return null;
+  }
+}
+
+export function removeInvitationFromHash(hash: string): string {
+  if (!hash.startsWith("#")) return hash;
+  const fragment = new URLSearchParams(hash.slice(1));
+  fragment.delete(INVITE_FRAGMENT_KEY);
+  const remaining = fragment.toString();
+  return remaining ? `#${remaining}` : "";
 }
 
 export function privateGamePath(gameId: string, playerToken: string): string {

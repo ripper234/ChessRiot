@@ -6,9 +6,6 @@ import {
   publicPushConfig,
 } from "./push-notifications";
 
-const p256dh = "A".repeat(87);
-const auth = "B".repeat(22);
-
 function base64Url(bytes: ArrayBuffer): string {
   const binary = Array.from(new Uint8Array(bytes))
     .map((byte) => String.fromCharCode(byte))
@@ -18,6 +15,12 @@ function base64Url(bytes: ArrayBuffer): string {
     .replace(/\//g, "_")
     .replace(/=+$/g, "");
 }
+
+const publicKeyBytes = new Uint8Array(65);
+publicKeyBytes[0] = 4;
+publicKeyBytes.fill(7, 1);
+const p256dh = base64Url(publicKeyBytes.buffer);
+const auth = base64Url(new Uint8Array(16).fill(11).buffer);
 
 async function vapidPair(): Promise<{ publicKey: string; privateJwk: JsonWebKey }> {
   const keys = await crypto.subtle.generateKey(
@@ -82,6 +85,11 @@ describe("push subscription validation", () => {
     expect(parsePushSubscription({
       endpoint: "https://fcm.googleapis.com/fcm/send/device-capability",
       expirationTime: -1,
+      keys: { p256dh, auth },
+    })).toBeNull();
+    expect(parsePushSubscription({
+      endpoint: "https://fcm.googleapis.com/fcm/send/device-capability",
+      expirationTime: Date.now() - 1,
       keys: { p256dh, auth },
     })).toBeNull();
   });

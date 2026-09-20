@@ -6,6 +6,7 @@ import {
   nextHistoryCursor,
   previousHistoryCursor,
   replayFrameLabel,
+  replayFrameLabelParts,
   resolvedHistoryPly,
 } from "./game-replay";
 import type { PublicMove } from "./game-types";
@@ -41,6 +42,12 @@ describe("game replay", () => {
     expect(replayFrameLabel(frames[0])).toBe("Start position");
     expect(replayFrameLabel(frames[2])).toBe("Move 1, Black: c5");
     expect(replayFrameLabel(frames[3])).toBe("Move 2, White: Nf3");
+    expect(replayFrameLabel(frames[0], "he")).toBe("עמדת פתיחה");
+    expect(replayFrameLabel(frames[2], "he")).toBe("מהלך 1, שחור: c5");
+    expect(replayFrameLabelParts(frames[2], "he")).toEqual([
+      { text: "מהלך 1, שחור: " },
+      { text: "c5", dir: "ltr" },
+    ]);
 
     expect(new Chess(frames[0].fen).get("e2")).toMatchObject({ color: "w", type: "p" });
     expect(new Chess(frames[1].fen).get("e4")).toMatchObject({ color: "w", type: "p" });
@@ -156,6 +163,46 @@ describe("game replay", () => {
     expect(new Chess(frames[1].fen).get("e5")).toMatchObject({
       color: "w",
       type: "n",
+    });
+  });
+
+  it("labels a multi-leg Magic action and points at its final square", () => {
+    const rules: CompiledMagicRules = {
+      version: 3,
+      rules: [{ kind: "move_sequence", pieces: ["n"], maxMoves: 3 }],
+    };
+    const initialFen = "4k3/8/8/8/8/8/1N6/4K3 w - - 0 1";
+    const outcome = applyCandidate(initialFen, [], {
+      from: "b2",
+      to: "c4",
+      continuation: [
+        { from: "c4", to: "a5" },
+        { from: "a5", to: "b7" },
+      ],
+    }, rules);
+    const history: PublicMove[] = [{
+      ply: 1,
+      color: outcome.move.color,
+      from: outcome.move.from,
+      to: outcome.move.to,
+      promotion: null,
+      san: outcome.move.san,
+      continuation: outcome.continuationMoves.map((move) => ({
+        from: move.from,
+        to: move.to,
+        san: move.san,
+      })),
+      fenBefore: outcome.fenBefore,
+      fenAfter: outcome.fenAfter,
+      createdAt: "2026-07-25T00:00:00.000Z",
+    }];
+
+    expect(buildReplayFrames(history, initialFen)[1]).toMatchObject({
+      from: "b2",
+      to: "b7",
+      san: [outcome.move, ...outcome.continuationMoves]
+        .map((move) => move.san)
+        .join(" → "),
     });
   });
 

@@ -9,6 +9,7 @@ import {
 import { authorizeGameRequest } from "@/lib/game-auth";
 import { playPendingComputerTurn } from "@/lib/computer-turn";
 import { apiError, json } from "@/lib/http";
+import { markMagicWorldPlayed } from "@/lib/magic-worlds";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +64,7 @@ export async function GET(
     game = await waitForComputerTurnResolution(id, expectedVersion);
     if (!game) return apiError(404, "not_found", "Game not found");
   }
+  if (game.world_code) await markMagicWorldPlayed(id);
 
   const since = new URL(request.url).searchParams.get("sinceVersion");
   if (since !== null && Number(since) === game.version) {

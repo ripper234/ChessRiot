@@ -1,6 +1,6 @@
 import { Chess, type PieceSymbol, type Square } from "chess.js";
 import { analyzeGreatMove, type GreatMoveInsight } from "./chess-coach";
-import type { Color, GameSnapshot, Promotion, PublicMove } from "./game-types";
+import type { Color, GameSnapshot, MoveContinuation, Promotion, PublicMove } from "./game-types";
 
 export interface EffectPiece {
   color: Color;
@@ -14,7 +14,7 @@ export interface CapturedEffectPiece extends EffectPiece {
 export interface BoardEffect {
   id: string;
   ply: number;
-  leg: "first" | "second";
+  leg: "first" | "second" | `continuation-${number}`;
   from: string;
   to: string;
   capture: boolean;
@@ -48,9 +48,10 @@ function capturedSquare(from: string, to: string, enPassant: boolean): string {
 function applyEffectLeg(
   chess: Chess,
   stored: PublicMove,
-  leg: "first" | "second",
+  leg: BoardEffect["leg"],
   from: string,
   to: string,
+  san: string,
   promotion?: Promotion,
 ): BoardEffect {
   const beforeFen = chess.fen();
@@ -67,7 +68,6 @@ function applyEffectLeg(
       square: capturedSquare(from, to, move.isEnPassant()),
     }
     : null;
-  const san = leg === "second" ? stored.second?.san ?? stored.san : stored.san;
   return {
     id: `${stored.ply}:${leg}:${from}-${to}`,
     ply: stored.ply,
@@ -83,9 +83,9 @@ function applyEffectLeg(
     victim,
     special: {
       castle: san.startsWith("O-O"),
-      check: san.includes("+") || san.includes("#"),
+      check: san.includes("+") && !san.includes("#"),
       queenCapture: victim?.type === "q",
-      promotion: stored.promotion ?? null,
+      promotion: promotion ?? null,
       greatMove: null,
     },
   };
@@ -105,18 +105,24 @@ export function moveBoardEffects(
         "first",
         stored.from,
         stored.to,
+        stored.san,
         stored.promotion ?? undefined,
       ),
     ];
 
-    if (stored.second) {
-      const secondChess = new Chess(forceSameTurn(chess.fen(), stored.color));
+    const continuation: MoveContinuation[] = stored.continuation
+      ?? (stored.second ? [stored.second] : []);
+    let currentChess = chess;
+    for (const [index, leg] of continuation.entries()) {
+      currentChess = new Chess(forceSameTurn(currentChess.fen(), stored.color));
       effects.push(applyEffectLeg(
-        secondChess,
+        currentChess,
         stored,
-        "second",
-        stored.second.from,
-        stored.second.to,
+        index === 0 ? "second" : `continuation-${index + 2}`,
+        leg.from,
+        leg.to,
+        leg.san,
+        leg.promotion ?? undefined,
       ));
     }
 
@@ -127,10 +133,13 @@ export function moveBoardEffects(
         from: stored.from as Square,
         to: stored.to as Square,
         ...(stored.promotion ? { promotion: stored.promotion } : {}),
-        ...(stored.second ? { second: {
-          from: stored.second.from as Square,
-          to: stored.second.to as Square,
-        } } : {}),
+        ...(continuation.length > 0 ? {
+          continuation: continuation.map((leg) => ({
+            from: leg.from as Square,
+            to: leg.to as Square,
+            ...(leg.promotion ? { promotion: leg.promotion } : {}),
+          })),
+        } : {}),
         expectedVersion: 0,
         piece: finalEffect.attacker?.type ?? null,
       });
@@ -156,6 +165,8 @@ export function boardEffects(
     fallbackFen = move.fenAfter ?? moveEffects.at(-1)?.afterFen ?? fallbackFen;
   }
   const finalEffect = effects.at(-1);
-  if (finalEffect && next.check) finalEffect.special.check = true;
+  if (finalEffect && next.status !== "completed" && next.check) {
+    finalEffect.special.check = true;
+  }
   return effects;
 }

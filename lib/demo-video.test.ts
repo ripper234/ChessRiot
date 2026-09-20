@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { readFileSync, statSync } from "node:fs";
 import {
   authorizeDemoVideoRequest,
   DEMO_VIDEO_CAPTIONS,
@@ -59,13 +60,17 @@ describe("demo video contract", () => {
     expect(DEMO_VIDEO_DURATION_SECONDS).toBe(90);
   });
 
-  it("uses a story-first fixed narration without advertising inactive features", () => {
-    expect(DEMO_VIDEO_STORY_VERSION).toBe(2);
-    expect(DEMO_VIDEO_NARRATION).toContain("Ron and Omri love chess");
+  it("uses a story-first fixed narration and accurately fences early-access features", () => {
+    expect(DEMO_VIDEO_STORY_VERSION).toBe(5);
+    expect(DEMO_VIDEO_NARRATION).toContain("Ron and Omri want chess");
     expect(DEMO_VIDEO_NARRATION).toContain("One game, still moving");
-    expect(DEMO_VIDEO_NARRATION).not.toContain("Magic Rules");
+    expect(DEMO_VIDEO_NARRATION).toContain("Magic Rules stay Coming Soon for most players");
+    expect(DEMO_VIDEO_NARRATION).toContain("optional forty-five-second tutorial");
+    expect(DEMO_VIDEO_NARRATION).toContain("read-only recap and replay link");
     expect(DEMO_VIDEO_NARRATION).not.toContain("AI coach");
     expect(DEMO_VIDEO_NARRATION).not.toContain("rewards");
+    expect(DEMO_VIDEO_NARRATION).not.toContain("No account");
+    expect(DEMO_VIDEO_NARRATION).not.toContain("private seat link");
   });
 
   it("ships captions through the final frame", () => {
@@ -82,6 +87,28 @@ describe("demo video contract", () => {
       new URL("../public/demo-assets/captions.vtt", import.meta.url),
       "utf8",
     ).trim()).toBe(DEMO_VIDEO_CAPTIONS.trim());
+  });
+
+  it("keeps the archived v4 fallback internally consistent until v5 is regenerated", () => {
+    const asset = new URL("../public/demo-assets/chessriot-demo.mp4", import.meta.url);
+    const narration = new URL("../public/demo-assets/fallback-narration.mp3", import.meta.url);
+    const captions = new URL("../public/demo-assets/captions.vtt", import.meta.url);
+    const manifest = JSON.parse(readFileSync(
+      new URL("../public/demo-assets/manifest.json", import.meta.url),
+      "utf8",
+    )) as Record<string, unknown>;
+    const digest = (url: URL) => createHash("sha256").update(readFileSync(url)).digest("hex");
+    expect(manifest).toMatchObject({
+      storyVersion: 4,
+      durationSeconds: 90,
+      width: 1280,
+      height: 720,
+      mimeType: "video/mp4",
+      sizeBytes: statSync(asset).size,
+      sha256: digest(asset),
+      narrationSha256: digest(narration),
+      captionsSha256: digest(captions),
+    });
   });
 
   it("keeps browser uploads bounded", () => {

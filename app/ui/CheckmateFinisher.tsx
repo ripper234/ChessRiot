@@ -1,10 +1,18 @@
 import type { GameFinisher } from "@/lib/game-finishers";
 import { ChessPiece } from "./ChessPiece";
 
-export function CheckmateFinisher({ finisher }: { finisher: GameFinisher }) {
+export function CheckmateFinisher({
+  finisher,
+  locale = "en",
+}: {
+  finisher: GameFinisher;
+  locale?: "en" | "he";
+}) {
   return (
     <div
       className={`checkmate-finisher winner-${finisher.winner}`}
+      lang={locale}
+      dir={locale === "he" ? "rtl" : "ltr"}
       aria-hidden="true"
     >
       <div className="checkmate-duel" aria-hidden="true">
@@ -16,7 +24,7 @@ export function CheckmateFinisher({ finisher }: { finisher: GameFinisher }) {
           <ChessPiece type="k" color={finisher.loser} />
         </span>
       </div>
-      <strong>CHECKMATE</strong>
+      <strong>{locale === "he" ? "מט" : "CHECKMATE"}</strong>
     </div>
   );
 }

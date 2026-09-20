@@ -10,16 +10,12 @@ const pending: PendingGameCreate = {
 describe("gameCreatePayload", () => {
   it("includes Riot Bot difficulty only for Solo games", () => {
     expect(gameCreatePayload({
-      displayName: "Ron",
-      guestToken: "guest-token",
       mode: "solo",
       variantId: "pawn-riot",
       difficulty: 3,
       turnPaceDays: 5,
       pending,
     })).toEqual({
-      displayName: "Ron",
-      guestToken: "guest-token",
       mode: "solo",
       variantId: "pawn-riot",
       difficulty: 3,
@@ -29,19 +25,19 @@ describe("gameCreatePayload", () => {
 
   it("includes turn pace only for Multiplayer games", () => {
     expect(gameCreatePayload({
-      displayName: "Ron",
-      guestToken: "guest-token",
       mode: "multiplayer",
       variantId: "half-army",
       difficulty: 4,
       turnPaceDays: 5,
+      opponentUsername: "Omri81",
+      worldCode: "0xaf1234567890abcdef1234567890abcdef123456",
       pending,
     })).toEqual({
-      displayName: "Ron",
-      guestToken: "guest-token",
       mode: "multiplayer",
       variantId: "half-army",
       turnPaceDays: 5,
+      opponentUsername: "Omri81",
+      worldCode: "0xaf1234567890abcdef1234567890abcdef123456",
       ...pending,
     });
   });

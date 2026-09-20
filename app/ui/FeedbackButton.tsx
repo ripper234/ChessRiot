@@ -21,7 +21,7 @@ export function FeedbackForm() {
     const cleanTitle = title.trim();
     const missingTitle = requiredTextError(
       title,
-      "Add a short title before submitting feedback.",
+      "הוסיפו כותרת קצרה לפני שליחת המשוב.",
     );
     if (missingTitle) {
       setMessage("");
@@ -47,24 +47,32 @@ export function FeedbackForm() {
       setTitle("");
       setComment("");
       setTitleError("");
-      setMessage("Thanks. Your feedback is in the pool.");
+      setMessage("תודה. המשוב התקבל.");
     } catch {
-      setMessage("Could not submit yet. Please try again.");
+      setMessage("עדיין לא הצלחנו לשלוח. נסו שוב.");
     } finally {
       setBusy(false);
     }
   }
 
   return (
-        <form className="feedback-inline-form" onSubmit={submit} noValidate>
+        <form
+          className="feedback-inline-form"
+          lang="he"
+          dir="rtl"
+          translate="no"
+          onSubmit={submit}
+          noValidate
+        >
           <RequiredTextInput
             ref={titleInput}
             id="feedback-summary"
-            label="Title"
+            label="כותרת"
+            requiredLabel="חובה"
             value={title}
             error={titleError}
             maxLength={120}
-            placeholder="What should change?"
+            placeholder="מה כדאי לשנות?"
             disabled={busy}
             onChange={(event) => {
               const nextTitle = event.target.value;
@@ -72,20 +80,20 @@ export function FeedbackForm() {
               setTitleError((current) => clearRequiredTextError(nextTitle, current));
             }}
           />
-          <label htmlFor="feedback-comment">Comment <span>optional</span></label>
+          <label htmlFor="feedback-comment">הערה <span>לא חובה</span></label>
           <textarea
             id="feedback-comment"
             value={comment}
             maxLength={2_000}
             rows={4}
-            placeholder="A little more context"
+            placeholder="אפשר להוסיף עוד קצת הקשר"
             disabled={busy}
             onChange={(event) => setComment(event.target.value)}
           />
           {message ? <p className="feedback-message" role="status">{message}</p> : null}
           <div className="feedback-actions">
             <button className="primary-button" type="submit" disabled={busy}>
-              {busy ? "SENDING…" : "SEND FEEDBACK"}
+              {busy ? "שולחים…" : "שליחת משוב"}
             </button>
           </div>
           <a
@@ -94,7 +102,7 @@ export function FeedbackForm() {
             target="_blank"
             rel="noopener noreferrer"
           >
-            Advanced: view issues or send a pull request on GitHub ↗
+            למתקדמים: צפייה בבעיות או שליחת בקשת שינוי ב־<bdi dir="ltr">GitHub</bdi> ↗
           </a>
         </form>
   );

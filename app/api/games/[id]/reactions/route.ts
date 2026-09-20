@@ -3,18 +3,20 @@ import {
   isPostGameReactionKey,
   isReactionKey,
   postGameReactionWindowOpen,
+  POST_GAME_REACTION_WINDOW_MS,
   REACTION_DAILY_LIMIT,
   REACTION_RETENTION_DAYS,
   REACTION_STORAGE_LIMIT,
   type PublicReaction,
   type ReactionKey,
 } from "@/lib/game-reactions";
-import { expireMultiplayerTurn } from "@/lib/game-store";
+import { expireMultiplayerTurn, findGameById } from "@/lib/game-store";
 import { authorizeGameRequest } from "@/lib/game-auth";
 import { enforceAccountRateLimit } from "@/lib/accounts";
 import { apiError, json, readJson } from "@/lib/http";
 import type { Color } from "@/lib/game-types";
 import { isUuid, requestIsSameOrigin } from "@/lib/validation";
+import { gameOpponentIsBlocked } from "@/lib/social";
 
 export const dynamic = "force-dynamic";
 
@@ -69,8 +71,11 @@ export async function GET(
   if (game.game_mode !== "multiplayer") {
     return apiError(409, "reactions_not_available", "Reactions are for two-player games");
   }
-  if (game.status === "waiting" || !game.black_token_hash) {
+  if (game.status === "waiting" || !game.joined_at) {
     return apiError(409, "reactions_not_ready", "Player 2 must join before reactions are available");
+  }
+  if (await gameOpponentIsBlocked(id, authorization.account.id)) {
+    return json({ reactions: [] });
   }
 
   const result = await getDatabase()
@@ -125,8 +130,11 @@ export async function POST(
   if (game.game_mode !== "multiplayer") {
     return apiError(409, "reactions_not_available", "Reactions are for two-player games");
   }
-  if (game.status === "waiting" || !game.black_token_hash) {
+  if (game.status === "waiting" || !game.joined_at) {
     return apiError(409, "reactions_not_ready", "Player 2 must join before reactions are available");
+  }
+  if (await gameOpponentIsBlocked(id, authorization.account.id)) {
+    return apiError(403, "connection_blocked", "Reactions are unavailable for this player");
   }
   const repeated = await readReaction(id, requestId);
   if (repeated) {
@@ -168,7 +176,36 @@ export async function POST(
       AND (
         SELECT COUNT(*) FROM game_reactions
         WHERE game_id = ? AND sender_color = ? AND created_at > ?
-      ) < ?`)
+      ) < ?
+      AND EXISTS (
+        SELECT 1
+        FROM games
+        LEFT JOIN game_settings ON game_settings.game_id = games.id
+        WHERE games.id = ?
+          AND COALESCE(game_settings.game_mode, 'multiplayer') = 'multiplayer'
+          AND games.joined_at IS NOT NULL
+          AND (
+            (
+              games.status = 'active'
+              AND (
+                game_settings.turn_pace_days IS NULL
+                OR julianday('now') < julianday(
+                  games.updated_at,
+                  '+' || game_settings.turn_pace_days || ' days'
+                )
+              )
+            )
+            OR (
+              games.status = 'completed'
+              AND ? = 1
+              AND julianday(COALESCE(games.finished_at, games.updated_at)) <= julianday('now')
+              AND julianday('now') <= julianday(
+                COALESCE(games.finished_at, games.updated_at),
+                '+${POST_GAME_REACTION_WINDOW_MS / 60_000} minutes'
+              )
+            )
+          )
+      )`)
       .bind(
         reactionId,
         id,
@@ -183,6 +220,8 @@ export async function POST(
         color,
         dailyAfter,
         REACTION_DAILY_LIMIT,
+        id,
+        isPostGameReactionKey(key) ? 1 : 0,
       )
       .run();
     if ((inserted.meta.changes ?? 0) === 0) {
@@ -191,6 +230,21 @@ export async function POST(
         return json({ reaction: publicReaction(raced) });
       }
       if (raced) return apiError(409, "idempotency_conflict", "This request id was already used");
+      const reloaded = await findGameById(id);
+      const current = reloaded ? await expireMultiplayerTurn(reloaded) : null;
+      if (
+        current?.status === "completed"
+        && (
+          !postGameReactionWindowOpen(current.finished_at ?? current.updated_at)
+          || !isPostGameReactionKey(key)
+        )
+      ) {
+        return apiError(
+          409,
+          "reactions_closed",
+          "The post-game reaction window has closed",
+        );
+      }
       return apiError(429, "reaction_rate_limited", "Wait a moment before sending another reaction");
     }
   } catch {

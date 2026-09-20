@@ -8,6 +8,7 @@ import {
 } from "@/lib/themes";
 import { AppUpdates } from "./AppUpdates";
 import { AudioController } from "./AudioController";
+import { PerformanceMode } from "./PerformanceMode";
 
 export function RouteChrome() {
   useLayoutEffect(() => {
@@ -23,6 +24,7 @@ export function RouteChrome() {
 
   return (
     <>
+      <PerformanceMode />
       <AudioController />
       <AppUpdates />
     </>

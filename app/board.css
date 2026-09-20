@@ -193,19 +193,24 @@ html[data-theme] .game-shell .dark-square {
 }
 
 .game-shell .square.legal-target::after {
+  position: absolute;
+  z-index: 5;
   width: 22%;
   border: 0;
   border-radius: 50%;
   background: color-mix(in srgb, var(--teal-spark) 78%, #153336);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--teal-spark) 20%, transparent);
+  pointer-events: none;
 }
 
 .game-shell .square.capture-target::after {
   inset: 8%;
+  z-index: 5;
   border: clamp(3px, .45vw, 5px) solid color-mix(in srgb, var(--riot-pink) 84%, #ff725d);
   border-radius: 50%;
   background: transparent;
   box-shadow: none;
+  pointer-events: none;
 }
 
 .game-shell .square.drag-over::before {
@@ -362,12 +367,12 @@ html[data-theme] .game-shell .dark-square {
 .public-board > span > i {
   position: relative;
   z-index: 2;
-  width: 84%;
-  height: 84%;
+  width: 100%;
+  height: 100%;
   display: grid;
   place-items: center;
   font-style: normal;
-  will-change: transform;
+  will-change: transform, opacity;
 }
 .public-board > span:has(> i[class]) { overflow: visible; }
 .home-move-e2-e4 { animation: home-e2-e4 8s cubic-bezier(.2,.75,.2,1) infinite; }
@@ -376,20 +381,32 @@ html[data-theme] .game-shell .dark-square {
 .home-move-b8-c6 { animation: home-b8-c6 8s cubic-bezier(.2,.75,.2,1) infinite; }
 
 @keyframes home-e2-e4 {
-  0%, 8%, 94%, 100% { transform: translate(0,0); }
-  14%, 86% { transform: translate(0,-200%); }
+  0%, 8% { transform: translate(0,0); opacity: 1; }
+  14%, 86% { transform: translate(0,-200%); opacity: 1; }
+  87% { transform: translate(0,-200%); opacity: 0; }
+  87.01%, 94% { transform: translate(0,0); opacity: 0; }
+  96%, 100% { transform: translate(0,0); opacity: 1; }
 }
 @keyframes home-e7-e5 {
-  0%, 22%, 94%, 100% { transform: translate(0,0); }
-  28%, 86% { transform: translate(0,200%); }
+  0%, 22% { transform: translate(0,0); opacity: 1; }
+  28%, 86% { transform: translate(0,200%); opacity: 1; }
+  87% { transform: translate(0,200%); opacity: 0; }
+  87.01%, 94% { transform: translate(0,0); opacity: 0; }
+  96%, 100% { transform: translate(0,0); opacity: 1; }
 }
 @keyframes home-g1-f3 {
-  0%, 36%, 94%, 100% { transform: translate(0,0); }
-  43%, 86% { transform: translate(-100%,-200%); }
+  0%, 36% { transform: translate(0,0); opacity: 1; }
+  43%, 86% { transform: translate(-100%,-200%); opacity: 1; }
+  87% { transform: translate(-100%,-200%); opacity: 0; }
+  87.01%, 94% { transform: translate(0,0); opacity: 0; }
+  96%, 100% { transform: translate(0,0); opacity: 1; }
 }
 @keyframes home-b8-c6 {
-  0%, 51%, 94%, 100% { transform: translate(0,0); }
-  58%, 86% { transform: translate(100%,200%); }
+  0%, 51% { transform: translate(0,0); opacity: 1; }
+  58%, 86% { transform: translate(100%,200%); opacity: 1; }
+  87% { transform: translate(100%,200%); opacity: 0; }
+  87.01%, 94% { transform: translate(0,0); opacity: 0; }
+  96%, 100% { transform: translate(0,0); opacity: 1; }
 }
 
 .public-board > span:nth-child(16n + 2),
@@ -403,7 +420,7 @@ html[data-theme] .game-shell .dark-square {
   background: var(--board-dark, #527681);
 }
 
-.public-board .chess-piece-svg { width: 100%; height: 100%; }
+.public-board .chess-piece-svg { width: 84%; height: 84%; }
 .public-board .piece-w { --piece-outline: var(--theme-piece-white-stroke, #24373d); color: var(--theme-piece-white, #f8f3e6); }
 .public-board .piece-b { --piece-outline: var(--theme-piece-black-stroke, #d9e6e3); color: var(--theme-piece-black, #17262c); }
 

@@ -42,6 +42,9 @@ function snapshot(moves: PublicMove[]): GameSnapshot {
     fen,
     turn: new Chess(fen).turn(),
     plyCount: moves.length,
+    elapsedMs: { w: 0, b: 0 },
+    turnStartedAt: "2026-07-24T00:00:00.000Z",
+    clockAsOf: "2026-07-24T00:00:00.000Z",
     players: { white: { name: "White" }, black: { name: "Black" } },
     you: { color: "w", name: "White" },
     check: false,
@@ -180,6 +183,46 @@ describe("boardEffects", () => {
     }, fenBefore);
 
     expect(effects.map((effect) => effect.special.check)).toEqual([false, true]);
+  });
+
+  it("emits distinct effects for every leg of a three-move Magic capture", () => {
+    const fenBefore = "7k/8/p7/8/p7/8/p7/R6K w - - 0 1";
+    const effects = moveBoardEffects({
+      ply: 1,
+      color: "w",
+      from: "a1",
+      to: "a2",
+      promotion: null,
+      san: "Rxa2",
+      continuation: [
+        { from: "a2", to: "a4", san: "Rxa4" },
+        { from: "a4", to: "a6", san: "Rxa6+" },
+      ],
+      fenBefore,
+      createdAt: "2026-07-24T00:00:00.000Z",
+    }, fenBefore);
+
+    expect(effects.map((effect) => ({
+      id: effect.id,
+      victim: effect.victim,
+      check: effect.special.check,
+    }))).toEqual([
+      {
+        id: "1:first:a1-a2",
+        victim: { color: "b", type: "p", square: "a2" },
+        check: false,
+      },
+      {
+        id: "1:second:a2-a4",
+        victim: { color: "b", type: "p", square: "a4" },
+        check: false,
+      },
+      {
+        id: "1:continuation-3:a4-a6",
+        victim: { color: "b", type: "p", square: "a6" },
+        check: true,
+      },
+    ]);
   });
 
   it("skips presentation safely when stored history cannot be reconstructed", () => {

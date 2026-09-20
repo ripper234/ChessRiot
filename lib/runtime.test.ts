@@ -3,6 +3,8 @@ import {
   applicationOrigin,
   configuredAppOrigin,
   controlOrigin,
+  googleClientId,
+  openAiApiKey,
   runtimeReadiness,
 } from "./runtime";
 
@@ -12,6 +14,15 @@ afterEach(() => {
   globalThis.__CHESSRIOT_CONTROL_ORIGIN__ = undefined;
   globalThis.__CHESSRIOT_ACCOUNT_ID_SECRET__ = undefined;
   globalThis.__CHESSRIOT_OBSERVABILITY_HASH_SECRET__ = undefined;
+  globalThis.__CHESSRIOT_OPENAI_API_KEY__ = undefined;
+  globalThis.__CHESSRIOT_OPENAI_API_KEY_DEV__ = undefined;
+  globalThis.__CHESSRIOT_OPENAI_API_KEY_PROD__ = undefined;
+  globalThis.__CHESSRIOT_GOOGLE_CLIENT_ID_DEV__ = undefined;
+  globalThis.__CHESSRIOT_GOOGLE_CLIENT_ID_PROD__ = undefined;
+  globalThis.__CHESSRIOT_GOOGLE_CLIENT_SECRET_DEV__ = undefined;
+  globalThis.__CHESSRIOT_GOOGLE_CLIENT_SECRET_PROD__ = undefined;
+  globalThis.__CHESSRIOT_GOOGLE_AUTH_SESSION_SECRET_DEV__ = undefined;
+  globalThis.__CHESSRIOT_GOOGLE_AUTH_SESSION_SECRET_PROD__ = undefined;
 });
 
 describe("runtime origins", () => {
@@ -46,5 +57,25 @@ describe("runtime origins", () => {
 
     expect(applicationOrigin(new Request("https://legacy.example/app")))
       .toBe("https://dev.chessriot.gg");
+  });
+
+  it("keeps hosted OpenAI and Google credentials isolated by environment", () => {
+    globalThis.__CHESSRIOT_OPENAI_API_KEY__ = "legacy-key";
+    globalThis.__CHESSRIOT_OPENAI_API_KEY_DEV__ = "dev-key";
+    globalThis.__CHESSRIOT_OPENAI_API_KEY_PROD__ = "prod-key";
+    globalThis.__CHESSRIOT_GOOGLE_CLIENT_ID_DEV__ = "dev-client";
+    globalThis.__CHESSRIOT_GOOGLE_CLIENT_ID_PROD__ = "prod-client";
+
+    globalThis.__CHESSRIOT_ENV__ = "development";
+    expect(openAiApiKey()).toBe("dev-key");
+    expect(googleClientId()).toBe("dev-client");
+
+    globalThis.__CHESSRIOT_ENV__ = "production";
+    expect(openAiApiKey()).toBe("prod-key");
+    expect(googleClientId()).toBe("prod-client");
+
+    globalThis.__CHESSRIOT_ENV__ = "local";
+    expect(openAiApiKey()).toBe("legacy-key");
+    expect(googleClientId()).toBeNull();
   });
 });

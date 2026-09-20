@@ -3,6 +3,14 @@ declare global {
   var __CHESSRIOT_APP_ORIGIN__: string | undefined;
   var __CHESSRIOT_DEMO_BUCKET__: R2Bucket | undefined;
   var __CHESSRIOT_OPENAI_API_KEY__: string | undefined;
+  var __CHESSRIOT_OPENAI_API_KEY_DEV__: string | undefined;
+  var __CHESSRIOT_OPENAI_API_KEY_PROD__: string | undefined;
+  var __CHESSRIOT_GOOGLE_CLIENT_ID_DEV__: string | undefined;
+  var __CHESSRIOT_GOOGLE_CLIENT_ID_PROD__: string | undefined;
+  var __CHESSRIOT_GOOGLE_CLIENT_SECRET_DEV__: string | undefined;
+  var __CHESSRIOT_GOOGLE_CLIENT_SECRET_PROD__: string | undefined;
+  var __CHESSRIOT_GOOGLE_AUTH_SESSION_SECRET_DEV__: string | undefined;
+  var __CHESSRIOT_GOOGLE_AUTH_SESSION_SECRET_PROD__: string | undefined;
   var __CHESSRIOT_OPS_READ_SECRET__: string | undefined;
   var __CHESSRIOT_OBSERVABILITY_HASH_SECRET__: string | undefined;
   var __CHESSRIOT_CONTROL_ORIGIN__: string | undefined;
@@ -75,6 +83,20 @@ export function runtimeReadiness() {
       operations: (opsReadSecret()?.length ?? 0) >= 32,
       push: Boolean(vapidPublicKey() && vapidPrivateJwk() && vapidSubject()),
       demoNarration: Boolean(demoVideoBucket() && openAiApiKey() && videoRegenSharedSecret()),
+      magicWorlds: true,
+      magicCompilation: Boolean(openAiApiKey()),
+      googleLogin: Boolean(
+        googleClientId()
+        && googleClientSecret()
+        && (sessionSigningSecret()?.length ?? 0) >= 32
+        && (accountIdSecret()?.length ?? 0) >= 32
+        && (
+          (appEnvironment() === "development"
+            && configuredAppOrigin() === "https://dev.chessriot.gg")
+          || (appEnvironment() === "production"
+            && configuredAppOrigin() === "https://chessriot.gg")
+        )
+      ),
     },
   };
 }
@@ -84,7 +106,46 @@ export function demoVideoBucket(): R2Bucket | null {
 }
 
 export function openAiApiKey(): string | null {
+  if (appEnvironment() === "development") {
+    return globalThis.__CHESSRIOT_OPENAI_API_KEY_DEV__?.trim() || null;
+  }
+  if (appEnvironment() === "production") {
+    return globalThis.__CHESSRIOT_OPENAI_API_KEY_PROD__?.trim() || null;
+  }
   return globalThis.__CHESSRIOT_OPENAI_API_KEY__?.trim() || null;
+}
+
+export function googleClientId(): string | null {
+  if (appEnvironment() === "development") {
+    return globalThis.__CHESSRIOT_GOOGLE_CLIENT_ID_DEV__?.trim() || null;
+  }
+  if (appEnvironment() === "production") {
+    return globalThis.__CHESSRIOT_GOOGLE_CLIENT_ID_PROD__?.trim() || null;
+  }
+  return null;
+}
+
+export function googleClientSecret(): string | null {
+  if (appEnvironment() === "development") {
+    return globalThis.__CHESSRIOT_GOOGLE_CLIENT_SECRET_DEV__?.trim() || null;
+  }
+  if (appEnvironment() === "production") {
+    return globalThis.__CHESSRIOT_GOOGLE_CLIENT_SECRET_PROD__?.trim() || null;
+  }
+  return null;
+}
+
+export function sessionSigningSecret(): string | null {
+  if (appEnvironment() === "development") {
+    return globalThis.__CHESSRIOT_GOOGLE_AUTH_SESSION_SECRET_DEV__?.trim() || null;
+  }
+  if (appEnvironment() === "production") {
+    return globalThis.__CHESSRIOT_GOOGLE_AUTH_SESSION_SECRET_PROD__?.trim() || null;
+  }
+  if (appEnvironment() === "test") {
+    return globalThis.__CHESSRIOT_GOOGLE_AUTH_SESSION_SECRET_DEV__?.trim() || null;
+  }
+  return null;
 }
 
 export function opsReadSecret(): string | null {

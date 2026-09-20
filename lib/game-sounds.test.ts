@@ -23,6 +23,9 @@ function snapshot(overrides: Partial<GameSnapshot> = {}): GameSnapshot {
     check: false,
     claimableDraws: [],
     outcome: null,
+    elapsedMs: { w: 0, b: 0 },
+    turnStartedAt: "2026-07-23T00:00:00.000Z",
+    clockAsOf: "2026-07-23T00:00:00.000Z",
     moves: [{
       ply: 1,
       color: "w",
@@ -121,6 +124,11 @@ describe("classifyGameSound", () => {
     for (let index = 1; index < timeline.length; index += 1) {
       expect(timeline[index].delay).toBeGreaterThan(timeline[index - 1].delay);
     }
+    expect(timeline.at(-1)?.delay).toBeGreaterThanOrEqual(1.5);
+  });
+
+  it("plays standalone game results immediately", () => {
+    expect(gameSoundTimeline(["draw"])).toEqual([{ sound: "draw", delay: 0 }]);
   });
 
   it("classifies game endings from the current player's perspective", () => {
@@ -148,7 +156,7 @@ describe("classifyGameSound", () => {
     }))).toEqual(["castle", "move"]);
   });
 
-  it("plays promotion and result sounds for a game-ending promotion", () => {
+  it("plays promotion and result sounds without a redundant check cue on checkmate", () => {
     const previous = snapshot({ version: 3, plyCount: 0, moves: [] });
     expect(classifyGameSounds(previous, snapshot({
       version: 4,
@@ -156,7 +164,7 @@ describe("classifyGameSound", () => {
       status: "completed",
       outcome: { winner: "w", reason: "checkmate" },
       moves: [{ ...snapshot().moves[0], promotion: "q", san: "e8=Q#" }],
-    }))).toEqual(["promotion_q", "check", "victory"]);
+    }))).toEqual(["promotion_q", "victory"]);
   });
 
   it("plays terminal sounds for claims and resignations that add no move", () => {

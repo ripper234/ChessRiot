@@ -11,6 +11,11 @@ export interface MoveIntent {
     from: Square;
     to: Square;
   };
+  continuation?: Array<{
+    from: Square;
+    to: Square;
+    promotion?: Promotion;
+  }>;
   expectedVersion: number;
   piece: PieceSymbol | null;
 }
@@ -32,6 +37,20 @@ const PROMOTION_NAMES: Record<Promotion, string> = {
   r: "rook",
   b: "bishop",
   n: "knight",
+};
+const HEBREW_PIECE_NAMES: Record<PieceSymbol, string> = {
+  p: "חייל",
+  n: "פרש",
+  b: "רץ",
+  r: "צריח",
+  q: "מלכה",
+  k: "מלך",
+};
+const HEBREW_PROMOTION_NAMES: Record<Promotion, string> = {
+  q: "מלכה",
+  r: "צריח",
+  b: "רץ",
+  n: "פרש",
 };
 
 export function readMoveConfirmationPreference(
@@ -59,14 +78,66 @@ export function writeMoveConfirmationPreference(
   }
 }
 
-export function describeMoveIntent(intent: MoveIntent): string {
-  const piece = intent.piece ? PIECE_NAMES[intent.piece] : "piece";
-  const route = [intent.from, intent.to, ...(intent.second ? [intent.second.to] : [])]
+export function describeMoveIntent(
+  intent: MoveIntent,
+  locale: "en" | "he" = "en",
+): string {
+  return describeMoveIntentParts(intent, locale).map((part) => part.text).join("");
+}
+
+export interface MoveIntentDescriptionPart {
+  text: string;
+  dir?: "ltr";
+}
+
+export function describeMoveIntentParts(
+  intent: MoveIntent,
+  locale: "en" | "he" = "en",
+): MoveIntentDescriptionPart[] {
+  const piece = intent.piece
+    ? locale === "he" ? HEBREW_PIECE_NAMES[intent.piece] : PIECE_NAMES[intent.piece]
+    : locale === "he" ? "כלי" : "piece";
+  const continuation: Array<{
+    from: Square;
+    to: Square;
+    promotion?: Promotion;
+  }> = intent.continuation
+    ?? (intent.second ? [intent.second] : []);
+  const route = [intent.from, intent.to, ...continuation.map((leg) => leg.to)]
     .join(" → ");
-  const promotion = intent.promotion
-    ? ` and promote to ${PROMOTION_NAMES[intent.promotion]}`
-    : "";
-  return `Move ${piece} ${route}${promotion}?`;
+  const continuationPromotion = continuation.find((leg) => leg.promotion);
+  if (locale === "he") {
+    const parts: MoveIntentDescriptionPart[] = [
+      { text: `להזיז ${piece}: ` },
+      { text: route, dir: "ltr" },
+    ];
+    if (intent.promotion) {
+      parts.push({ text: ` ולהכתיר ל${HEBREW_PROMOTION_NAMES[intent.promotion]}` });
+    } else if (continuationPromotion?.promotion) {
+      parts.push(
+        { text: " ולהכתיר ב־" },
+        { text: continuationPromotion.to, dir: "ltr" },
+        { text: ` ל${HEBREW_PROMOTION_NAMES[continuationPromotion.promotion]}` },
+      );
+    }
+    parts.push({ text: "?" });
+    return parts;
+  }
+  const parts: MoveIntentDescriptionPart[] = [
+    { text: `Move ${piece} ` },
+    { text: route, dir: "ltr" },
+  ];
+  if (intent.promotion) {
+    parts.push({ text: ` and promote to ${PROMOTION_NAMES[intent.promotion]}` });
+  } else if (continuationPromotion?.promotion) {
+    parts.push(
+      { text: " and promote on " },
+      { text: continuationPromotion.to, dir: "ltr" },
+      { text: ` to ${PROMOTION_NAMES[continuationPromotion.promotion]}` },
+    );
+  }
+  parts.push({ text: "?" });
+  return parts;
 }
 
 export function moveIntentStillValid(

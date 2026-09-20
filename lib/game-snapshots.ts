@@ -1,5 +1,6 @@
 import type { Square } from "chess.js";
 import { chooseComputerMove, seededComputerRandom } from "./computer-player";
+import { turnDeadlineAt } from "./game-deadlines";
 import { applyCandidate, type CandidateMove } from "./game-rules";
 import type { GameSnapshot, Promotion } from "./game-types";
 
@@ -32,6 +33,11 @@ function appendOptimisticMove(
       outcome: outcome.termination
         ? { winner: outcome.winner, reason: outcome.termination }
         : null,
+      deadlineAt: outcome.completed
+        ? null
+        : current.mode === "multiplayer" && current.turnPaceDays
+          ? turnDeadlineAt(createdAt, current.turnPaceDays)
+          : current.deadlineAt,
       moves: [
         ...current.moves,
         {
@@ -41,6 +47,12 @@ function appendOptimisticMove(
           to: outcome.move.to,
           promotion: candidate.promotion ?? null,
           san: outcome.move.san,
+          continuation: outcome.continuationMoves.map((move) => ({
+            from: move.from,
+            to: move.to,
+            promotion: move.promotion as Promotion | undefined,
+            san: move.san,
+          })),
           second: outcome.secondMove
             ? {
               from: outcome.secondMove.from,
@@ -67,6 +79,11 @@ export function optimisticMoveSnapshot(
   promotion?: Promotion,
   options: {
     second?: { from: Square; to: Square };
+    continuation?: Array<{
+      from: Square;
+      to: Square;
+      promotion?: Promotion;
+    }>;
     createdAt?: string;
   } = {},
 ): GameSnapshot | null {
@@ -78,6 +95,7 @@ export function optimisticMoveSnapshot(
       to,
       ...(promotion ? { promotion } : {}),
       ...(options.second ? { second: options.second } : {}),
+      ...(options.continuation ? { continuation: options.continuation } : {}),
     },
     options.createdAt ?? new Date().toISOString(),
   );
@@ -91,6 +109,11 @@ export function optimisticSoloTurnSnapshot(
   promotion?: Promotion,
   options: {
     second?: { from: Square; to: Square };
+    continuation?: Array<{
+      from: Square;
+      to: Square;
+      promotion?: Promotion;
+    }>;
     createdAt?: string;
   } = {},
 ): GameSnapshot | null {
@@ -102,6 +125,7 @@ export function optimisticSoloTurnSnapshot(
     promotion,
     {
       ...(options.second ? { second: options.second } : {}),
+      ...(options.continuation ? { continuation: options.continuation } : {}),
       createdAt,
     },
   );

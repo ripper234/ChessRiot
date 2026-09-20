@@ -7,13 +7,30 @@
 - Every changed deployment must use a new, higher SemVer version. Run `npm run release:patch` by default, or `release:minor` for a coherent new user capability, before the deployment checkpoint. Never reuse or decrease a deployed version.
 - Run lint, typecheck, unit tests, and relevant end-to-end tests.
 - Never commit secrets.
-- Play must never require or advertise sign-in. New games use private seat
-  capabilities; existing verified account memberships remain a compatible
-  authorization path.
+- A valid Google session and completed username onboarding are prerequisites
+  for creating, joining, opening, or playing a game. Public marketing, demo,
+  changelog, Privacy, and Terms routes remain available without a session.
 - Do not add a CAPTCHA or separate human-check gate without an explicit product decision and a tested branch preview.
-- Preserve game-specific membership plus private-seat authorization. A valid
-  token may act through an existing membership, but no identity may own both
-  seats.
+- Require each new account to claim one immutable, globally unique username.
+  Usernames are 3–20 grapheme characters, begin with a Unicode letter, use
+  letters and numbers from any writing system plus internal ASCII dots,
+  hyphens, or underscores, and pass reserved-name and profanity checks.
+  Canonical uniqueness uses the shared Unicode normalizer; never add an ASCII
+  regex, code-unit length gate, or ad-hoc lowercase comparison.
+- Preserve game-specific membership plus private invitation and seat tokens,
+  but never treat a token as a substitute for account authentication. A valid
+  Google account may claim only the exact offered seat, and no account may own
+  both seats.
+- Keep friend requests username-based and account-scoped. Only accepted friends
+  may be selected for a direct challenge; link invitations remain available to
+  another registered player.
+- Keep Magic Rules disabled by default. Only an owner-managed, server-side
+  account whitelist may enable new Magic game creation. Non-whitelisted users
+  see Coming Soon, while participants may continue any already-created game.
+- Keep Google OAuth on the canonical custom hostname with exact per-environment
+  callback URLs and separate client, client-secret, and session-secret values.
+  Development keeps its Sites user allowlist; never make it public merely to
+  accommodate the browser callback.
 - Keep identity-scoped write limits and the per-game/version Riot Bot lease on all expensive or mutating paths. Volumetric DDoS protection remains an edge responsibility.
 - Prefer small, reviewable milestones over one giant implementation.
 - GitHub is the canonical source. A deployable release must correspond to an immutable Git commit and release branch or tag.

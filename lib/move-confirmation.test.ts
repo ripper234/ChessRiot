@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   describeMoveIntent,
+  describeMoveIntentParts,
   MOVE_CONFIRMATION_PREFERENCE_KEY,
   moveIntentStillValid,
   readMoveConfirmationPreference,
@@ -74,6 +75,29 @@ describe("move confirmation intent", () => {
       second: { from: "f3", to: "e5" },
       piece: "n",
     })).toBe("Move knight g1 → f3 → e5?");
+    expect(describeMoveIntent({
+      ...MOVE,
+      from: "a6",
+      to: "a7",
+      continuation: [
+        { from: "a7", to: "a8", promotion: "n" },
+        { from: "a8", to: "b6" },
+      ],
+    })).toBe(
+      "Move pawn a6 → a7 → a8 → b6 and promote on a8 to knight?",
+    );
+    expect(describeMoveIntent(MOVE, "he")).toBe("להזיז חייל: e2 → e4?");
+    expect(describeMoveIntentParts(MOVE, "he")).toEqual([
+      { text: "להזיז חייל: " },
+      { text: "e2 → e4", dir: "ltr" },
+      { text: "?" },
+    ]);
+    expect(describeMoveIntentParts({
+      ...MOVE,
+      from: "a6",
+      to: "a7",
+      continuation: [{ from: "a7", to: "a8", promotion: "n" }],
+    }, "he")).toContainEqual({ text: "a8", dir: "ltr" });
   });
 
   it("rejects a confirmation after the authoritative position changes", () => {

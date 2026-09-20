@@ -30,6 +30,10 @@ parallel automatic Production deployment from repository pushes.
 - Target-local builds may inject only the target Site id, declared bindings,
   public configuration, and secrets. They may not edit application source.
 - Preserve each environment’s isolated data and runtime configuration.
+- Keep player-visible behavior identical across Development and Production for
+  the promoted version. Environment-local Google credentials, Sites access,
+  account data, and Magic whitelist membership are configuration or data, not
+  permission for environment-specific source edits.
 - Keep arbitrary-version deploys and rollbacks behind the advanced manual flow.
 
 ## Two development lanes

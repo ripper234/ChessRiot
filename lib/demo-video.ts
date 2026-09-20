@@ -11,96 +11,100 @@ export const DEMO_VIDEO_MAX_BYTES = 45 * 1024 * 1024;
 export const DEMO_VIDEO_FALLBACK_MEDIA = "/demo-assets/chessriot-demo.mp4";
 export const DEMO_VIDEO_TTS_MODEL = "gpt-4o-mini-tts-2025-12-15";
 export const DEMO_VIDEO_SHA256_PATTERN = /^[A-Za-z0-9_-]{43}$/;
-export const DEMO_VIDEO_STORY_VERSION = 2;
+export const DEMO_VIDEO_STORY_VERSION = 5;
 
-export const DEMO_VIDEO_NARRATION = `Ron and Omri love chess. The problem is finding an hour when both are free. ChessRiot turns spare minutes into a game that keeps moving.
+export const DEMO_VIDEO_NARRATION = `Ron and Omri want chess that fits real life. ChessRiot begins with a clear look at the product before login. To play, Ron signs in with Google. There is no guest mode. He claims one permanent username. If he wants a quick tour, an optional forty-five-second tutorial is waiting in Settings.
 
-Ron opens the browser, enters his name, and starts. No account. No CAPTCHA. Solo is ready for a warm-up. He chooses one of five Riot Bot levels and moves by drag, tap, click, or keyboard.
+His signed-in home is built for action: continue a game, answer a friend request, or see whose turn it is. Solo has five Riot Bot levels. Each skin changes the board, pieces, soundscape, and richer music without losing its identity.
 
-But their game should feel like theirs. He opens Themes and transforms the board into Blockfield.
+Ron finds Omri by username. After Omri accepts, Ron chooses the variant and pace, then sends a direct challenge. Activity keeps the request, challenge, turns, and result in one inbox.
 
-Now the real match. Ron switches to Multiplayer, chooses three days per move, and creates a game. ChessRiot gives him one private invitation for Omri.
+On the board, live clocks, status, deadline, and essential controls fit one screen. Move by drag, tap, click, or keyboard. Every legal move is checked and saved. Clear capture, great-move, checkmate, and result moments let the game breathe.
 
-It waits safely until Omri is ready. When Omri claims Black, Ron has White, so he moves first. Every move is saved immediately.
+Ron closes the browser. Later, both players return to the exact position. When the game ends, either player can share a read-only recap and replay link. History keeps every game. Privacy and Data lets each player download their data, manage blocks, or delete the account after Google verification.
 
-Ron closes the browser. Later, each player returns through a private seat link, moves, and leaves. The same saved board and full history are waiting whenever either comes back. Step back, replay the position, then return live.
+Magic Rules stay Coming Soon for most players, with server-controlled access for invited testers.
 
-No scheduling. No setup. Just real chess that survives real life.
-
-ChessRiot. Two people. One game, still moving.`;
+Real chess that survives real life. ChessRiot. One game, still moving.`;
 
 export const DEMO_VIDEO_CAPTIONS = `WEBVTT
 
-00:00:00.500 --> 00:00:05.500
-Ron and Omri love chess.
+00:00:00.500 --> 00:00:05.000
+Ron and Omri want chess
+that fits real life.
 
-00:00:05.500 --> 00:00:10.000
-The problem is finding an hour
-when both are free.
+00:00:05.000 --> 00:00:09.500
+See the product clearly
+before login.
 
-00:00:10.000 --> 00:00:14.500
-ChessRiot turns spare minutes
-into a game that keeps moving.
+00:00:09.500 --> 00:00:14.000
+Sign in with Google to play.
+There is no guest mode.
 
-00:00:14.500 --> 00:00:19.000
-Ron enters his name and starts.
-No account. No CAPTCHA.
+00:00:14.000 --> 00:00:19.000
+Claim one permanent username.
 
-00:00:19.000 --> 00:00:24.500
-Solo is ready for a warm-up.
-Choose one of five Riot Bot levels.
+00:00:19.000 --> 00:00:24.000
+An optional 45-second tutorial
+waits in Settings.
 
-00:00:24.500 --> 00:00:30.000
+00:00:24.000 --> 00:00:29.000
+Continue games, answer requests,
+and see whose turn it is.
+
+00:00:29.000 --> 00:00:33.500
+Solo has five Riot Bot levels.
+
+00:00:33.500 --> 00:00:38.500
+Every skin keeps its own board,
+pieces, effects, and richer music.
+
+00:00:38.500 --> 00:00:43.500
+Find friends by username.
+
+00:00:43.500 --> 00:00:48.500
+Choose the variant and pace,
+then send a direct challenge.
+
+00:00:48.500 --> 00:00:53.500
+Activity keeps requests, challenges,
+turns, and results together.
+
+00:00:53.500 --> 00:00:59.000
+Live clocks, status, deadline,
+and controls fit one screen.
+
+00:00:59.000 --> 00:01:03.500
 Move by drag, tap, click,
 or keyboard.
 
-00:00:30.000 --> 00:00:34.500
-Their game should feel like theirs.
+00:01:03.500 --> 00:01:08.000
+Every legal move is checked
+and saved.
 
-00:00:34.500 --> 00:00:39.000
-Open Themes and transform
-the board into Blockfield.
+00:01:08.000 --> 00:01:13.000
+Capture, great-move, checkmate,
+and result moments can breathe.
 
-00:00:39.000 --> 00:00:44.500
-Now the real match.
-Switch to Multiplayer.
-
-00:00:44.500 --> 00:00:51.000
-Choose three days per move
-and create the game.
-
-00:00:51.000 --> 00:00:56.500
-ChessRiot creates one private
-invitation for Omri.
-
-00:00:56.500 --> 00:01:02.500
-It waits safely for Omri.
-When he claims Black…
-
-00:01:02.500 --> 00:01:07.000
-Ron has White, so he moves first.
-Every move is saved.
-
-00:01:07.000 --> 00:01:12.000
-Ron closes the browser.
+00:01:13.000 --> 00:01:17.000
+Close the browser.
 Nothing is lost.
 
-00:01:12.000 --> 00:01:18.000
-Each player can return through
-a private seat link.
+00:01:17.000 --> 00:01:22.000
+Both players return
+to the exact position.
 
-00:01:18.000 --> 00:01:23.500
-The same saved board and
-full history are waiting.
+00:01:22.000 --> 00:01:26.000
+Share a read-only recap and replay.
 
-00:01:23.500 --> 00:01:27.000
-Step back, replay,
-then return live.
+00:01:26.000 --> 00:01:28.500
+Download data, manage blocks,
+or delete after Google verification.
 
-00:01:27.000 --> 00:01:29.000
-Real chess that survives real life.
+00:01:28.500 --> 00:01:29.500
+Magic stays gated for invited testers.
 
-00:01:29.000 --> 00:01:29.900
+00:01:29.500 --> 00:01:29.900
 One game, still moving.
 `;
 
@@ -405,7 +409,7 @@ export async function requestDemoVideoNarration(): Promise<Response> {
       voice: "cedar",
       input: DEMO_VIDEO_NARRATION,
       instructions:
-        "Warm, playful, story-first narration. Speak clearly at about 125 words per minute with short pauses between paragraphs. Let the opening problem feel human and the ending feel earned. Keep the energy grounded, not salesy.",
+        "Warm, playful, story-first narration. Speak clearly at about 150 words per minute with brief pauses between paragraphs. Finish every word within 89 seconds. Let the opening problem feel human and the ending feel earned. Keep the energy grounded, not salesy.",
       response_format: "mp3",
     }),
   });

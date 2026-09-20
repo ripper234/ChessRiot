@@ -2,30 +2,25 @@ import Link from "next/link";
 import { WHATSAPP_COMMUNITY_URL } from "@/lib/external-links";
 import { AnimatedPublicBoard } from "./AnimatedPublicBoard";
 import { Brand } from "./Brand";
+import { PublicAnalytics } from "./PublicAnalytics";
 
 export function PublicHome() {
   return (
     <main className="public-shell">
+      <PublicAnalytics />
       <header className="topbar public-topbar">
         <Brand />
-        <nav className="public-nav" aria-label="ChessRiot">
-          <Link className="public-nav-link" href="/demo">90-SEC DEMO</Link>
-          <Link className="public-nav-link" href="/privacy">PRIVACY</Link>
-        </nav>
       </header>
       <section className="public-hero">
         <div className="public-copy">
           <p className="public-eyebrow"><span /> CHESS, BUT ALIVE</p>
           <h1>REAL CHESS.<br /><em>TOTAL PLAY.</em></h1>
           <p>
-            Play Riot Bot or challenge someone you know. Magic Rules are
-            brewing on a separate experimental branch.
+            Play Riot Bot or challenge a friend. Every match is saved to your
+            account, while Magic Rules open early for invited testers.
           </p>
           <Link className="public-play-button" href="/app">
             PLAY CHESS <span aria-hidden="true">→</span>
-          </Link>
-          <Link className="public-demo-link" href="/demo">
-            WATCH THE 90-SECOND DEMO <span aria-hidden="true">▶</span>
           </Link>
           <a
             className="public-community-link"
@@ -38,7 +33,7 @@ export function PublicHome() {
           </a>
           <ul aria-label="ChessRiot highlights">
             <li>Solo or multiplayer</li>
-            <li>Three-day turns</li>
+            <li>One-, three-, or five-day turns</li>
             <li>Magic Rules coming soon</li>
           </ul>
         </div>

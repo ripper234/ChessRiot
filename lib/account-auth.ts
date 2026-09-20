@@ -2,6 +2,7 @@ import {
   accountIdSecret,
   appEnvironment,
 } from "./runtime";
+import { googleSessionAccountFromHeaders } from "./google-auth";
 
 export interface PlayerAccount {
   id: string;
@@ -87,7 +88,7 @@ function displayNameFromHeaders(headers: Pick<Headers, "get">, email: string): s
   return Array.from(email.split("@")[0] || "Player").slice(0, 24).join("");
 }
 
-async function identityFromHeaders(
+export async function hostingIdentityFromHeaders(
   headers: Pick<Headers, "get">,
 ): Promise<PlayerAccount | null> {
   const rawEmail = headers.get(EMAIL_HEADER);
@@ -98,10 +99,23 @@ async function identityFromHeaders(
   return { id, displayName: displayNameFromHeaders(headers, email) };
 }
 
+export async function verifiedAccountsFromHeaders(
+  headers: Pick<Headers, "get">,
+): Promise<PlayerAccount[]> {
+  const [google, hosting] = await Promise.all([
+    googleSessionAccountFromHeaders(headers),
+    hostingIdentityFromHeaders(headers),
+  ]);
+  const accounts: PlayerAccount[] = [];
+  if (google) accounts.push(google);
+  if (hosting && hosting.id !== google?.id) accounts.push(hosting);
+  return accounts;
+}
+
 export async function verifiedAccountFromHeaders(
   headers: Pick<Headers, "get">,
 ): Promise<PlayerAccount | null> {
-  return identityFromHeaders(headers);
+  return (await verifiedAccountsFromHeaders(headers))[0] ?? null;
 }
 
 export async function verifiedRequestAccount(

@@ -2,6 +2,9 @@ import type { GameSnapshot, PublicMove } from "./game-types";
 
 export const RELEASE_SEEN_KEY = "chessriot:release-seen";
 export const MOVE_NOTIFICATIONS_KEY = "chessriot:move-notifications";
+export const TURN_ALERT_OFFER_SEEN_PREFIX = "chessriot:turn-alert-offer-seen:v1:";
+export const NOTIFICATION_OFFER_DECISION_PREFIX = "chessriot:notification-offer:v2:";
+export const PUSH_DEVICE_OWNER_KEY = "chessriot:push-device-owner:v1";
 export const RELEASE_CHECK_INTERVAL_MS = 5 * 60 * 1_000;
 export const MOVE_CHECK_INTERVAL_MS = 15_000;
 
@@ -33,6 +36,78 @@ export function hasUnseenRelease(
 
 export function parseEnabledPreference(value: string | null): boolean {
   return value === "true";
+}
+
+export function mayClearTurnNotification(
+  visibility: DocumentVisibilityState,
+  focused: boolean,
+): boolean {
+  return visibility === "visible" && focused;
+}
+
+export function shouldOfferTurnAlerts(input: {
+  hasActiveGame: boolean;
+  gameMode: "solo" | "multiplayer" | null;
+  gameStatus: "waiting" | "active" | "completed" | null;
+  pushReady: boolean;
+  pushConfigured: boolean;
+  turnAlertsEnabled: boolean;
+  offerSeen: boolean;
+}): boolean {
+  return input.hasActiveGame
+    && input.gameMode === "multiplayer"
+    && input.gameStatus === "active"
+    && input.pushReady
+    && input.pushConfigured
+    && !input.turnAlertsEnabled
+    && !input.offerSeen;
+}
+
+export function notificationOfferDecisionKey(username: string): string {
+  return `${NOTIFICATION_OFFER_DECISION_PREFIX}${encodeURIComponent(username.normalize("NFKC"))}`;
+}
+
+export function shouldBadgeAccountNotificationSettings(input: {
+  activeGameId: string | null;
+  mobile: boolean;
+  signedInUsername: string | null;
+  pushReady: boolean;
+  pushConfigured: boolean;
+  pushSupported: boolean;
+  permission: NotificationPermission | "unsupported";
+  enabled: boolean;
+  decision: string | null;
+}): boolean {
+  const permissionBlocked = input.permission === "denied"
+    && input.decision !== "disabled"
+    && input.decision !== "dismissed";
+  const needsRecovery = input.decision === "setup-failed"
+    || input.decision === "onboarding"
+    || permissionBlocked;
+  return (Boolean(input.activeGameId) || needsRecovery)
+    && input.mobile
+    && Boolean(input.signedInUsername)
+    && input.pushReady
+    && (input.pushConfigured || needsRecovery)
+    && input.pushSupported
+    && input.permission !== "unsupported"
+    && !input.enabled
+    && (input.decision === null || needsRecovery);
+}
+
+export function accountNotificationTogglePresentation(
+  enabled: boolean,
+  legacyEnabled: boolean,
+): { checked: boolean; detail: string; status: "ON" | "LIMITED" | "OFF" } {
+  if (enabled) return { checked: true, detail: "This device", status: "ON" };
+  if (legacyEnabled) {
+    return {
+      checked: true,
+      detail: "Older game alerts only",
+      status: "LIMITED",
+    };
+  }
+  return { checked: false, detail: "This device", status: "OFF" };
 }
 
 export function gameIdFromPathname(pathname: string): string | null {

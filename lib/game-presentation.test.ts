@@ -3,12 +3,15 @@ import { Chess } from "chess.js";
 import type { GameSnapshot, PublicMove } from "./game-types";
 import {
   actionEndpointSquares,
+  actionSanSequence,
   capturedPiecesByVictimColor,
   CHESS_PIECE_GLYPHS,
   CHESS_PIECE_NAMES,
   checkedKingSquare,
   DIFFICULTY_LABELS,
   gameStatusText,
+  HEBREW_CHESS_PIECE_NAMES,
+  HEBREW_DIFFICULTY_LABELS,
   illegalDestinationMessage,
   isDarkSquare,
   orientedBoardSquares,
@@ -83,6 +86,18 @@ describe("capturedPiecesByVictimColor", () => {
     });
   });
 
+  it("counts captures from every leg of a Magic action", () => {
+    const first = move(1, "w", "a1", "a3", "Rxa3");
+    first.continuation = [
+      { from: "a3", to: "h3", san: "Rxh3" },
+      { from: "h3", to: "h6", san: "Rxh6+" },
+    ];
+    expect(capturedPiecesByVictimColor(
+      [first],
+      "4k3/8/7r/8/8/n6b/8/R3K3 w - - 0 1",
+    )).toEqual({ w: [], b: ["r", "b", "n"] });
+  });
+
   it("identifies the king that is currently in check", () => {
     expect(checkedKingSquare(new Chess("4k3/8/8/8/8/8/4R3/4K3 b - - 0 1")))
       .toBe("e8");
@@ -120,6 +135,8 @@ describe("board colors", () => {
     expect(CHESS_PIECE_GLYPHS.b.k).toBe("♚");
     expect(CHESS_PIECE_NAMES.q).toBe("queen");
     expect(DIFFICULTY_LABELS[3]).toBe("Medium");
+    expect(HEBREW_CHESS_PIECE_NAMES.q).toBe("מלכה");
+    expect(HEBREW_DIFFICULTY_LABELS[3]).toBe("בינוני");
   });
 });
 
@@ -130,6 +147,20 @@ describe("move presentation", () => {
       to: "a3",
       second: { from: "a3", to: "h3", san: "Rh3" },
     })).toEqual(["a1", "h3"]);
+  });
+
+  it("highlights and labels the final leg of an arbitrary Magic action", () => {
+    const action = {
+      from: "b2",
+      to: "c4",
+      san: "Nc4",
+      continuation: [
+        { from: "c4", to: "a5", san: "Na5" },
+        { from: "a5", to: "b7", san: "Nb7" },
+      ],
+    };
+    expect(actionEndpointSquares(action)).toEqual(["b2", "b7"]);
+    expect(actionSanSequence(action)).toBe("Nc4 → Na5 → Nb7");
   });
 });
 
@@ -148,6 +179,9 @@ describe("outcome presentation", () => {
       fen: new Chess().fen(),
       turn: "b",
       plyCount: 1,
+      elapsedMs: { w: 0, b: 0 },
+      turnStartedAt: null,
+      clockAsOf: "2026-07-26T00:00:00.000Z",
       players: {
         white: { name: "White player" },
         black: { name: "Black player" },
@@ -174,6 +208,30 @@ describe("outcome presentation", () => {
       winner: null,
       reason: "threefold_repetition",
     }))).toBe("Draw by repetition");
+    expect(outcomeText(gameWithOutcome({
+      winner: "w",
+      reason: "checkmate",
+    }), "he")).toBe("White player ניצח במט");
+    expect(outcomeText(gameWithOutcome({
+      winner: null,
+      reason: "threefold_repetition",
+    }), "he")).toBe("תיקו בחזרה משולשת");
+  });
+
+  it("provides native Hebrew game states without changing the English default", () => {
+    const game = gameWithOutcome(null);
+    game.status = "active";
+    game.turn = "w";
+    expect(gameStatusText({
+      game,
+      viewingHistory: false,
+      historyLabel: "",
+      openingIntro: false,
+      displayCheck: false,
+      locale: "he",
+    })).toBe("תורך");
+    expect(illegalDestinationMessage(false, "he")).toBe("יש לבחור אחת מהמשבצות המסומנות.");
+    expect(pieceCannotAnswerCheckMessage("he")).toMatch(/לא יכול לעצור את השח/);
   });
 
   it("keeps live, check, history, and Magic status precedence explicit", () => {

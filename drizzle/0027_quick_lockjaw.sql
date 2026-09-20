@@ -1,0 +1,1 @@
+ALTER TABLE `ops_action_nonces` ADD `result_json` text;
