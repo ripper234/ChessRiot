@@ -209,6 +209,17 @@ export function AppUpdates() {
   const [turnAlertsMessage, setTurnAlertsMessage] = useState("");
   const [turnAlertsMessageIsError, setTurnAlertsMessageIsError] = useState(false);
   const [turnAlertsRefresh, setTurnAlertsRefresh] = useState(0);
+  const externalPushSetupActive = useRef(false);
+  useEffect(() => {
+    const start = () => { externalPushSetupActive.current = true; setTurnAlertsRefresh((value) => value + 1); };
+    const end = () => { externalPushSetupActive.current = false; setTurnAlertsRefresh((value) => value + 1); };
+    window.addEventListener("chessriot:external-push-setup-start", start);
+    window.addEventListener("chessriot:external-push-setup-end", end);
+    return () => {
+      window.removeEventListener("chessriot:external-push-setup-start", start);
+      window.removeEventListener("chessriot:external-push-setup-end", end);
+    };
+  }, []);
   const [notificationOfferDecision, setNotificationOfferDecision] = useState<string | null>(null);
   const [mobileNotificationSurface, setMobileNotificationSurface] = useState(false);
   const [braveBrowser, setBraveBrowser] = useState(false);
@@ -566,7 +577,7 @@ export function AppUpdates() {
 
   useEffect(() => {
     setPushReady(false);
-    if (!googleUsername || !pushOwnerReady || turnAlertsBusy) return;
+    if (!googleUsername || !pushOwnerReady || turnAlertsBusy || externalPushSetupActive.current) return;
     const username = googleUsername;
     const browserSupported = (
       !("serviceWorker" in navigator)
@@ -590,7 +601,7 @@ export function AppUpdates() {
     }
     let cancelled = false;
     const controller = new AbortController();
-    const isCurrent = () => !cancelled && googleUsernameRef.current === username;
+    const isCurrent = () => !cancelled && !externalPushSetupActive.current && googleUsernameRef.current === username;
     const markPendingSetupFailed = (message: string, code: string): boolean => {
       if (!isCurrent()) return false;
       const decision = storedValue(decisionKey);
@@ -1677,6 +1688,7 @@ export function AppUpdates() {
                   <b>{notificationToggleStatus}</b>
                 </label>
               )}
+              <Link className={styles.communityAction} href="/notification-test" onClick={closeDialog}>בדיקה מלאה במכשיר אחד · 4 תורים</Link>
               {legacyTurnAlertsEnabled && !turnAlertsEnabled ? (
                 <p className={styles.note}>התראות תור עדיין פעילות רק במשחקים ישנים. כבו את ההגדרה כדי לבטל אותן.</p>
               ) : null}

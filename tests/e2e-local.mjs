@@ -178,7 +178,7 @@ function createRuntime({
   extraBindings = {},
   outboundService = defaultOutboundService,
 } = {}) {
-  return new Miniflare({
+  const runtime = new Miniflare({
     modules: modulePaths.map((path) => ({ type: "ESModule", path })),
     modulesRoot: serverRoot,
     compatibilityDate: runtimeConfig.cloudflareCompatibilityDate,
@@ -200,6 +200,40 @@ function createRuntime({
     outboundService,
     resourcePersistencePath: persistRoot,
   });
+  // Publish applies migrations before exposing the Worker. Mirror that boundary
+  // for every external fixture request, while preserving Miniflare's internal
+  // dispatch path used by D1 bindings.
+  const wrapped = new Proxy(runtime, {
+    get(target, key) {
+      if (key === "dispatchFetch") return async (...args) => {
+        await ensureTestMigrations(target);
+        return target.dispatchFetch(...args);
+      };
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  testRuntimeTargets.set(wrapped, runtime);
+  return wrapped;
+}
+
+const testRuntimeTargets = new WeakMap();
+const migrationReadiness = new WeakMap();
+async function ensureTestMigrations(runtime) {
+  runtime = testRuntimeTargets.get(runtime) ?? runtime;
+  if (!migrationReadiness.has(runtime)) migrationReadiness.set(runtime, (async () => {
+    const database = await runtime.getD1Database("DB");
+    const columns = await database.prepare("PRAGMA table_info(game_settings)").all();
+    if (columns.results.some((column) => column.name === "notification_test_device_id")) return;
+    const files = (await readdir(resolve("drizzle"))).filter((name) => /^\d{4}_.+\.sql$/.test(name)).sort();
+    for (const file of columns.results.length ? files.filter((name) => name.startsWith("0029_")) : files) {
+      const sql = await readFile(resolve("drizzle", file), "utf8");
+      for (const statement of sql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) {
+        await database.prepare(statement.replace(/;$/, "")).run();
+      }
+    }
+  })());
+  await migrationReadiness.get(runtime);
 }
 
 function signedGoogleSession(subject, displayName, {
@@ -1094,6 +1128,7 @@ async function verifyVariantMigration() {
 }
 
 async function request(runtime, path, init = {}) {
+  await ensureTestMigrations(runtime);
   const {
     anonymous = false,
     accountEmail,
@@ -1182,7 +1217,7 @@ async function verifyFullMigrationChain() {
       .map((entry) => entry.name)
       .sort();
     assert.equal(migrationFiles[0]?.startsWith("0000_"), true);
-    assert.equal(migrationFiles.at(-1)?.startsWith("0028_"), true);
+    assert.equal(migrationFiles.at(-1)?.startsWith("0029_"), true);
 
     for (const file of migrationFiles) {
       const migration = await readFile(resolve("drizzle", file), "utf8");
@@ -1664,6 +1699,104 @@ async function verifyPushRecoveryAndBidirectionalTurns() {
   }
 }
 
+async function verifyOnePhoneNotificationTurns() {
+  const sends = [];
+  const isolated = createRuntime({
+    databaseName: "one-phone-turn-test",
+    outboundService: async (outbound) => {
+      if (new URL(outbound.url).hostname !== "fcm.googleapis.com") return new Response(null, { status: 502 });
+      sends.push({ endpoint: outbound.url, at: Date.now(), bytes: (await outbound.arrayBuffer()).byteLength });
+      return new Response(null, { status: 201 });
+    },
+  });
+  try {
+    const owner = accountForLabel("Phone Test Owner");
+    const outsider = accountForLabel("Phone Test Outsider");
+    const identity = { accountEmail: owner.email, accountName: owner.displayName };
+    const selected = { endpoint: "https://fcm.googleapis.com/fcm/send/test-this-one-phone", expirationTime: null,
+      keys: { p256dh: pushClientPublicKey, auth: randomBytes(16).toString("base64url") } };
+    const other = { ...selected, endpoint: "https://fcm.googleapis.com/fcm/send/not-the-selected-phone" };
+    for (const subscription of [selected, other]) {
+      assert.equal((await request(isolated, "/api/me/push-devices", {
+        ...identity, method: "PUT", body: JSON.stringify({ requestId: randomUUID(), expectedUsername: usernameForAccount(owner), subscription }),
+      })).status, 200);
+    }
+    const gamePayload = () => ({ playerToken: secret(), inviteToken: secret(), requestId: requestIdForColor("b"),
+      mode: "solo", difficulty: 1, variantId: "standard", notificationTestEndpoint: selected.endpoint });
+    assert.equal((await request(isolated, "/api/games", { method: "POST", accountEmail: outsider.email, accountName: outsider.displayName,
+      body: JSON.stringify(gamePayload()) })).status, 409, "another account cannot select this phone");
+    const initialPayload = gamePayload();
+    const createdResponse = await request(isolated, "/api/games", { ...identity, method: "POST", body: JSON.stringify(initialPayload) });
+    assert.equal(createdResponse.status, 201);
+    let game = (await body(createdResponse)).game;
+    assert.equal(game.you.color, "w", "test always starts with a real human white seat");
+    assert.equal(game.version, 0);
+    assert.ok(game.notificationTest);
+    const database = await isolated.getD1Database("DB");
+    assert.equal((await database.prepare("SELECT COUNT(*) AS count FROM game_memberships WHERE game_id = ?").bind(game.id).first()).count, 1);
+    const endpointHash = createHash("sha256").update(selected.endpoint).digest("hex");
+    const statusPath = `/api/games/${game.id}/notification-test?endpointHash=${endpointHash}`;
+    assert.equal((await request(isolated, statusPath, { accountEmail: outsider.email, accountName: outsider.displayName })).status, 404);
+    assert.equal((await request(isolated, `/api/games/${game.id}/notification-test?endpointHash=${createHash("sha256").update(other.endpoint).digest("hex")}`, identity)).status, 409);
+    assert.equal((await request(isolated, "/api/games", { ...identity, method: "POST", body: JSON.stringify({ ...initialPayload, notificationTestEndpoint: other.endpoint }) })).status, 409);
+    for (let round = 1; round <= 4; round += 1) {
+      const legal = new Chess(game.fen).moves({ verbose: true });
+      const move = legal.find((m) => !m.captured && !m.promotion) ?? legal[0];
+      const payload = { from: move.from, to: move.to, expectedVersion: game.version, requestId: randomUUID() };
+      const started = Date.now();
+      const response = await request(isolated, `/api/games/${game.id}/moves`, { ...identity, method: "POST", body: JSON.stringify(payload) });
+      assert.equal(response.status, 200);
+      const human = (await body(response)).game;
+      assert.equal(human.version, round * 2 - 1, "only the human move commits before closing the app");
+      assert.equal(human.turn, "b");
+      assert.equal(response.headers.get("x-chessriot-notification-test-version"), String(human.version));
+      if (round === 1) {
+        const early = await body(await request(isolated, `/api/games/${game.id}`, identity));
+        assert.equal(early.game.version, 1, "foreground polling cannot bypass the delay");
+        const replayResponse = await request(isolated, `/api/games/${game.id}/moves`, { ...identity, method: "POST", body: JSON.stringify(payload) });
+        assert.equal(replayResponse.headers.get("x-chessriot-notification-test-version"), "1", "a retried move reschedules the same guarded opponent callback");
+        const replay = await body(replayResponse);
+        assert.equal(replay.game.version, 1);
+      }
+      // Only direct D1 reads now: no request can wake the opponent or the push queue.
+      assert.equal(await waitFor(async () => {
+        const row = await database.prepare("SELECT status FROM push_turn_deliveries WHERE game_id = ? AND game_version = ?").bind(game.id, round * 2).first();
+        return row?.status === "sent";
+      }, 15_000), true, `round ${round} must finish without another HTTP request`);
+      assert.equal(sends.length, round, "one notification per round, no second device or replay duplicate");
+      assert.equal(sends.at(-1).endpoint, selected.endpoint);
+      assert.ok(sends.at(-1).at - started >= 7_900, "bot reply leaves time to close the app");
+      assert.ok(sends.at(-1).bytes > 100, "delivery traverses real encrypted Web Push");
+      game = (await body(await request(isolated, `/api/games/${game.id}`, identity))).game;
+      assert.equal(game.version, round * 2);
+      assert.equal(game.turn, "w");
+    }
+    const progress = await body(await request(isolated, statusPath, identity));
+    assert.deepEqual(progress.rounds.map((r) => [r.gameVersion, r.status]), [[2, "sent"], [4, "sent"], [6, "sent"], [8, "sent"]]);
+    const fifth = new Chess(game.fen).moves({ verbose: true })[0];
+    assert.equal((await request(isolated, `/api/games/${game.id}/moves`, { ...identity, method: "POST", body: JSON.stringify({ from: fifth.from, to: fifth.to, expectedVersion: 8, requestId: randomUUID() }) })).status, 409);
+    const ordinary = (await body(await request(isolated, "/api/games", { ...identity, method: "POST", body: JSON.stringify({ ...gamePayload(), requestId: requestIdForColor("w"), notificationTestEndpoint: undefined }) }))).game;
+    const ordinaryReply = await body(await request(isolated, `/api/games/${ordinary.id}/moves`, { ...identity, method: "POST", body: JSON.stringify({ from: "e2", to: "e4", expectedVersion: 0, requestId: randomUUID() }) }));
+    assert.equal(ordinaryReply.game.version, 2, "ordinary Solo remains immediate");
+    assert.equal(sends.length, 4);
+    const stopped = [];
+    for (const action of ["end", "disable"]) {
+      const test = (await body(await request(isolated, "/api/games", { ...identity, method: "POST", body: JSON.stringify(gamePayload()) }))).game;
+      assert.equal((await request(isolated, `/api/games/${test.id}/moves`, { ...identity, method: "POST", body: JSON.stringify({ from: "e2", to: "e4", expectedVersion: 0, requestId: randomUUID() }) })).status, 200);
+      if (action === "end") {
+        assert.equal((await request(isolated, `/api/games/${test.id}/end`, { ...identity, method: "POST", body: JSON.stringify({ expectedVersion: 1, requestId: randomUUID() }) })).status, 200);
+      }
+      stopped.push(test.id);
+    }
+    await database.prepare("UPDATE push_devices SET disabled_at = ? WHERE endpoint = ?").bind(new Date().toISOString(), selected.endpoint).run();
+    await new Promise((resolveWait) => setTimeout(resolveWait, 8_400));
+    for (const id of stopped) assert.equal((await database.prepare("SELECT COUNT(*) AS count FROM push_turn_deliveries WHERE game_id = ?").bind(id).first()).count, 0);
+    assert.equal(sends.length, 4, "ending the game or disabling the selected phone suppresses pending test alerts");
+    console.log("E2E passed: one-phone four real delayed turns, exact-device isolation, replay, early-poll, cancellation, and ordinary Solo behavior");
+  } finally { await isolated.dispose(); }
+}
+
+await verifyOnePhoneNotificationTurns();
 await verifyPushRecoveryAndBidirectionalTurns();
 
 await verifyFullMigrationChain();

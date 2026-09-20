@@ -12,6 +12,7 @@ interface WorkerEvent {
       diagnosticId?: unknown;
       localDiagnosticId?: unknown;
       gameVersion?: unknown;
+      testGameId?: unknown;
     };
     close(): void;
   };
@@ -21,6 +22,7 @@ interface WorkerEvent {
 type WorkerListener = (event: WorkerEvent) => void;
 
 const listeners = new Map<string, WorkerListener>();
+const diagnosticCache = new Map<string, Response>();
 interface RetainedNotification {
   tag: string;
   data: Record<string, unknown>;
@@ -57,6 +59,7 @@ const openWindow = vi.fn<(path: string) => Promise<undefined>>(async () => undef
 
 beforeEach(() => {
   listeners.clear();
+  diagnosticCache.clear();
   retainedNotifications.clear();
   showNotification.mockClear();
   getNotifications.mockClear();
@@ -77,7 +80,12 @@ beforeEach(() => {
     readFileSync(resolve(process.cwd(), "public/sw.js"), "utf8"),
     {
       self: worker,
-      caches: {},
+      caches: { open: async () => ({
+        match: async (path: string) => diagnosticCache.get(path)?.clone(),
+        put: async (path: string, response: Response) => { diagnosticCache.set(path, response.clone()); },
+        keys: async () => [...diagnosticCache.keys()],
+        delete: async (path: string) => diagnosticCache.delete(path),
+      }) },
       fetch: vi.fn(),
       URL,
       Uint8Array,
@@ -111,6 +119,47 @@ async function dispatchPush(payload: unknown): Promise<void> {
 }
 
 describe("service-worker push display", () => {
+  it("keeps real-turn evidence with every app window closed, then records an exact-game tap", async () => {
+    const gameId = "123e4567-e89b-42d3-a456-426614174000";
+    matchAll.mockResolvedValueOnce([]);
+    await dispatchPush({ type: "your_turn", gameId, gameVersion: 2, notificationTest: true });
+    const path = `/__chessriot_turn_test__/${gameId}/2`;
+    const receipt = await diagnosticCache.get(path)?.clone().json() as Record<string, unknown>;
+    expect(receipt).toMatchObject({ visibleClients: 0, receivedAt: expect.any(Number), shownAt: expect.any(Number) });
+    expect(receipt.clickedAt).toBeUndefined();
+    expect(showNotification).toHaveBeenCalledWith("ChessRiot", expect.objectContaining({
+      data: { path: `/g/${gameId}`, gameVersion: 2, testGameId: gameId },
+    }));
+    matchAll.mockResolvedValueOnce([]);
+    let completion: Promise<unknown> = Promise.resolve();
+    listeners.get("notificationclick")?.({
+      notification: { data: { path: `/g/${gameId}`, gameVersion: 2, testGameId: gameId }, close: vi.fn() },
+      waitUntil: (promise) => { completion = promise; },
+    });
+    await completion;
+    expect(openWindow).toHaveBeenCalledWith(`/g/${gameId}`);
+    expect(await diagnosticCache.get(path)?.clone().json()).toMatchObject({ clickedAt: expect.any(Number), shownAt: expect.any(Number) });
+  });
+
+  it("cannot turn a foreground first receipt into a hidden receipt by redelivering it", async () => {
+    const gameId = "123e4567-e89b-42d3-a456-426614174000";
+    matchAll.mockResolvedValueOnce([client]);
+    await dispatchPush({ type: "your_turn", gameId, gameVersion: 2, notificationTest: true });
+    matchAll.mockResolvedValueOnce([]);
+    await dispatchPush({ type: "your_turn", gameId, gameVersion: 2, notificationTest: true });
+    expect(await diagnosticCache.get(`/__chessriot_turn_test__/${gameId}/2`)?.clone().json()).toMatchObject({ visibleClients: 1 });
+  });
+
+  it("records a rejected Android presentation without claiming a display", async () => {
+    const gameId = "123e4567-e89b-42d3-a456-426614174000";
+    matchAll.mockResolvedValueOnce([]);
+    showNotification.mockRejectedValueOnce(new Error("display blocked"));
+    await expect(dispatchPush({ type: "your_turn", gameId, gameVersion: 4, notificationTest: true })).rejects.toThrow("display blocked");
+    const receipt = await diagnosticCache.get(`/__chessriot_turn_test__/${gameId}/4`)?.clone().json() as Record<string, unknown>;
+    expect(receipt.showRejectedAt).toEqual(expect.any(Number));
+    expect(receipt.shownAt).toBeUndefined();
+  });
+
   it.each(["enumerate", "focus", "navigate-focus"])(
     "opens the exact game when an existing client fails at %s",
     async (failure) => {
@@ -371,7 +420,7 @@ describe("service-worker push display", () => {
     });
     expect(reply).toHaveBeenCalledWith({
       type: "chessriot:push-worker-version-response",
-      version: "0.27.8",
+      version: "0.28.0",
     });
   });
 

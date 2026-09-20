@@ -107,6 +107,13 @@ function sameMoveRequest(
   );
 }
 
+function notificationTestResponseHeaders(game: GameRow): Record<string, string> {
+  return game.notification_test_device_id && game.status === "active"
+    && game.turn_color !== game.human_color && game.ply_count < 8
+    && (game.notification_test_expires_at ?? 0) > Date.now()
+    ? { "x-chessriot-notification-test-version": String(game.version) } : {};
+}
+
 function storedMove(
   ply: number,
   requestId: string,
@@ -211,7 +218,7 @@ export async function POST(
       return apiError(409, "idempotency_conflict", "This move request id was already used");
     }
     if (game.world_code) await reconcileMagicWorldPlay(id);
-    return json({ game: snapshot(game, storedMoves, color) });
+    return json({ game: snapshot(game, storedMoves, color) }, { headers: notificationTestResponseHeaders(game) });
   }
   if (game.status !== "active") return apiError(409, "game_not_active", "The game is not active");
   if (game.version !== expectedVersion) {
@@ -272,6 +279,9 @@ export async function POST(
     throw error;
   }
 
+  if (game.notification_test_device_id && (
+    (game.notification_test_expires_at ?? 0) <= Date.now() || game.ply_count >= 8
+  )) return apiError(409, "notification_test_finished", "This four-turn test has finished. Start a new test to repeat it.");
   const now = new Date().toISOString();
   const deadlineAt = multiplayerTurnDeadline(game);
   const attemptNonce = crypto.randomUUID();
@@ -290,6 +300,7 @@ export async function POST(
   if (
     !humanOutcome.completed
     && game.game_mode === "solo"
+    && !game.notification_test_device_id
     && game.ai_difficulty !== null
     && botColor
     && humanOutcome.turn === botColor
@@ -449,7 +460,7 @@ export async function POST(
         continuationMoves,
       )) {
         if (game.world_code) await reconcileMagicWorldPlay(id);
-        return json({ game: snapshot(game, storedMoves, color) });
+        return json({ game: snapshot(game, storedMoves, color) }, { headers: notificationTestResponseHeaders(game) });
       }
       return apiError(409, "idempotency_conflict", "This move request id was already used");
     }
@@ -477,7 +488,7 @@ export async function POST(
         continuationMoves,
       )) {
         if (game.world_code) await reconcileMagicWorldPlay(id);
-        return json({ game: snapshot(game, storedMoves, color) });
+        return json({ game: snapshot(game, storedMoves, color) }, { headers: notificationTestResponseHeaders(game) });
       }
       return apiError(409, "idempotency_conflict", "This move request id was already used");
     }
@@ -522,7 +533,7 @@ export async function POST(
       },
     });
   }
-  const responseHeaders: Record<string, string> = {};
+  const responseHeaders = notificationTestResponseHeaders(committedGame);
   if (shouldNotifyOpponent) {
     responseHeaders["x-chessriot-turn-committed"] = "1";
   }

@@ -3451,3 +3451,8 @@ body:has(.game-shell) { height: 100%; overflow: hidden; }
   .applied-world { grid-template-columns: 1fr; }
   .magic-apply-row { align-items: stretch; flex-direction: column; }
 }
+
+.game-shell[data-notification-test="true"] { height: auto; min-height: 100dvh; overflow: visible; }
+
+html:has(.game-shell[data-notification-test="true"]),
+body:has(.game-shell[data-notification-test="true"]) { height: auto; overflow-y: auto; }

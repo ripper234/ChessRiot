@@ -212,6 +212,7 @@ function routeEvent(method: string, pathname: string): string | null {
   if (
     (method === "GET" && pathname === "/api/health")
     || (method === "GET" && pathname === "/api/push/config")
+    || (method === "GET" && /^\/api\/games\/[^/]+\/notification-test$/.test(pathname))
     || (method === "GET" && /^\/api\/games\/[^/]+\/push-subscriptions$/.test(pathname))
     || (method === "GET" && pathname === "/api/me/push-devices")
     || (method === "POST" && pathname === "/api/ops/push-notifications")

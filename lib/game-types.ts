@@ -78,6 +78,7 @@ export interface GameSnapshot extends GameClockSnapshot {
   mode: GameMode;
   variantId: GameVariantId;
   aiDifficulty: AiDifficulty | null;
+  notificationTest?: { expiresAt: number; replyDueAt: number | null };
   turnPaceDays?: TurnPaceDays | null;
   magicRules?: PublicMagicRules | null;
   world?: {

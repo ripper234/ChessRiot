@@ -1,4 +1,4 @@
-# ChessRiot v0.27.8 specification
+# ChessRiot v0.28.0 specification
 
 ## v0.27.8 notification recovery
 
@@ -1139,3 +1139,40 @@ This file and `MVP.md` are the source of truth for the current milestone.
   independently of its bounded item list. `new` and `reviewed` feedback are
   unresolved; `closed` feedback is done. Unresolved items are returned first.
   Failed reads remain visibly stale and never become fake zeroes.
+
+
+## v0.28.0: one-device notification acceptance test
+
+- `/notification-test`, linked from Settings and New game, guides an authenticated
+  player through four real Solo turns on one selected device, without a second
+  account or device. Starting explicitly opts this browser into push and verifies
+  its current service worker and writable local diagnostic storage.
+- The test creates standard chess against level-1 Riot Bot with the human on
+  White. One human account membership remains authoritative; the server owns the
+  bot seat. Game settings bind the test to that account's exact active device
+  for two hours. Ordinary Solo games keep immediate replies.
+- Each human move commits first; an eight-second server-side continuation makes
+  the real leased bot move and atomically enqueues an ordinary `your_turn`
+  delivery for the selected device only. Legacy subscriptions and other devices
+  are excluded. Move replays can re-arm the same version, while the bot lease,
+  optimistic version and unique outbox prevent duplicate moves or alerts.
+- Delay and drain share the original 25-second budget. The test needs no open
+  page or subsequent polling to trigger each reply. It does not add autonomous
+  recovery beyond the host's request lifetime. Closing/ending the test and
+  disabling the device suppress pending sends.
+- The phone retains per-game/version push receipt, notification creation, window
+  visibility/count, tap and exact-game reopening evidence. Evidence from a
+  duplicate cannot overwrite the first attempt. A failed display or out-of-order
+  evidence never passes. A user confirms seeing the Android notification.
+- Four rounds pass only after nonvisible receipt, successful notification
+  creation, tap, visible/focused exact-game opening and physical confirmation.
+  Zero visible windows proves background delivery; zero total windows is shown
+  separately as closed-window evidence. Round three suggests dismissing the PWA
+  from recent apps or closing its browser tab. Android Force stop is excluded.
+- A visible failure or unknown stage stays incomplete. The report separates
+  provider acceptance from phone evidence. Test board input is read-only;
+  guided move buttons preserve round order and real chess validation.
+- Generated migration 0029 owns the new nullable settings columns. Apply the
+  migration before running this Worker against an existing local database, as
+  the Sites publisher does before hosted deployment. New runtime ALTERs are not
+  used to duplicate migration ownership.

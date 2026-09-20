@@ -1,7 +1,7 @@
 const STATIC_CACHE = "chessriot-static-v2";
 const PUSH_CONSENT_CACHE = "chessriot-push-consent-v1";
 const PUSH_CONSENT_PATH = "/__chessriot_push_consent__";
-const PUSH_DIAGNOSTIC_WORKER_VERSION = "0.27.8";
+const PUSH_DIAGNOSTIC_WORKER_VERSION = "0.28.0";
 const PUSH_DIAGNOSTIC_RECEIPT_TYPE = "chessriot:push-diagnostic-receipt";
 const LOCAL_PUSH_DIAGNOSTIC_EVENT_TYPE = "chessriot:local-push-diagnostic-event";
 const PUSH_DIAGNOSTIC_WORKER_VERSION_REQUEST_TYPE = "chessriot:push-worker-version-request";
@@ -102,6 +102,22 @@ async function postPushDiagnosticStage(
   }
 }
 
+async function recordTurnTestReceipt(gameId, gameVersion, changes) {
+  return serializeTurnNotification(`receipt-${gameId}-${gameVersion}`, async () => {
+  try {
+    const cache = await caches.open("chessriot-turn-test-v1");
+    const path = `/__chessriot_turn_test__/${gameId}/${gameVersion}`;
+    const previous = await cache.match(path);
+    const data = previous ? await previous.json() : {};
+    await cache.put(path, new Response(JSON.stringify({ ...changes, ...data })));
+    const keys = await cache.keys();
+    for (const key of keys.slice(0, Math.max(0, keys.length - 80))) await cache.delete(key);
+  } catch {
+    // Missing diagnostic storage must never prevent the real notification.
+  }
+  });
+}
+
 self.addEventListener("push", (event) => {
   let payload = {};
   try {
@@ -158,7 +174,18 @@ self.addEventListener("push", (event) => {
     : friendRequest
       ? `friend-request-${friendRequest.requestId}`
       : `service-${notificationId}`;
+  const testTurn = gameId && gameVersion !== null && payload.notificationTest === true;
   const display = async () => {
+    if (testTurn) {
+      let visibleClients = null;
+      let windowClients = null;
+      try {
+        const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+        windowClients = windows.length;
+        visibleClients = windows.filter((client) => client.visibilityState === "visible").length;
+      } catch { /* Unknown is not a closed-app pass. */ }
+      await recordTurnTestReceipt(gameId, gameVersion, { receivedAt: Date.now(), visibleClients, windowClients });
+    }
     if (diagnosticId) await postPushDiagnosticStage(diagnosticId, "push_received");
     let renotify = false;
     let suppressStaleTurn = false;
@@ -194,13 +221,16 @@ self.addEventListener("push", (event) => {
         data: {
           path,
           ...(gameVersion === null ? {} : { gameVersion }),
+          ...(testTurn ? { testGameId: gameId } : {}),
           ...(diagnosticId ? { diagnosticId } : {}),
         },
       });
     } catch (error) {
+      if (testTurn) await recordTurnTestReceipt(gameId, gameVersion, { showRejectedAt: Date.now() });
       if (diagnosticId) await postPushDiagnosticStage(diagnosticId, "show_rejected");
       throw error;
     }
+    if (testTurn) await recordTurnTestReceipt(gameId, gameVersion, { shownAt: Date.now() });
     if (!diagnosticId) return;
     await postPushDiagnosticStage(diagnosticId, "show_resolved");
     const active = await self.registration.getNotifications({ tag });
@@ -353,6 +383,12 @@ self.addEventListener("notificationclick", (event) => {
     )
   ) ? candidate : "/app";
   event.waitUntil((async () => {
+    const testGameId = event.notification.data?.testGameId;
+    const testVersion = event.notification.data?.gameVersion;
+    if (typeof testGameId === "string" && GAME_ID_PATTERN.test(testGameId)
+      && path === `/g/${testGameId}` && Number.isSafeInteger(testVersion) && testVersion >= 0) {
+      await recordTurnTestReceipt(testGameId, testVersion, { clickedAt: Date.now() });
+    }
     if (localDiagnostic) {
       await postPushDiagnosticStage(
         localDiagnosticId,

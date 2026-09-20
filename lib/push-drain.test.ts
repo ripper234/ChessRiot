@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   REQUEST_PUSH_FINAL_ROUND_LIMIT,
   REQUEST_PUSH_ROUND_LIMIT,
@@ -24,6 +24,16 @@ function fakeClock() {
 }
 
 describe("bounded request-time push drain", () => {
+  it("counts a delayed opponent reply against the original request budget", async () => {
+    let now = 24_000;
+    const drain = vi.fn(async () => ({ attempted: 0, failed: 0 }));
+    await runBoundedPushDrain(drain, drain, { startedAt: 0, now: () => now });
+    expect(drain).not.toHaveBeenCalled();
+    now = 8_000;
+    await runBoundedPushDrain(drain, drain, { startedAt: 0, now: () => now });
+    expect(drain).toHaveBeenCalledTimes(2);
+  });
+
   it("uses durable retry times after successful unrelated devices and across wakes", async () => {
     const clock = fakeClock();
     const attempts: number[] = [];

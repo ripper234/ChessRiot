@@ -18,6 +18,7 @@ export type PushDrainLane = "turn" | "account";
 
 interface PushDrainPolicyOptions {
   now?: () => number;
+  startedAt?: number;
   sleep?: (delayMs: number) => Promise<void>;
   onLaneError?: (lane: PushDrainLane, error: unknown) => void;
 }
@@ -78,7 +79,7 @@ export async function runBoundedPushDrain(
 ): Promise<void> {
   const now = options.now ?? Date.now;
   const sleep = options.sleep ?? sleepFor;
-  const startedAt = now();
+  const startedAt = options.startedAt ?? now();
   const lanes: LaneState[] = [
     { name: "turn", drain: drainTurns, hasMore: true, retryAt: null, retryIndex: 0 },
     { name: "account", drain: drainAccounts, hasMore: true, retryAt: null, retryIndex: 0 },
@@ -92,9 +93,9 @@ export async function runBoundedPushDrain(
       : lane.retryAt ?? Infinity));
     if (!Number.isFinite(nextWake)) return;
     const delay = Math.max(0, nextWake - now());
-    if (round > 0 && !canStartRound(startedAt, delay, now)) return;
+    if ((round > 0 || options.startedAt !== undefined) && !canStartRound(startedAt, delay, now)) return;
     if (delay > 0) await sleep(delay);
-    if (round > 0 && !canStartRound(startedAt, 0, now)) return;
+    if ((round > 0 || options.startedAt !== undefined) && !canStartRound(startedAt, 0, now)) return;
 
     const dueAt = now();
     await Promise.all(lanes.map(async (lane) => {

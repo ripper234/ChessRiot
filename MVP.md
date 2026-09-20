@@ -113,3 +113,14 @@
 - Telegram release announcements
 - Guest play or private-seat-only access
 - Google Analytics, Hotjar, session replay, or third-party advertising trackers
+
+
+### One-phone notification verification
+
+A player can open `/notification-test` on the Android to test, enable push, and
+complete four guided real turns against Riot Bot. Each bot reply arrives after
+an eight-second delay, targets only that device, and opens the exact game.
+The phone records background/closed-window evidence and notification taps across
+page closure. Provider acceptance alone does not pass a round; the player must
+return through the notification and confirm seeing it. No second account or
+second device is needed. The test is available from Settings and New game.

@@ -57,6 +57,8 @@ export interface GameRow {
   world_code: string | null;
   world_creator_username: string | null;
   world_created_at: string | null;
+  notification_test_device_id?: string | null;
+  notification_test_expires_at?: number | null;
 }
 
 interface MoveRow {
@@ -90,6 +92,8 @@ export async function findGameById(id: string): Promise<GameRow | null> {
         game_settings.magic_prompt AS magic_prompt,
         game_settings.magic_rules_json AS magic_rules_json,
         game_settings.world_code AS world_code,
+        game_settings.notification_test_device_id,
+        game_settings.notification_test_expires_at,
         world_creator.username AS world_creator_username,
         magic_worlds.created_at AS world_created_at
         FROM games
@@ -115,6 +119,8 @@ export async function findGameByCreateRequest(requestId: string): Promise<GameRo
         game_settings.magic_prompt AS magic_prompt,
         game_settings.magic_rules_json AS magic_rules_json,
         game_settings.world_code AS world_code,
+        game_settings.notification_test_device_id,
+        game_settings.notification_test_expires_at,
         world_creator.username AS world_creator_username,
         magic_worlds.created_at AS world_created_at
         FROM games
@@ -140,6 +146,8 @@ export async function findGameByInviteHash(inviteHash: string): Promise<GameRow 
         game_settings.magic_prompt AS magic_prompt,
         game_settings.magic_rules_json AS magic_rules_json,
         game_settings.world_code AS world_code,
+        game_settings.notification_test_device_id,
+        game_settings.notification_test_expires_at,
         world_creator.username AS world_creator_username,
         magic_worlds.created_at AS world_created_at
         FROM games
@@ -573,6 +581,10 @@ export function snapshot(
     mode: game.game_mode,
     variantId: normalizeGameVariantId(game.variant_id),
     aiDifficulty: game.ai_difficulty,
+    ...(game.notification_test_device_id ? { notificationTest: {
+      expiresAt: game.notification_test_expires_at ?? 0,
+      replyDueAt: game.turn_color !== game.human_color ? Date.parse(game.updated_at) + 8_000 : null,
+    } } : {}),
     turnPaceDays: game.turn_pace_days,
     magicRules: publicMagicRules(game.magic_prompt, magicRules),
     world: game.world_code && game.world_created_at ? {
