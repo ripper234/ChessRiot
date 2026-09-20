@@ -25,20 +25,20 @@ describe("invitation client recovery", () => {
   it.each([
     ["friend referral", referralSource],
     ["game invitation", gameInviteSource],
-  ])("declares native Hebrew and an escape while the %s is loading", (_label, source) => {
-    expect(source).toMatch(/lang="he" dir="rtl" translate="no"/);
-    expect(source).toContain('<Brand locale="he" />');
-    expect(source).toContain("ניסיון נוסף");
-    expect(source).toContain("חזרה לדף הבית");
+  ])("declares English and an escape while the %s is loading", (_label, source) => {
+    expect(source).toMatch(/lang="en" dir="ltr" translate="no"/);
+    expect(source).toContain('<Brand locale="en" />');
+    expect(source).toContain("Try again");
+    expect(source).toContain("Back to home");
   });
 
   it("labels the personal referral as a friend link rather than a game invitation", () => {
-    expect(referralSource).toContain("זהו קישור להוספת חבר, לא הזמנה למשחק קיים.");
-    expect(referralSource).toContain("זהו קישור לחברים, לא הזמנה למשחק קיים.");
+    expect(referralSource).toContain("This adds a friend. It does not join an existing game.");
+    expect(referralSource.match(/This adds a friend\. It does not join an existing game\./g)).toHaveLength(2);
   });
 
-  it("renders Hebrew rule labels and isolates world identifiers in a game invitation", () => {
-    expect(gameInviteSource).toContain('magicRuleLabel(rule, "he")');
+  it("renders English rule labels and isolates world identifiers in a game invitation", () => {
+    expect(gameInviteSource).toContain('magicRuleLabel(rule, "en")');
     expect(gameInviteSource).toContain('<bdi dir="ltr">{invite.world.displayCode}</bdi>');
     expect(gameInviteSource).toContain('<PlayerHandle username={invite.world.creatorUsername} />');
     expect(gameInviteSource).not.toContain('invite.magicRules.labels.join');

@@ -51,37 +51,37 @@ interface JoinPayload {
 
 const JOIN_RECOVERY_TIMEOUT_MS = 4_000;
 
-const HEBREW_VARIANTS: Record<GameVariantId, {
+const VARIANT_LABELS: Record<GameVariantId, {
   name: string;
   description: string;
 }> = {
   standard: {
-    name: "שחמט קלאסי",
-    description: "לוח מלא. מט מנצח.",
+    name: "Classic chess",
+    description: "A full board. Checkmate wins.",
   },
   "pawn-riot": {
-    name: "מהומת רגלים",
-    description: "מקדמים רגלי, בונים צבא ונותנים מט.",
+    name: "Pawn Riot",
+    description: "Promote a pawn, build an army, and deliver checkmate.",
   },
   "half-army": {
-    name: "חצי צבא",
-    description: "מלך, צריח, רץ, פרש וארבעה רגלים.",
+    name: "Half Army",
+    description: "A king, rook, bishop, knight, and four pawns.",
   },
   "pawn-duel": {
-    name: "דו-קרב רגלים",
-    description: "מרוץ טקטי קצר לקידום רגלי ולמט.",
+    name: "Pawn Duel",
+    description: "A quick tactical race to promotion and checkmate.",
   },
   "mate-pawn": {
-    name: "הכתרת רגלי",
-    description: "משתמשים באופוזיציה, מכתירים ונותנים מט.",
+    name: "Pawn Promotion",
+    description: "Use opposition, promote, and deliver checkmate.",
   },
   "mate-rook": {
-    name: "מט עם צריח",
-    description: "מצמצמים את המרחב ודוחקים את המלך לקצה.",
+    name: "Rook Checkmate",
+    description: "Cut off escape squares and drive the king to the edge.",
   },
   "mate-two-bishops": {
-    name: "מט עם שני רצים",
-    description: "מתאמים בין שני הרצים והמלך כדי לכפות מט.",
+    name: "Two-Bishop Checkmate",
+    description: "Coordinate your two bishops and king to force checkmate.",
   },
 };
 
@@ -243,7 +243,7 @@ export function JoinGame({
       if (controller.signal.aborted || joinAttempt.current !== attemptId) return;
       if (await recoverJoinedGame()) return;
       if (controller.signal.aborted || joinAttempt.current !== attemptId) return;
-      setError("לא הצלחנו להשלים את ההצטרפות. ייתכן שהיא כבר בוצעה, ולכן אפשר לנסות שוב בבטחה.");
+      setError("Joining could not be confirmed. You may already have joined, so it is safe to try again.");
     } finally {
       if (joinRequest.current === controller) {
         joinRequest.current = null;
@@ -253,80 +253,80 @@ export function JoinGame({
   }
 
   return (
-    <main className="join-shell" lang="he" dir="rtl" translate="no">
-      <header className="topbar"><Brand locale="he" /></header>
+    <main className="join-shell" lang="en" dir="ltr" translate="no">
+      <header className="topbar"><Brand locale="en" /></header>
       <section className="join-stage">
-        <div className="challenge-mark" aria-hidden="true"><span>♜</span><b>נגד</b><span>♞</span></div>
+        <div className="challenge-mark" aria-hidden="true"><span>♜</span><b>vs</b><span>♞</span></div>
         {invite.kind === "loading" ? <div className="voxel-card state-card">
-          <h1>פותח את ההזמנה…</h1>
-          <p role="status">בודק את המשחק ואת החשבון שלכם.</p>
-          <button className="primary-button" type="button" onClick={() => void loadInvite()}>ניסיון נוסף</button>
-          <Link className="secondary-button" href="/">חזרה לדף הבית</Link>
+          <h1>Opening invitation…</h1>
+          <p role="status">Checking the game and your account.</p>
+          <button className="primary-button" type="button" onClick={() => void loadInvite()}>Try again</button>
+          <Link className="secondary-button" href="/">Back to home</Link>
         </div> : null}
         {invite.kind === "waiting" ? (
           <form className="voxel-card join-card" onSubmit={join} noValidate>
-            <p className="eyebrow"><span /> הזמנה פרטית למשחק</p>
-            <h1><em><bdi dir="auto">{invite.creatorName}</bdi></em><br />רוצה לשחק מולך.</h1>
+            <p className="eyebrow"><span /> Private game invitation</p>
+            <h1><em><bdi dir="auto">{invite.creatorName}</bdi></em><br />wants to play you.</h1>
             <div className="variant-invite">
-              <strong>{invite.variantId === "standard" ? "♜ שחמט" : "⚔ משחק קצר"}</strong>
-              <span>{HEBREW_VARIANTS[invite.variantId].name}</span>
-              <small>{HEBREW_VARIANTS[invite.variantId].description}</small>
+              <strong>{invite.variantId === "standard" ? "♜ Chess" : "⚔ Quick game"}</strong>
+              <span>{VARIANT_LABELS[invite.variantId].name}</span>
+              <small>{VARIANT_LABELS[invite.variantId].description}</small>
             </div>
             <p className="join-pace">
               <strong>⌛ {invite.turnPaceDays
                 ? invite.turnPaceDays === 1
-                  ? "יום אחד לכל מהלך"
-                  : `${invite.turnPaceDays} ימים לכל מהלך`
-                : "ללא מגבלת זמן למהלך"}</strong>
+                  ? "1 day per move"
+                  : `${invite.turnPaceDays} days per move`
+                : "No move time limit"}</strong>
             </p>
             {invite.magicRules ? (
               <div className="magic-invite">
-                <strong>✦ חוקי קסם</strong>
-                <span>{invite.magicRules.rules.map((rule) => magicRuleLabel(rule, "he")).join(" · ")}</span>
+                <strong>✦ Magic rules</strong>
+                <span>{invite.magicRules.rules.map((rule) => magicRuleLabel(rule, "en")).join(" · ")}</span>
                 {invite.world ? <small>
-                  עולם <bdi dir="ltr">{invite.world.displayCode}</bdi>
+                  World <bdi dir="ltr">{invite.world.displayCode}</bdi>
                   {invite.world.creatorUsername ? <> · <PlayerHandle username={invite.world.creatorUsername} /></> : null}
                 </small> : null}
               </div>
             ) : null}
-            <p className="join-identity">הצטרפות בתור <strong><PlayerHandle username={account.username} /></strong></p>
+            <p className="join-identity">Joining as <strong><PlayerHandle username={account.username} /></strong></p>
             {error ? <p className="form-error" role="alert">{error}</p> : null}
             <button className="primary-button" type="submit" disabled={busy}>
-              {busy ? "מצטרף…" : "אישור והצטרפות כשחור ←"}
+              {busy ? "Joining…" : "Accept and play as Black →"}
             </button>
-            <Link className="secondary-button" href="/">חזרה לדף הבית</Link>
-            <p className="fine-print">האישור מתחיל את המשחק ומוסיף אותו לחשבון שלכם.</p>
+            <Link className="secondary-button" href="/">Back to home</Link>
+            <p className="fine-print">Accepting starts the game and adds it to your account.</p>
           </form>
         ) : null}
         {invite.kind === "claimed" ? (
           <div className="voxel-card state-card">
-            <span className="big-glyph">⚑</span><h1>המקום כבר נתפס</h1>
-            <p>ההזמנה הזו כבר שימשה שחקן אחר.</p>
-            <button className="primary-button" type="button" onClick={() => void loadInvite()}>בדיקה נוספת</button>
-            <Link className="secondary-button" href="/app">פתיחת משחק אחר</Link>
-            <Link className="secondary-button" href="/">חזרה לדף הבית</Link>
+            <span className="big-glyph">⚑</span><h1>This seat is taken</h1>
+            <p>Another player has already used this invitation.</p>
+            <button className="primary-button" type="button" onClick={() => void loadInvite()}>Check again</button>
+            <Link className="secondary-button" href="/app">Start another game</Link>
+            <Link className="secondary-button" href="/">Back to home</Link>
           </div>
         ) : null}
         {invite.kind === "cancelled" ? (
           <div className="voxel-card state-card">
-            <span className="big-glyph">×</span><h1>המשחק בוטל</h1>
-            <p>יוצר המשחק ביטל אותו לפני שהתחיל.</p><Link className="secondary-button" href="/app">פתיחת משחק אחר</Link>
-            <Link className="secondary-button" href="/">חזרה לדף הבית</Link>
+            <span className="big-glyph">×</span><h1>Game cancelled</h1>
+            <p>The host cancelled this game before it started.</p><Link className="secondary-button" href="/app">Start another game</Link>
+            <Link className="secondary-button" href="/">Back to home</Link>
           </div>
         ) : null}
         {invite.kind === "missing" ? (
           <div className="voxel-card state-card">
-            <span className="big-glyph">?</span><h1>ההזמנה לא נמצאה</h1>
-            <p>בקשו מיוצר המשחק קישור חדש.</p><Link className="secondary-button" href="/app">מעבר למשחקים</Link>
-            <Link className="secondary-button" href="/">חזרה לדף הבית</Link>
+            <span className="big-glyph">?</span><h1>Invitation not found</h1>
+            <p>Ask the host for a new link.</p><Link className="secondary-button" href="/app">Go to games</Link>
+            <Link className="secondary-button" href="/">Back to home</Link>
           </div>
         ) : null}
         {invite.kind === "error" ? (
           <div className="voxel-card state-card">
-            <span className="big-glyph">↻</span><h1>החיבור נקטע</h1>
-            <p>המשחק עדיין לא נטען. בדקו את החיבור ונסו שוב.</p>
-            <button className="primary-button" type="button" onClick={() => void loadInvite()}>ניסיון נוסף</button>
-            <Link className="secondary-button" href="/">חזרה לדף הבית</Link>
+            <span className="big-glyph">↻</span><h1>Connection interrupted</h1>
+            <p>The game has not loaded. Check your connection and try again.</p>
+            <button className="primary-button" type="button" onClick={() => void loadInvite()}>Try again</button>
+            <Link className="secondary-button" href="/">Back to home</Link>
           </div>
         ) : null}
       </section>

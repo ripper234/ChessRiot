@@ -124,3 +124,13 @@ The phone records background/closed-window evidence and notification taps across
 page closure. Provider acceptance alone does not pass a round; the player must
 return through the notification and confirm seeing it. No second account or
 second device is needed. The test is available from Settings and New game.
+
+
+## English default and guided notification checks (v0.29.0)
+
+- English is the default throughout the app, including sign-in, game screens,
+  settings and notification diagnostics. User-entered text is preserved.
+- The phone test shows one current instruction and action, with all four real
+  rounds and full receipt evidence intact. Full results and the test board are
+  expandable. Retry, restart, exit, exact-device targeting and closed-app checks
+  remain available; no extra device or account is required.

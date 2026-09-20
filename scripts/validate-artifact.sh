@@ -58,12 +58,12 @@ const forbiddenRuntimeMarkers = [
 ];
 
 const requiredAccountMarkers = [
-  "נכנסים ומשחקים",
-  "המשך עם Google",
-  "בחירת שם משתמש",
+  "Sign in and play",
+  "Continue with Google",
+  "Choose a username",
   "/api/auth/google/start",
   "/api/me/username",
-  "צפייה בהיסטוריית המשחקים",
+  "View game history",
 ];
 const foundAccountMarkers = new Set();
 

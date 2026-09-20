@@ -335,26 +335,26 @@ export function PlayerHome() {
     setShareMessage("");
     setShareError(false);
     const shareData = {
-      title: "הצטרפו אליי כשחקנים ב־ChessRiot",
-      text: `זהו קישור חברים לפתיחת חשבון שחקן ולהתחברות אל @${account.username}, לא הזמנה למשחק פרטי.`,
+      title: "Join me on ChessRiot",
+      text: `Create a player account and connect with @${account.username} on ChessRiot. This friend link does not join a private game.`,
       url: referral.inviteUrl,
     };
     try {
       if (typeof navigator.share === "function") {
         await navigator.share(shareData);
-        setShareMessage("קישור החברים שותף.");
+        setShareMessage("Friend link shared.");
         return;
       }
       await navigator.clipboard.writeText(referral.inviteUrl);
-      setShareMessage("קישור החברים הועתק.");
+      setShareMessage("Friend link copied.");
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       try {
         await navigator.clipboard.writeText(referral.inviteUrl);
-        setShareMessage("קישור החברים הועתק.");
+        setShareMessage("Friend link copied.");
       } catch {
         setShareError(true);
-        setShareMessage("העתיקו את קישור החברים מהשדה.");
+        setShareMessage("Copy the friend link from the field.");
       }
     }
   }
@@ -420,20 +420,20 @@ export function PlayerHome() {
 
         <div className="dashboard-card friends-card">
           <header><div><small>FRIENDS</small><h2>Challenge your people</h2></div><span>{friends.length}</span></header>
-          {referral ? <section className="referral-share" lang="he" dir="rtl" translate="no" aria-label="קישור חברים לצירוף שחקן חדש">
+          {referral ? <section className="referral-share" lang="en" dir="ltr" translate="no" aria-label="Friend link for inviting a new player">
             <div className="referral-share-heading">
-              <div><strong>קישור החברים שלך</strong><small>{referral.creditsPerSignup} קרדיטים על כל שחקן חדש</small></div>
-              <span><b>{referral.credits}</b> קרדיטים · {referral.invitedPlayers} הצטרפו</span>
+              <div><strong>Your friend link</strong><small>{referral.creditsPerSignup} credits per new player</small></div>
+              <span><b>{referral.credits}</b> credits · {referral.invitedPlayers} joined</span>
             </div>
             <div className="referral-share-controls">
               <input
-                aria-label="קישור חברים אישי לצירוף שחקן"
+                aria-label="Your personal friend invitation link"
                 value={referral.inviteUrl}
                 dir="ltr"
                 readOnly
                 onFocus={(event) => event.currentTarget.select()}
               />
-              <button type="button" onClick={() => void shareInvite()}>שיתוף קישור חברים</button>
+              <button type="button" onClick={() => void shareInvite()}>Share friend link</button>
             </div>
             {shareMessage ? <small className={shareError ? "form-error" : "form-success"}
               role={shareError ? "alert" : "status"}>{shareMessage}</small> : null}

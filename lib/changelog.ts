@@ -12,6 +12,18 @@ const commitSource = (sha: string) => `${REPOSITORY_URL}/commit/${sha}`;
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.29.0",
+    date: "2026-09-20",
+    title: "Simpler notification test, English by default",
+    summary: "Follow one clear step at a time while checking all four real notifications on your phone.",
+    changes: [
+      "Show one instruction and one primary action, with the complete test results and real game available on demand.",
+      "Keep every delivery, tap, game-opening and user-confirmation check, with clear retry and restart paths.",
+      "Use English throughout sign-in, games, menus, settings and notification diagnostics while preserving user-entered text.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.29.0`,
+  },
+  {
     version: "0.28.0",
     date: "2026-09-20",
     title: "Four-turn Android test on one device",

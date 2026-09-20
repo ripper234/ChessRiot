@@ -2008,7 +2008,7 @@ try {
   });
   assert.equal(referralPage.status, 200);
   const referralPageHtml = await referralPage.text();
-  assert.match(referralPageHtml, /קישור לחיבור בין שחקנים/);
+  assert.match(referralPageHtml, /Friend invitation/);
   assert.match(referralPageHtml, new RegExp(referralOwnerUsername));
 
   const friendAlice = {

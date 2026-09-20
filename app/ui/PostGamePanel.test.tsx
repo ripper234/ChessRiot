@@ -41,13 +41,13 @@ describe("PostGamePanel", () => {
       <PostGamePanel game={completedGame("stalemate")} onDismiss={vi.fn()} onReview={vi.fn()} />,
     );
 
-    expect(cancelled).toContain("המשחק בוטל");
-    expect(cancelled).not.toContain("המשחק הסתיים בתיקו");
+    expect(cancelled).toContain("Game cancelled");
+    expect(cancelled).not.toContain("The game is a draw");
     expect(cancelled).toContain("pace=3");
     expect(cancelled).toContain("opponent=Bob");
-    expect(drawn).toContain("המשחק הסתיים בתיקו");
-    expect(drawn).toContain("פט");
-    expect(drawn).toContain("שתף סיכום");
+    expect(drawn).toContain("The game is a draw");
+    expect(drawn).toContain("Stalemate");
+    expect(drawn).toContain("Share recap");
   });
 
   it.each([1, 3, 5] as const)("restores the %d-day pace for Play Again", (pace) => {

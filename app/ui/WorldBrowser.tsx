@@ -297,7 +297,7 @@ export function WorldDetail({ code }: { code: string }) {
                 <dl>
                   <div><dt>CREATOR</dt><dd>{world.creatorUsername ? `@${world.creatorUsername}` : "Former player"}</dd></div>
                   <div><dt>PLAYED GAMES</dt><dd>{world.gamesPlayed}</dd></div>
-                  <div><dt>CREATED</dt><dd>{new Date(world.createdAt).toLocaleDateString()}</dd></div>
+                  <div><dt>CREATED</dt><dd>{new Date(world.createdAt).toLocaleDateString("en")}</dd></div>
                 </dl>
               </article>
               <aside className="world-rules-card">

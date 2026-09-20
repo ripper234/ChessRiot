@@ -146,7 +146,7 @@ export function GameHistory() {
           <Link href={`/g/${game.id}`} className="history-game" key={game.id}>
             <span className={`mini-piece ${game.color === "w" ? "light" : "dark"}`}><ChessPiece type="p" color={game.color} /></span>
             <span className="history-game-main"><strong>{game.mode === "solo" ? "Riot Bot" : game.opponent ? `@${game.opponent}` : "Open invitation"}</strong><small>{gameVariant(game.variantId).name}{game.isMagic ? " · Magic" : ""}{game.mode === "multiplayer" && game.turnPaceDays ? ` · ${game.turnPaceDays} ${game.turnPaceDays === 1 ? "day" : "days"}/move` : ""} · {game.plyCount} {game.plyCount === 1 ? "move" : "moves"}</small></span>
-            <span className="history-game-meta"><b data-result={resultLabel(game).toLowerCase().replace(/\s/g, "-")}>{resultLabel(game)}</b><small>{new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(game.updatedAt))}</small></span>
+            <span className="history-game-meta"><b data-result={resultLabel(game).toLowerCase().replace(/\s/g, "-")}>{resultLabel(game)}</b><small>{new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(game.updatedAt))}</small></span>
             <i aria-hidden="true">→</i>
           </Link>
         ))}</div> : null}

@@ -2296,7 +2296,7 @@ html[data-performance="low"] :is(
   grid-template-columns: 30px minmax(0,1fr) 12px;
 }
 .player-card > div { min-width: 0; }
-.player-card-copy { direction: rtl; text-align: start; }
+.player-card-copy { direction: ltr; text-align: start; }
 .captured-by {
   min-width: 0;
   display: flex;
@@ -3456,3 +3456,14 @@ body:has(.game-shell) { height: 100%; overflow: hidden; }
 
 html:has(.game-shell[data-notification-test="true"]),
 body:has(.game-shell[data-notification-test="true"]) { height: auto; overflow-y: auto; }
+
+/* Test guidance stays primary; the complete real game remains available below. */
+.notification-test-game { width: min(1100px, calc(100% - 32px)); margin: 0 auto 32px; font: 500 16px/1.5 var(--ui); }
+.notification-test-game > summary { width: fit-content; margin: 0 auto; padding: 12px 18px; color: var(--muted); cursor: pointer; font-weight: 700; }
+.notification-test-game > summary:focus-visible { outline: 3px solid var(--electric-blue); outline-offset: 2px; }
+.notification-test-game .game-layout { height: auto; min-height: 0; overflow: visible; }
+.game-shell[data-notification-test="true"] .board-column { height: auto; }
+@media (max-width: 700px) {
+  .notification-test-game { width: 100%; }
+  .notification-test-game .game-layout { display: block; padding: 8px 5px 76px; }
+}

@@ -67,9 +67,9 @@ export function PlayerClock({ game, color }: { game: GameSnapshot; color: Color 
       className="player-clock"
       dir="ltr"
       data-active={active ? "true" : "false"}
-      aria-label={`הזמן שחלף לשחקן ${color === "w" ? "לבן" : "שחור"}: ${formatted}${active ? ", השעון פועל" : ""}`}
+      aria-label={`${color === "w" ? "White" : "Black"} elapsed time: ${formatted}${active ? ", clock running" : ""}`}
     >
-      <small dir="rtl">{active ? "חושב" : "חלף"}</small>
+      <small dir="ltr">{active ? "Thinking" : "Elapsed"}</small>
       <strong>{formatted}</strong>
     </span>
   );
