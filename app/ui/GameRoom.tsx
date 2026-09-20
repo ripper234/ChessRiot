@@ -2,6 +2,7 @@
 
 import { Chess, type Move, type PieceSymbol, type Square } from "chess.js";
 import Link from "next/link";
+import { NotificationTurnTest } from "./NotificationTurnTest";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
@@ -613,6 +614,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       !game ||
       busy ||
       game.mode !== "solo" ||
+      game.notificationTest ||
       game.status !== "active" ||
       game.turn === game.you.color
     ) return;
@@ -887,6 +889,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
 
   const canMove = Boolean(
     game
+    && !game.notificationTest
     && !openingIntro
     && !viewingHistory
     && game.status === "active"
@@ -1021,7 +1024,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     setMagicDraft(null);
     if (humanPreview) {
       setOptimisticGame(humanPreview);
-      if (humanPreview.mode === "solo" && humanPreview.status === "active") {
+      if (humanPreview.mode === "solo" && !currentGame.notificationTest && humanPreview.status === "active") {
         botPreviewTimer = window.setTimeout(() => {
           const fullPreview = optimisticSoloTurnSnapshot(
             currentGame,
@@ -1585,10 +1588,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
     : null;
   const draggedPiece = drag ? chess.get(drag.from) : null;
   return (
-    <main className="game-shell" lang="he" dir="rtl" translate="no">
+    <main className="game-shell" lang="he" dir="rtl" translate="no" data-notification-test={Boolean(game?.notificationTest)}>
       <header className="topbar game-topbar">
         <Brand locale="he" />
       </header>
+      {game.notificationTest ? <NotificationTurnTest game={game} onRefresh={() => void loadGame()} /> : null}
       <dialog
         className="surrender-confirm-backdrop"
         ref={surrenderDialog}

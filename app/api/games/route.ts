@@ -42,6 +42,7 @@ import {
   MAGIC_RULES_FEATURE,
 } from "@/lib/social";
 import { validateUsername } from "@/lib/usernames";
+import { notificationTestDevice } from "@/lib/notification-turn-test";
 
 export const dynamic = "force-dynamic";
 
@@ -158,6 +159,14 @@ export async function POST(request: Request) {
     );
   }
 
+  const notificationTestRequested = body.notificationTestEndpoint !== undefined;
+  const testDevice = notificationTestRequested
+    ? await notificationTestDevice(account.id, body.notificationTestEndpoint)
+    : null;
+  if (notificationTestRequested && (
+    !testDevice || mode !== "solo" || variantId !== "standard" || difficulty !== 1 || requestedMagic
+  )) return apiError(409, "notification_test_unavailable", "Enable notifications on this device before starting a standard level-1 test game");
+
   await ensureSchema();
   const [playerHash, inviteHash] = await Promise.all([hashSecret(playerToken), hashSecret(inviteToken)]);
   const existing = await findGameByCreateRequest(requestId);
@@ -203,6 +212,7 @@ export async function POST(request: Request) {
       playerColor(existing, playerHash) !== existing.human_color ||
       existingColor !== existing.human_color ||
       existing.invite_token_hash !== inviteHash ||
+      (existing.notification_test_device_id ?? null) !== (testDevice?.id ?? null) ||
       existing.game_mode !== mode ||
       existing.variant_id !== variantId ||
       existing.initial_fen !== initialFen ||
@@ -236,7 +246,7 @@ export async function POST(request: Request) {
   const now = new Date().toISOString();
   const status = mode === "solo" ? "active" : "waiting";
   const humanColor: Color = mode === "solo"
-    ? variant.humanColor ?? assignedSoloColor(requestId)
+    ? testDevice ? "w" : variant.humanColor ?? assignedSoloColor(requestId)
     : "w";
   const computerColor: Color | null = mode === "solo"
     ? humanColor === "w" ? "b" : "w"
@@ -300,8 +310,8 @@ export async function POST(request: Request) {
         ),
       db.prepare(`INSERT INTO game_settings (
         game_id, game_mode, variant_id, ai_difficulty, human_color, turn_pace_days,
-        magic_prompt, magic_rules_json, world_code
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        magic_prompt, magic_rules_json, world_code, notification_test_device_id, notification_test_expires_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
         .bind(
           id,
           mode,
@@ -312,6 +322,8 @@ export async function POST(request: Request) {
           magicPrompt,
           magicRulesJson,
           worldCode,
+          testDevice?.id ?? null,
+          testDevice ? Date.now() + 2 * 60 * 60 * 1_000 : null,
         ),
       db.prepare(`INSERT INTO game_memberships (
         game_id, color, account_id, claimed_at
@@ -392,6 +404,7 @@ export async function POST(request: Request) {
       playerColor(raced, playerHash) !== raced.human_color ||
       raced.invite_token_hash !== inviteHash ||
       raced.game_mode !== mode ||
+      (raced.notification_test_device_id ?? null) !== (testDevice?.id ?? null) ||
       raced.variant_id !== variantId ||
       raced.initial_fen !== initialFen ||
       raced.ai_difficulty !== difficulty ||

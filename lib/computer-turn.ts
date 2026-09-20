@@ -11,6 +11,8 @@ import {
 import { recordEvent } from "./observability";
 import { markMagicWorldPlayed } from "./magic-worlds";
 import { serializeMoveContinuation } from "./move-continuation";
+import { activeNotificationTestDevice } from "./notification-turn-test";
+import { queueTurnNotifications } from "./push-notifications";
 
 function changes(result: D1Result<unknown> | undefined): number {
   return result?.meta.changes ?? 0;
@@ -58,11 +60,12 @@ async function releaseBotTurnLease(
     .run();
 }
 
-export async function playPendingComputerTurn(gameId: string): Promise<void> {
+export async function playPendingComputerTurn(gameId: string, expectedTestVersion?: number): Promise<void> {
   const game = await findGameById(gameId);
   const botColor = game ? computerColor(game) : null;
   if (
     !game ||
+    (expectedTestVersion !== undefined && (game.version !== expectedTestVersion || !game.notification_test_device_id)) ||
     game.game_mode !== "solo" ||
     game.status !== "active" ||
     !botColor ||
@@ -71,6 +74,11 @@ export async function playPendingComputerTurn(gameId: string): Promise<void> {
   )
     return;
 
+  if (game.notification_test_device_id && (
+    Date.now() < Date.parse(game.updated_at) + 8_000
+    || game.ply_count >= 8
+    || !(await activeNotificationTestDevice(game))
+  )) return;
   const expectedVersion = game.version;
   const leaseNonce = await acquireBotTurnLease(gameId, expectedVersion);
   if (!leaseNonce) return;
@@ -85,6 +93,9 @@ export async function playPendingComputerTurn(gameId: string): Promise<void> {
       leasedGame.ai_difficulty === null
     )
       return;
+    const testDevice = leasedGame.notification_test_device_id
+      ? await activeNotificationTestDevice(leasedGame) : null;
+    if (leasedGame.notification_test_device_id && !testDevice) return;
     const difficulty = leasedGame.ai_difficulty;
     const storedMoves = await readMoves(gameId);
     const replayed = assertAuthoritativeState(leasedGame, storedMoves);
@@ -121,7 +132,7 @@ export async function playPendingComputerTurn(gameId: string): Promise<void> {
     const status = outcome.completed ? "completed" : "active";
     const db = getDatabase();
 
-    const results = await db.batch([
+    const writes = [
       db
         .prepare(
           `UPDATE games SET
@@ -177,7 +188,14 @@ export async function playPendingComputerTurn(gameId: string): Promise<void> {
           nextVersion,
           attemptNonce,
         ),
-    ]);
+    ];
+    if (testDevice && !outcome.completed && outcome.turn === leasedGame.human_color) {
+      writes.push(...queueTurnNotifications(db, {
+        gameId, gameVersion: nextVersion, targetColor: outcome.turn,
+        mutationNonce: attemptNonce, createdAt: now, targetDeviceId: testDevice.id,
+      }));
+    }
+    const results = await db.batch(writes);
 
     const committed =
       (changes(results[0]) === 1 && changes(results[1]) === 1) ||

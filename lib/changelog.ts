@@ -12,6 +12,18 @@ const commitSource = (sha: string) => `${REPOSITORY_URL}/commit/${sha}`;
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.28.0",
+    date: "2026-09-20",
+    title: "Four-turn Android test on one device",
+    summary: "Test closed-app notifications through four real turns against Riot Bot on the phone you are holding.",
+    changes: [
+      "Start the guided test from Settings or the new-game page, with no second device or account.",
+      "Riot Bot waits eight seconds before each real reply; the ordinary turn queue sends only to the device that started the test.",
+      "Inspect server delivery, persistent device receipts, notification taps and exact-game opening separately, then confirm the Android notification you saw.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.28.0`,
+  },
+  {
     version: "0.27.8",
     date: "2026-09-20",
     title: "Recover notification setup and unblock healthy devices",

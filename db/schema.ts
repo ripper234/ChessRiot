@@ -123,6 +123,8 @@ export const gameSettings = sqliteTable(
     aiDifficulty: integer("ai_difficulty"),
     humanColor: text("human_color").notNull().default("w"),
     turnPaceDays: integer("turn_pace_days"),
+    notificationTestDeviceId: text("notification_test_device_id"),
+    notificationTestExpiresAt: integer("notification_test_expires_at"),
     magicPrompt: text("magic_prompt"),
     magicRulesJson: text("magic_rules_json"),
     worldCode: text("world_code"),

@@ -79,6 +79,8 @@ interface ClaimedPushDelivery extends StoredPushTarget {
   game_updated_at: string;
   turn_pace_days: TurnPaceDays | null;
   target_color: Color;
+  notification_test_device_id?: string | null;
+  notification_test_expires_at?: number | null;
 }
 
 interface ClaimedAccountDelivery extends StoredPushTarget {
@@ -806,6 +808,7 @@ export function queueTurnNotifications(
     gameVersion: number;
     targetColor: Color;
     mutationNonce: string;
+    targetDeviceId?: string;
     createdAt: string;
     nowMs?: number;
   },
@@ -872,6 +875,7 @@ export function queueTurnNotifications(
     JOIN games ON games.id = memberships.game_id
     WHERE memberships.game_id = ?
       AND memberships.color = ?
+      AND (? IS NULL OR devices.id = ?)
       AND devices.disabled_at IS NULL
       AND (devices.expiration_time IS NULL OR devices.expiration_time > ?)
       AND games.version = ?
@@ -888,13 +892,15 @@ export function queueTurnNotifications(
       input.createdAt,
       input.gameId,
       input.targetColor,
+      input.targetDeviceId ?? null,
+      input.targetDeviceId ?? null,
       nowMs,
       input.gameVersion,
       input.mutationNonce,
       input.targetColor,
       MAX_DEVICES_PER_ACCOUNT,
     );
-  return [account, legacy];
+  return input.targetDeviceId ? [account] : [account, legacy];
 }
 
 export function queueFriendRequestNotifications(
@@ -1391,7 +1397,9 @@ async function claimDelivery(nowMs: number): Promise<ClaimedPushDelivery | null>
         games.version AS current_version,
         games.turn_color AS current_turn,
         games.updated_at AS game_updated_at,
-        settings.turn_pace_days
+        settings.turn_pace_days,
+        settings.notification_test_device_id,
+        settings.notification_test_expires_at
       FROM push_turn_deliveries AS deliveries
       JOIN push_devices AS devices ON devices.id = deliveries.device_id
       JOIN game_memberships AS memberships
@@ -1418,7 +1426,9 @@ async function claimDelivery(nowMs: number): Promise<ClaimedPushDelivery | null>
         games.version AS current_version,
         games.turn_color AS current_turn,
         games.updated_at AS game_updated_at,
-        settings.turn_pace_days
+        settings.turn_pace_days,
+        settings.notification_test_device_id,
+        settings.notification_test_expires_at
       FROM push_deliveries AS deliveries
       JOIN push_subscriptions AS subscriptions
         ON subscriptions.id = deliveries.subscription_id
@@ -1506,7 +1516,9 @@ async function sendClaimedTurnPush(
     return "dead";
   }
   if (
-    delivery.game_status !== "active"
+    (delivery.notification_test_device_id && (delivery.notification_test_device_id !== delivery.id
+      || (delivery.notification_test_expires_at ?? 0) <= Date.now()))
+    || delivery.game_status !== "active"
     || delivery.current_version !== delivery.game_version
     || delivery.current_turn !== delivery.target_color
     || (delivery.turn_pace_days !== null
@@ -1529,6 +1541,7 @@ async function sendClaimedTurnPush(
         type: "your_turn",
         gameId: delivery.game_id,
         gameVersion: delivery.game_version,
+        ...(delivery.notification_test_device_id ? { notificationTest: true } : {}),
       }),
       {
         vapidDetails: {

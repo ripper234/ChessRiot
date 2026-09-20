@@ -17,6 +17,8 @@ import {
   drainPendingTurnNotifications,
 } from "@/lib/push-notifications";
 import { runBoundedPushDrain } from "@/lib/push-drain";
+import { playPendingComputerTurn } from "@/lib/computer-turn";
+import { isUuid } from "@/lib/validation";
 import {
   GOOGLE_SESSION_COOKIE,
   refreshedGoogleSessionCookieFromHeaders,
@@ -205,7 +207,21 @@ const worker = {
     try {
       const hardened = hardenResponse(await handler.fetch(request, env, ctx), url);
       const response = await renewActiveGoogleSession(request, hardened, url);
-      if (env.DB && url.pathname.startsWith("/api/") && !readOnlyHealth) schedulePushDrain(ctx);
+      const testVersion = response.headers.get("x-chessriot-notification-test-version");
+      const testGameId = /^\/api\/games\/([^/]+)\/moves$/.exec(url.pathname)?.[1];
+      if (env.DB && response.ok && request.method === "POST" && isUuid(testGameId)
+        && testVersion !== null && Number.isSafeInteger(Number(testVersion)) && Number(testVersion) > 0) {
+        const testStartedAt = Date.now();
+        ctx.waitUntil((async () => {
+          try {
+            await new Promise((resolve) => setTimeout(resolve, 8_000));
+            await playPendingComputerTurn(testGameId, Number(testVersion));
+            await runBoundedPushDrain(drainPendingTurnNotifications, drainPendingAccountNotifications, { startedAt: testStartedAt });
+          } catch {
+            await recordEvent({ event: "push.notification_test_failed", outcome: "failure", errorCode: "delayed_turn_failed" });
+          }
+        })());
+      } else if (env.DB && url.pathname.startsWith("/api/") && !readOnlyHealth) schedulePushDrain(ctx);
       if (observation) {
         ctx.waitUntil(observeHttpRequest(request, response, startedAt, observation));
       }

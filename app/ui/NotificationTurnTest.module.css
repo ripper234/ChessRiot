@@ -1,0 +1,21 @@
+.panel { width: min(720px, calc(100% - 24px)); margin: 76px auto 24px; padding: clamp(18px, 4vw, 30px); border: 2px solid var(--chess-gold); color: var(--text); background: var(--surface-raised); box-shadow: 0 6px 0 var(--stone-dark); font: 500 16px/1.55 var(--ui); }
+.heading { display: flex; align-items: center; gap: 14px; }
+.heading > span { color: var(--chess-gold); font-size: 46px; }
+.heading p { margin: 0; color: var(--chess-gold); font-size: 14px; }
+.heading h1 { margin: 2px 0 0; font: 900 clamp(25px, 6vw, 34px)/1.15 var(--display); }
+.panel ol { padding-inline-start: 22px; }
+.panel button { display: block; width: 100%; min-height: 48px; padding: 12px; margin: 14px 0; border: 2px solid var(--chess-gold); background: var(--chess-gold); color: #171c20; font: 800 16px/1.35 var(--ui); cursor: pointer; }
+.panel button:disabled { opacity: .5; cursor: wait; }
+.panel button:focus-visible, .panel a:focus-visible { outline: 3px solid var(--electric-blue); outline-offset: 3px; }
+.panel a { color: var(--electric-blue); font-weight: 700; }
+.summary { font-weight: 800; }
+.instruction { border-inline-start: 4px solid var(--chess-gold); padding: 12px; background: var(--surface); }
+.rounds { display: grid; gap: 8px; list-style: none; padding: 0 !important; }
+.rounds li { display: grid; gap: 3px; border: 1px solid var(--muted); padding: 10px 12px; }
+.rounds li[data-passed="true"] { border-color: var(--teal-spark); }
+.rounds span, .rounds small, .note { font-size: 14px; }
+.rounds small { color: var(--chess-gold); }
+.note { color: var(--muted); }
+.links { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; }
+.panel .secondary { width: auto; margin: 0; background: transparent; color: var(--text); font-size: 14px; }
+.error { color: #ffadb3; border: 1px solid #ff7d84; padding: 12px; }

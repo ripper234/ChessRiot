@@ -58,7 +58,7 @@ export async function GET(
   const { color } = authorization;
   let game: GameRow | null = authorization.game;
   game = await expireMultiplayerTurn(game);
-  if (isPendingComputerTurn(game)) {
+  if (isPendingComputerTurn(game) && (!game.notification_test_device_id || Date.now() >= Date.parse(game.updated_at) + 8_000)) {
     const expectedVersion = game.version;
     await playPendingComputerTurn(id);
     game = await waitForComputerTurnResolution(id, expectedVersion);

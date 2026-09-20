@@ -1,0 +1,45 @@
+export const TURN_TEST_CACHE = "chessriot-turn-test-v1";
+export const turnTestReceiptPath = (gameId: string, version: number) => `/__chessriot_turn_test__/${gameId}/${version}`;
+
+export interface TurnTestReceipt {
+  receivedAt?: number;
+  shownAt?: number;
+  showRejectedAt?: number;
+  clickedAt?: number;
+  openedAt?: number;
+  confirmedAt?: number;
+  visibleClients?: number | null;
+  windowClients?: number | null;
+}
+
+export function turnTestRoundPassed(receipt: TurnTestReceipt | undefined): boolean {
+  return Boolean(!receipt?.showRejectedAt && receipt?.receivedAt && receipt.shownAt && receipt.clickedAt
+    && receipt.openedAt && receipt.confirmedAt && receipt.visibleClients === 0
+    && receipt.receivedAt <= receipt.shownAt && receipt.shownAt <= receipt.clickedAt
+    && receipt.clickedAt <= receipt.openedAt && receipt.openedAt <= receipt.confirmedAt);
+}
+
+export async function readTurnTestReceipts(gameId: string, version: number, openedGame: boolean): Promise<Record<number, TurnTestReceipt>> {
+  const cache = await caches.open(TURN_TEST_CACHE);
+  const records: Record<number, TurnTestReceipt> = {};
+  for (const roundVersion of [2, 4, 6, 8]) {
+    const path = turnTestReceiptPath(gameId, roundVersion);
+    const response = await cache.match(path);
+    const value: TurnTestReceipt = response ? await response.json() : {};
+    if (openedGame && value.clickedAt && !value.openedAt && version >= roundVersion) {
+      value.openedAt = Date.now();
+      await cache.put(path, new Response(JSON.stringify(value)));
+    }
+    records[roundVersion] = value;
+  }
+  return records;
+}
+
+export async function confirmTurnTestReceipt(gameId: string, version: number): Promise<void> {
+  const cache = await caches.open(TURN_TEST_CACHE);
+  const path = turnTestReceiptPath(gameId, version);
+  const response = await cache.match(path);
+  const value: TurnTestReceipt = response ? await response.json() : {};
+  if (!value.clickedAt || !value.openedAt || value.visibleClients !== 0) return;
+  await cache.put(path, new Response(JSON.stringify({ ...value, confirmedAt: Date.now() })));
+}

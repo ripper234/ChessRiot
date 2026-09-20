@@ -184,3 +184,30 @@ add `includeSubDomains` only when every intended subdomain is HTTPS-only.
   grants or endpoints, and verify privacy-safe logs before restoring service.
 - Keep the latest Production release unchanged while a Development fix is under
   review.
+
+
+## One Android, four-turn acceptance test
+
+1. On the Android being tested, open `https://chessriot.gg/notification-test` and
+   sign in. Select **הפעלת התראות והתחלת בדיקה** and allow notifications.
+2. Select **המהלך הבא**, then immediately go Home or lock the phone. The server
+   makes Riot Bot's real response about eight seconds later; no second device
+   or second account is required.
+3. Tap the Android notification. It must open this exact game. Confirm that
+   this is the notification you saw. Repeat until four rounds are verified.
+4. On round three, also try dismissing ChessRiot from recent apps or closing its
+   browser tab. Do not use Android **Force stop**. The report distinguishes no
+   visible windows from no open ChessRiot windows.
+5. If a round stalls, inspect its separate provider, device, notification,
+   click and game-open stages. A displayed browser notification API result is
+   not physical banner proof. Foreground, failed-display and missing evidence
+   remain incomplete; use **בדיקה חדשה** to retry cleanly.
+
+Ending or restarting closes the diagnostic game, preventing its pending bot
+reply. The test is capped at four rounds and expires after two hours. Exact-device
+ownership is rechecked before the bot reply and send; normal multiplayer and
+ordinary Solo behavior are unchanged. The same known hosting limit still
+applies: interrupted continuations have no independent recurring wake.
+
+Apply generated migration 0029 before running v0.28.0 with an existing standalone
+or local database. Hosted publication applies it before uploading the Worker.
