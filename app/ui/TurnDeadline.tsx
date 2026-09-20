@@ -28,13 +28,13 @@ export function TurnDeadline({
   }, []);
 
   return (
-    <div className={`turn-deadline${yourTurn ? " mine" : ""}`} dir="rtl" role="timer" aria-live="off">
+    <div className={`turn-deadline${yourTurn ? " mine" : ""}`} dir="ltr" role="timer" aria-live="off">
       <span aria-hidden="true">⌛</span>
       <div>
-        <small>{yourTurn ? "המועד האחרון למהלך שלך" : "המועד האחרון למהלך היריב"}</small>
-        <strong>{formatTurnTimeLeft(deadlineAt, now, "he")}</strong>
+        <small>{yourTurn ? "Your move deadline" : "Opponent's move deadline"}</small>
+        <strong>{formatTurnTimeLeft(deadlineAt, now, "en")}</strong>
       </div>
-      <b>{turnPaceDays} {turnPaceDays === 1 ? "יום" : "ימים"} / מהלך</b>
+      <b>{turnPaceDays} {turnPaceDays === 1 ? "day" : "days"} / move</b>
     </div>
   );
 }

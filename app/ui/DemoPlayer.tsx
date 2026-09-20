@@ -88,7 +88,7 @@ export function DemoPlayer() {
         <span>SYNTHETIC NARRATION</span>
         {status?.source === "generated" && status.generatedAt ? (
           <span>
-            UPDATED {new Date(status.generatedAt).toLocaleDateString()}
+            UPDATED {new Date(status.generatedAt).toLocaleDateString("en")}
           </span>
         ) : null}
       </div>

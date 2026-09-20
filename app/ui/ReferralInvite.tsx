@@ -32,8 +32,8 @@ type SessionState =
 
 function InviteShell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="auth-shell referral-invite-shell" lang="he" dir="rtl" translate="no">
-      <header className="topbar"><Brand locale="he" /></header>
+    <main className="auth-shell referral-invite-shell" lang="en" dir="ltr" translate="no">
+      <header className="topbar"><Brand locale="en" /></header>
       <div className="auth-stage">{children}</div>
     </main>
   );
@@ -74,7 +74,7 @@ function ConnectedInvite({ code, expectedInviter }: {
       setStatus("ready");
     } catch {
       if (controller.signal.aborted || attempt.current !== attemptId) return;
-      setMessage("לא הצלחנו להשלים את החיבור. ייתכן שהוא כבר בוצע, ולכן אפשר לנסות שוב בבטחה.");
+      setMessage("We could not confirm the connection. You may already be connected, so it is safe to try again.");
       setStatus("error");
     } finally {
       if (request.current === controller) request.current = null;
@@ -94,25 +94,25 @@ function ConnectedInvite({ code, expectedInviter }: {
     <InviteShell>
       <section className="auth-card referral-invite-card">
         <span className="auth-glyph" aria-hidden="true">♞</span>
-        <p className="auth-kicker">קישור לחיבור בין שחקנים</p>
+        <p className="auth-kicker">Friend invitation</p>
         {status === "loading" ? <>
-          <h1>מחבר בין השחקנים…</h1>
-          <p role="status">מוסיף את <PlayerHandle username={inviterUsername} /> ואת <PlayerHandle username={account.username} /> לרשימות החברים זה של זה.</p>
-          <p>זהו קישור לחברים, לא הזמנה למשחק קיים.</p>
-          <button className="primary-button" type="button" onClick={() => void connect()}>ניסיון נוסף</button>
-          <Link className="secondary-button" href="/">חזרה לדף הבית</Link>
+          <h1>Connecting players…</h1>
+          <p role="status">Adding <PlayerHandle username={inviterUsername} /> and <PlayerHandle username={account.username} /> to each other’s friend lists.</p>
+          <p>This adds a friend. It does not join an existing game.</p>
+          <button className="primary-button" type="button" onClick={() => void connect()}>Try again</button>
+          <Link className="secondary-button" href="/">Back to home</Link>
         </> : status === "error" ? <>
-          <h1>החיבור נעצר</h1>
+          <h1>Connection interrupted</h1>
           <p className="form-error" role="alert">{message}</p>
-          <button className="primary-button" type="button" onClick={() => void connect()}>ניסיון נוסף</button>
-          <Link className="secondary-button" href="/">חזרה לדף הבית</Link>
+          <button className="primary-button" type="button" onClick={() => void connect()}>Try again</button>
+          <Link className="secondary-button" href="/">Back to home</Link>
         </> : <>
-          <h1>אתם מחוברים.</h1>
-          <p><PlayerHandle username={inviterUsername} /> נוסף לרשימת החברים. עכשיו אפשר ליצור משחק חדש.</p>
+          <h1>You are connected.</h1>
+          <p><PlayerHandle username={inviterUsername} /> is now on your friend list. You can start a game together.</p>
           <Link className="primary-button" href={`/app?opponent=${encodeURIComponent(inviterUsername)}`}>
-            יצירת משחק מול <PlayerHandle username={inviterUsername} />
+            Start a game with <PlayerHandle username={inviterUsername} />
           </Link>
-          <Link className="secondary-button" href="/">חזרה לדף הבית</Link>
+          <Link className="secondary-button" href="/">Back to home</Link>
         </>}
       </section>
     </InviteShell>
@@ -188,28 +188,28 @@ export function ReferralInvite({ code, inviterUsername, creditsPerSignup }: Refe
     <InviteShell>
       <section className="auth-card referral-invite-card">
         <span className="auth-glyph" aria-hidden="true">♞</span>
-        <p className="auth-kicker">קישור לחיבור בין שחקנים</p>
+        <p className="auth-kicker">Friend invitation</p>
         {session.kind === "loading" ? <>
-          <h1>פותח את הקישור…</h1>
-          <p role="status">מאתר את <PlayerHandle username={inviterUsername} />.</p>
-          <p>זהו קישור להוספת חבר, לא הזמנה למשחק קיים.</p>
-          <button className="primary-button" type="button" onClick={() => void refresh()}>ניסיון נוסף</button>
-          <Link className="secondary-button" href="/">חזרה לדף הבית</Link>
+          <h1>Opening link…</h1>
+          <p role="status">Finding <PlayerHandle username={inviterUsername} />.</p>
+          <p>This adds a friend. It does not join an existing game.</p>
+          <button className="primary-button" type="button" onClick={() => void refresh()}>Try again</button>
+          <Link className="secondary-button" href="/">Back to home</Link>
         </> : session.kind === "error" ? <>
-          <h1>לא הצלחנו להתחבר</h1>
-          <p className="form-error" role="alert">הקישור עדיין לא נפתח. בדקו את החיבור ונסו שוב.</p>
-          <button className="primary-button" type="button" onClick={() => void refresh()}>ניסיון נוסף</button>
-          <Link className="secondary-button" href="/">חזרה לדף הבית</Link>
+          <h1>Could not connect</h1>
+          <p className="form-error" role="alert">The link has not opened. Check your connection and try again.</p>
+          <button className="primary-button" type="button" onClick={() => void refresh()}>Try again</button>
+          <Link className="secondary-button" href="/">Back to home</Link>
         </> : <>
-          <h1>להוסיף את <PlayerHandle username={inviterUsername} /> לחברים.</h1>
-          <p>לאחר הכניסה תתווספו אוטומטית לרשימות החברים. זה אינו מצרף אתכם למשחק קיים. <PlayerHandle username={inviterUsername} /> יקבל {creditsPerSignup} קרדיטים אם זהו חשבון חדש.</p>
+          <h1>Add <PlayerHandle username={inviterUsername} /> as a friend.</h1>
+          <p>After sign-in, you will be added to each other’s friend lists automatically. This does not join an existing game. <PlayerHandle username={inviterUsername} /> receives {creditsPerSignup} credits if you create a new account.</p>
           <button className="google-sign-in" type="button" disabled={!session.available} onClick={startGoogleLogin}>
             <span aria-hidden="true">G</span>
-            המשך עם Google
+            Continue with Google
           </button>
-          {!session.available ? <p className="form-error">הכניסה עם Google אינה זמינה כרגע.</p> : null}
+          {!session.available ? <p className="form-error">Google sign-in is unavailable right now.</p> : null}
           <small className="auth-legal">
-            בהמשך הפעולה אתם מסכימים ל<Link href="/terms">תנאי השימוש</Link> ומאשרים שקראתם את <Link href="/privacy">מדיניות הפרטיות</Link>.
+            By continuing, you agree to the <Link href="/terms">Terms of Use</Link> and confirm that you have read the <Link href="/privacy">Privacy Policy</Link>.
           </small>
         </>}
       </section>

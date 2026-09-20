@@ -18,11 +18,11 @@ export function HistoryControls({
   onForward,
 }: HistoryControlsProps) {
   return (
-    <div className="history-controls" dir="ltr" role="group" aria-label="היסטוריית מהלכים">
+    <div className="history-controls" dir="ltr" role="group" aria-label="Move history">
       <button
         type="button"
-        aria-label="העמדה הקודמת"
-        title="העמדה הקודמת"
+        aria-label="Previous position"
+        title="Previous position"
         disabled={unavailable || (currentPly === 0 && !canStepBackFromDraft)}
         onClick={onBack}
       >
@@ -30,8 +30,8 @@ export function HistoryControls({
       </button>
       <button
         type="button"
-        aria-label="העמדה הבאה"
-        title="העמדה הבאה"
+        aria-label="Next position"
+        title="Next position"
         disabled={unavailable || !viewingHistory}
         onClick={onForward}
       >

@@ -211,3 +211,22 @@ applies: interrupted continuations have no independent recurring wake.
 
 Apply generated migration 0029 before running v0.28.0 with an existing standalone
 or local database. Hosted publication applies it before uploading the Worker.
+
+
+### v0.29.0 acceptance UI
+
+Open `/notification-test` on the Android being tested. Tap **Start test**, then
+**Send notification 1**. Immediately go Home or lock the phone; Riot Bot replies
+in about eight seconds. Tap the real notification, then **Yes, I saw it and tapped
+it**. Repeat all four rounds. Round three asks the player to close the app from
+Recents or close its browser tab; do not use Force stop.
+
+**Full test results** retains provider acceptance, attempt counts, all receipt
+stage timestamps, visible/total window counts, device state and expiry. **View test
+game** retains the real board and history. **Need help?** offers status refresh and
+a fresh test. No round passes merely because the provider accepted a send. If
+immutable evidence is invalid, or an earlier saved result is missing, restart the
+test rather than attempting an extra move beyond the four-round limit.
+
+Default UI is now English and LTR. Existing Hebrew usernames/user-authored content
+remain unchanged. The UI change uses the existing 0029 schema with no new migration.

@@ -26,15 +26,15 @@ function renderEnv() {
 }
 
 function assertMandatoryAccountGate(html) {
-  assert.match(html, /פותחים את הזירה…|נכנסים ומשחקים/);
+  assert.match(html, /Opening the arena…|Sign in and play/);
   assert.match(
     html,
-    /<main(?=[^>]*class="auth-shell")(?=[^>]*lang="he")(?=[^>]*dir="rtl")(?=[^>]*translate="no")[^>]*>/,
+    /<main(?=[^>]*class="auth-shell")(?=[^>]*lang="en")(?=[^>]*dir="ltr")(?=[^>]*translate="no")[^>]*>/,
   );
-  assert.doesNotMatch(html, /OPENING THE ARENA|ASSEMBLING BOARD/i);
+  assert.doesNotMatch(html, /פותחים את הזירה|מסדרים את הלוח/);
   assert.doesNotMatch(html, /Your display name|id="display-name"|Playing as|play as (?:a )?guest/i);
-  if (/נכנסים ומשחקים/.test(html)) {
-    assert.match(html, /המשך עם Google/);
+  if (/Sign in and play/.test(html)) {
+    assert.match(html, /Continue with Google/);
     assert.match(html, /href="\/terms"/);
     assert.match(html, /href="\/privacy"/);
   }
@@ -147,8 +147,8 @@ test("renders the public home and mandatory account-gated play routes", async ()
   assert.match(playerHomeSource, /fetchJsonWithReadTimeout<SocialPayload>/);
   assert.match(playerHomeSource, /generation !== refreshGeneration\.current/);
   assert.match(playerHomeSource, /ACTIVITY_CHANGED_EVENT, refreshAfterActivityChange/);
-  assert.match(playerHomeSource, /קישור החברים שלך/);
-  assert.match(playerHomeSource, /לא הזמנה למשחק פרטי/);
+  assert.match(playerHomeSource, /Your friend link/);
+  assert.match(playerHomeSource, /This friend link does not join a private game/);
   assert.match(activityInboxSource, /searchParams\.get\("activity"\) !== "1"/);
   assert.match(activityInboxSource, /dialogRef\.current\?\.showModal\(\)/);
   assert.match(activityInboxSource, /ACTIVITY_POLL_MS = 30_000/);
@@ -159,7 +159,7 @@ test("renders the public home and mandatory account-gated play routes", async ()
   assert.match(activityInboxSource, /fetchJsonWithReadTimeout<ActivityPayload>/);
   assert.match(
     activityInboxSource,
-    /className="activity-trigger"[\s\S]*?lang="he"\s*dir="rtl"\s*translate="no"/,
+    /className="activity-trigger"[\s\S]*?lang="en"\s*dir="ltr"\s*translate="no"/,
   );
   assert.match(
     readFileSync(new URL("../app/globals.css", import.meta.url), "utf8"),
@@ -178,10 +178,10 @@ test("renders the public home and mandatory account-gated play routes", async ()
   assert.doesNotMatch(playerHomeSource, /<ActivityInbox\b/);
   assert.match(
     accountGateSource,
-    /<main className="auth-shell" lang="he" dir="rtl" translate="no">/,
+    /<main className="auth-shell" lang="en" dir="ltr" translate="no">/,
   );
-  assert.match(accountGateSource, /role="status">פותחים את הזירה…[\s\S]*?חזרה לדף הבית<\/Link><\/div>/);
-  assert.doesNotMatch(accountGateSource, /OPENING THE ARENA/i);
+  assert.match(accountGateSource, /role="status">Opening the arena…[\s\S]*?Back to home<\/Link><\/div>/);
+  assert.doesNotMatch(accountGateSource, /פותחים את הזירה|נכנסים ומשחקים/);
   assert.doesNotMatch(accountGateSource, /state\.session\.tutorialStatus === "pending" \?/);
   assert.match(accountGateSource, /recoveryDelayMs/);
   assert.match(accountGateSource, /fetchJsonWithReadTimeout<SessionPayload>/);
@@ -210,27 +210,27 @@ test("renders the public home and mandatory account-gated play routes", async ()
   assert.match(tutorialSource, /moveTutorialKnight\(current, square\)/);
   assert.doesNotMatch(gameRoomSource, /className="magic-game-banner"/);
   assert.match(gameRoomSource, /className="side-card world-game-card"/);
-  assert.match(gameRoomSource, /game\.magicRules \? "עולם" : "מידע"/);
+  assert.match(gameRoomSource, /game\.magicRules \? "World" : "Info"/);
   assert.match(gameRoomSource, /answerWaitingChallenge\("accept"\)/);
-  assert.match(gameRoomSource, /אשר ושחק/);
+  assert.match(gameRoomSource, /Accept and play/);
   assert.match(gameRoomSource, /setPostGameDismissed\(true\);\s*focusBoardSquare\(focusedSquare\)/s);
   assert.match(gameRoomSource, /if \(!sidePanel\) return;[\s\S]*?sidePanelClose\.current\?\.focus/);
   assert.match(gameRoomSource, /readInvitationUrlFromHash/);
   assert.match(
     gameRoomSource,
-    /if \(access === "loading"\)[\s\S]*?<main className="game-shell" lang="he" dir="rtl" translate="no">[\s\S]*?מסדרים את הלוח…/,
+    /if \(access === "loading"\)[\s\S]*?<main className="game-shell" lang="en" dir="ltr" translate="no">[\s\S]*?Setting up the board…/,
   );
   assert.doesNotMatch(gameRoomSource, /ASSEMBLING BOARD/i);
   assert.match(
     gameRoomSource,
     /className="chessboard"\s*dir="ltr"\s*role="grid"/,
-    "the chessboard must preserve file order inside the Hebrew game shell",
+    "the chessboard must preserve file order inside the English game shell",
   );
   assert.match(
     joinGameSource,
-    /<main className="join-shell" lang="he" dir="rtl" translate="no">/,
+    /<main className="join-shell" lang="en" dir="ltr" translate="no">/,
   );
-  assert.match(joinGameSource, /invite\.kind === "loading"[\s\S]*?פותח את ההזמנה…/);
+  assert.match(joinGameSource, /invite\.kind === "loading"[\s\S]*?Opening invitation…/);
   assert.doesNotMatch(joinGameSource, /OPENING THE ARENA/i);
   assert.match(
     joinGameSource,
@@ -247,7 +247,7 @@ test("renders the public home and mandatory account-gated play routes", async ()
     /\bplayerKey\b/,
     "a stale seat token from another account must not block invitation acceptance",
   );
-  assert.match(joinGameSource, /ללא מגבלת זמן למהלך/);
+  assert.match(joinGameSource, /No move time limit/);
   assert.doesNotMatch(
     gameRoomSource,
     /ReactionPanel|\/reactions|openSidePanel\("reactions"|>React<|reaction-bubble/,
@@ -316,13 +316,13 @@ test("renders the public home and mandatory account-gated play routes", async ()
   const html = await response.text();
   assert.match(html, /ChessRiot/);
   assertMandatoryAccountGate(html);
-  assert.match(html, /מה חדש/);
+  assert.match(html, /What’s new/);
   assert.match(
     html,
     new RegExp(`v(?:<!-- -->)?${packageJson.version.replaceAll(".", "\\.")}`),
   );
-  assert.match(html, /פתיחת תפריט ChessRiot/);
-  assert.match(html, /מראה וערכת עיצוב/);
+  assert.match(html, /Open ChessRiot menu/);
+  assert.match(html, /Appearance and theme/);
   assert.match(html, /manifest\.webmanifest/);
   assert.doesNotMatch(html, /https:\/\/chessriot\.gg\/(?:manifest|icons)\//);
   assert.doesNotMatch(html, /human check|captcha|turnstile/i);
@@ -343,23 +343,23 @@ test("renders the public home and mandatory account-gated play routes", async ()
     new URL("../app/globals.css", import.meta.url),
     "utf8",
   );
-  assert.match(accountGateSource, /<h1>נכנסים ומשחקים<\/h1>/);
-  assert.match(accountGateSource, /המשך עם Google/);
+  assert.match(accountGateSource, /<h1>Sign in and play<\/h1>/);
+  assert.match(accountGateSource, /Continue with Google/);
   assert.match(accountGateSource, /\/api\/auth\/google\/start/);
   assert.doesNotMatch(accountGateSource, /currently requires a registered Google account|play as (?:a )?guest/i);
-  assert.match(accountGateSource, /<h1>בחירת שם משתמש<\/h1>/);
-  assert.match(accountGateSource, /אותיות מכל שפה/);
-  assert.match(accountGateSource, /לא ניתן לשנות אחר כך/);
+  assert.match(accountGateSource, /<h1>Choose a username<\/h1>/);
+  assert.match(accountGateSource, /letters from any language/i);
+  assert.match(accountGateSource, /cannot change it later/);
   assert.match(accountGateSource, /kind: "notifications"/);
   assert.match(accountGateSource, /function NotificationOnboarding/);
-  assert.match(accountGateSource, /לא מפספסים תור\./);
-  assert.match(accountGateSource, /קבלו בקשות חברות, התראות תור/);
+  assert.match(accountGateSource, /Never miss your turn\./);
+  assert.match(accountGateSource, /Get friend requests, turn alerts/);
   assert.match(accountGateSource, /writeNotificationDecision\(payload\.account\.username, "onboarding"\)/);
   assert.match(accountGateSource, /registerPushDevice\(\{/);
   assert.match(accountGateSource, /writeNotificationDecision\(session\.username, "enabled"\)/);
   assert.match(accountGateSource, /localStorage\.setItem\(PUSH_DEVICE_OWNER_KEY, session\.username\)/);
-  assert.match(accountGateSource, /לא חובה\. ההפעלה תפתח בקשת הרשאה/);
-  assert.match(accountGateSource, /לא עכשיו/);
+  assert.match(accountGateSource, /Optional\. Enabling notifications opens a one-time browser permission request/);
+  assert.match(accountGateSource, /Not now/);
   assert.match(accountGateSource, /claimNotificationOnboardingFailOpen/);
   const notificationOnboardingSource = accountGateSource.match(
     /function NotificationOnboarding[\s\S]*$/,
@@ -390,8 +390,8 @@ test("renders the public home and mandatory account-gated play routes", async ()
   }
   assert.doesNotMatch(appUpdatesSource, /href="\/(?:privacy|terms)"/);
   assert.doesNotMatch(appUpdatesSource, /add this game to my account|account-link/i);
-  assert.match(appUpdatesSource, /צפייה בהיסטוריית המשחקים/);
-  assert.match(appUpdatesSource, /פתיחת הגדרות ChessRiot לטיפול בהתראות/);
+  assert.match(appUpdatesSource, /View game history/);
+  assert.match(appUpdatesSource, /Open ChessRiot settings to fix notifications/);
   assert.match(appUpdatesSource, /enableTurnAlerts/);
   assert.match(appUpdatesSource, /Use Google Services for Push Messaging/);
   assert.match(appUpdatesSource, /notificationOfferDecisionKey/);
@@ -407,12 +407,12 @@ test("renders the public home and mandatory account-gated play routes", async ()
   assert.match(appUpdatesSource, /expectedUsername: username/);
   assert.match(appUpdatesSource, /turnAlertsBusy, turnAlertsRefresh/);
   assert.doesNotMatch(appUpdatesSource, /createdSubscription/);
-  assert.match(appUpdatesSource, /התראות CHESSRIOT/);
-  assert.match(appUpdatesSource, /קבלו בקשות חברות, התראות תור/);
-  assert.match(appUpdatesSource, /בדיקת המכשיר הזה/);
+  assert.match(appUpdatesSource, /CHESSRIOT notifications/);
+  assert.match(appUpdatesSource, /Get friend requests, turn alerts/);
+  assert.match(appUpdatesSource, /Test this device/);
   assert.match(appUpdatesSource, /\/api\/me\/push-devices\/test/);
-  assert.match(appUpdatesSource, /התראות תור עדיין פעילות רק במשחקים ישנים/);
-  assert.match(appUpdatesSource, /בדיקה חוזרת של ההתראות/);
+  assert.match(appUpdatesSource, /Turn alerts are still on for older games only/);
+  assert.match(appUpdatesSource, /Recheck notifications/);
   assert.match(appUpdatesSource, /className=\{styles\.notificationRecoveryBanner\}/);
   assert.match(
     appUpdatesSource,
@@ -431,25 +431,25 @@ test("renders the public home and mandatory account-gated play routes", async ()
     appUpdatesSource,
     /function openDialog\(\)[\s\S]*?notificationSettingsRef\.current\?\.scrollIntoView/,
   );
-  assert.match(appUpdatesSource, /ההתראות חסומות במכשיר/);
-  assert.match(appUpdatesSource, /הגדרות Android/);
-  assert.match(appUpdatesSource, /אפליקציות ← Chrome/);
-  assert.match(appUpdatesSource, /הגדרות אתרים ← התראות/);
+  assert.match(appUpdatesSource, /Notifications are blocked on this device/);
+  assert.match(appUpdatesSource, /Android Settings/);
+  assert.match(appUpdatesSource, /Apps → Chrome/);
+  assert.match(appUpdatesSource, /Site settings → Notifications/);
   assert.match(appUpdatesSource, /setNotificationHostname\(window\.location\.hostname/);
   assert.match(appUpdatesSource, /<bdi dir="ltr">\{notificationHostname\}<\/bdi>/);
   assert.doesNotMatch(appUpdatesSource, /<bdi dir="ltr">chessriot\.gg<\/bdi>/);
-  assert.match(appUpdatesSource, /בדקתי, נסו שוב/);
+  assert.match(appUpdatesSource, /I checked, try again/);
   assert.doesNotMatch(appUpdatesSource, /chrome:\/\//i);
   assert.doesNotMatch(appUpdatesSource, /intent:\/\//i);
   assert.match(
     appUpdatesSource,
-    /<dialog[\s\S]*?lang="he"\s*dir="rtl"\s*translate="no"/,
+    /<dialog[\s\S]*?lang="en"\s*dir="ltr"\s*translate="no"/,
   );
-  assert.match(feedbackFormSource, /lang="he"[\s\S]*?dir="rtl"[\s\S]*?translate="no"/);
-  assert.match(feedbackFormSource, /שליחת משוב/);
-  assert.match(feedbackFormSource, /מה כדאי לשנות\?/);
-  assert.match(feedbackFormSource, /requiredLabel="חובה"/);
-  assert.match(feedbackFormSource, /צפייה בבעיות או שליחת בקשת שינוי/);
+  assert.match(feedbackFormSource, /lang="en"[\s\S]*?dir="ltr"[\s\S]*?translate="no"/);
+  assert.match(feedbackFormSource, /Send feedback/);
+  assert.match(feedbackFormSource, /What should change\?/);
+  assert.match(feedbackFormSource, /requiredLabel="Required"/);
+  assert.match(feedbackFormSource, /View issues or request a change/);
   assert.match(appUpdatesSource, /className=\{styles\.turnAlertBadge\}/);
   assert.match(appUpdatesSource, /shouldBadgeAccountNotificationSettings/);
   assert.match(appUpdatesSource, /PUSH_DEVICE_OWNER_KEY/);
@@ -495,8 +495,8 @@ test("renders the public home and mandatory account-gated play routes", async ()
   const gameHtml = await gameResponse.text();
   assertMandatoryAccountGate(gameHtml);
   assert.match(gameHtml, /<html(?![^>]*data-theme)[^>]*>/i);
-  assert.match(gameHtml, /פתיחת תפריט ChessRiot/);
-  assert.match(gameHtml, /מראה וערכת עיצוב/);
+  assert.match(gameHtml, /Open ChessRiot menu/);
+  assert.match(gameHtml, /Appearance and theme/);
   assert.doesNotMatch(gameHtml, /name="menu-theme"/);
   assert.doesNotMatch(gameHtml, /class="global-version"/);
   assert.doesNotMatch(gameHtml, /LOCKING MOVE/);
@@ -504,7 +504,7 @@ test("renders the public home and mandatory account-gated play routes", async ()
     gameHtml,
     /<a(?=[^>]*href="https:\/\/chat\.whatsapp\.com\/FaBgiUgl73vLdeqzcqx0vX")(?=[^>]*target="_blank")(?=[^>]*rel="noopener noreferrer")[^>]*>/,
   );
-  assert.match(gameHtml, /הצטרפות לקהילת WhatsApp/);
+  assert.match(gameHtml, /Join the WhatsApp community/);
 
   const joinResponse = await worker.fetch(
     new Request(`http://localhost/join/${"a".repeat(43)}`, {

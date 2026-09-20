@@ -57,13 +57,13 @@ function activityItems(value: unknown): ActivityItem[] {
 
 function relativeTime(value: string): string {
   const elapsed = Date.now() - Date.parse(value);
-  if (!Number.isFinite(elapsed) || elapsed < 0) return "עכשיו";
+  if (!Number.isFinite(elapsed) || elapsed < 0) return "Now";
   const minutes = Math.floor(elapsed / 60_000);
-  if (minutes < 1) return "עכשיו";
-  if (minutes < 60) return `לפני ${minutes} דק׳`;
+  if (minutes < 1) return "Now";
+  if (minutes < 60) return `${minutes} min ago`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `לפני ${hours} שע׳`;
-  return `לפני ${Math.floor(hours / 24)} ימים`;
+  if (hours < 24) return `${hours} hr ago`;
+  return `${Math.floor(hours / 24)}d ago`;
 }
 
 const ICONS: Record<ActivityItem["kind"], string> = {
@@ -74,31 +74,31 @@ const ICONS: Record<ActivityItem["kind"], string> = {
 };
 
 function activityTitle(kind: ActivityItem["kind"]): string {
-  if (kind === "friend_request") return "בקשת חברות";
-  if (kind === "challenge") return "הזמנה למשחק";
-  if (kind === "turn") return "תורך";
-  return "המשחק הסתיים";
+  if (kind === "friend_request") return "Friend request";
+  if (kind === "challenge") return "Game invitation";
+  if (kind === "turn") return "Your turn";
+  return "Game finished";
 }
 
 function actor(item: ActivityItem): ReactNode {
   return item.username
     ? <bdi dir="auto">@{item.username}</bdi>
-    : "שחקן אחר";
+    : "Another player";
 }
 
 function activityDetail(item: ActivityItem): ReactNode {
-  if (item.kind === "friend_request") return <>{actor(item)} רוצה להתחבר אליך.</>;
-  if (item.kind === "challenge") return <>{actor(item)} הזמין אותך למשחק.</>;
+  if (item.kind === "friend_request") return <>{actor(item)} wants to be friends.</>;
+  if (item.kind === "challenge") return <>{actor(item)} invited you to a game.</>;
   if (item.kind === "turn") return item.username
-    ? <>זה הזמן לשחק מול {actor(item)}.</>
-    : "זה הזמן למהלך הבא שלך.";
+    ? <>It is your turn against {actor(item)}.</>
+    : "It is your turn to move.";
   const results: Record<string, string> = {
-    "You won": "ניצחת.",
-    "You lost": "הפסדת.",
-    Draw: "תיקו.",
-    "Game cancelled": "המשחק בוטל.",
+    "You won": "You won.",
+    "You lost": "You lost.",
+    Draw: "Draw.",
+    "Game cancelled": "Game cancelled.",
   };
-  return results[item.detail] ?? "המשחק הסתיים.";
+  return results[item.detail] ?? "Game finished.";
 }
 
 function publishActivityChanged(): void {
@@ -138,7 +138,7 @@ export function ActivityInbox() {
       setMessage("");
     } catch {
       if (generation !== refreshGeneration.current || controller.signal.aborted) return;
-      setMessage("לא הצלחנו לרענן את ההתראות.");
+      setMessage("Notifications could not be refreshed.");
     } finally {
       if (refreshAbort.current === controller) refreshAbort.current = null;
       if (generation === refreshGeneration.current) setLoading(false);
@@ -225,11 +225,11 @@ export function ActivityInbox() {
         body: JSON.stringify({ action }),
       });
       if (!response.ok) throw new Error();
-      setMessage(action === "accept" ? "החבר נוסף." : "הבקשה נדחתה.");
+      setMessage(action === "accept" ? "Friend added." : "Request declined.");
       publishActivityChanged();
       await refresh();
     } catch {
-      setMessage("לא הצלחנו לעדכן את הבקשה.");
+      setMessage("That request could not be updated.");
     } finally {
       setBusyId(null);
     }
@@ -251,11 +251,11 @@ export function ActivityInbox() {
         window.location.assign(`/g/${encodeURIComponent(item.gameId)}`);
         return;
       }
-      setMessage("ההזמנה נדחתה.");
+      setMessage("Invitation declined.");
       publishActivityChanged();
       await refresh();
     } catch {
-      setMessage("לא הצלחנו לעדכן את ההזמנה.");
+      setMessage("That invitation could not be updated.");
     } finally {
       setBusyId(null);
     }
@@ -267,10 +267,10 @@ export function ActivityInbox() {
         className="activity-trigger"
         type="button"
         ref={triggerRef}
-        lang="he"
-        dir="rtl"
+        lang="en"
+        dir="ltr"
         translate="no"
-        aria-label={unreadCount ? `התראות, ${unreadCount} לא נקראו` : "התראות"}
+        aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : "Notifications"}
         aria-haspopup="dialog"
         onClick={open}
       >
@@ -280,29 +280,29 @@ export function ActivityInbox() {
       <dialog
         className="activity-dialog"
         ref={dialogRef}
-        lang="he"
-        dir="rtl"
+        lang="en"
+        dir="ltr"
         translate="no"
         aria-labelledby="activity-title"
         onClose={() => triggerRef.current?.focus()}
         onClick={(event) => { if (event.target === event.currentTarget) close(); }}
       >
         <section className="activity-panel">
-          <header><div><p>מרכז עדכונים</p><h2 id="activity-title">התראות</h2></div><button type="button" onClick={close} aria-label="סגירת ההתראות">×</button></header>
+          <header><div><p>Activity center</p><h2 id="activity-title">Notifications</h2></div><button type="button" onClick={close} aria-label="Close notifications">×</button></header>
           <div className="activity-list">
-            {loading ? <p className="activity-empty" role="status">בודקים התראות…</p> : items.length ? items.map((item) => (
+            {loading ? <p className="activity-empty" role="status">Checking notifications…</p> : items.length ? items.map((item) => (
               <article className="activity-item" data-unread={item.unread} key={item.id}>
                 <span className="activity-icon" aria-hidden="true">{ICONS[item.kind]}</span>
                 <div><strong>{activityTitle(item.kind)}</strong><p>{activityDetail(item)}</p><small>{relativeTime(item.createdAt)}</small></div>
                 {item.kind === "friend_request" && item.requestId ? <div className="activity-actions">
-                  <button type="button" disabled={busyId !== null} onClick={() => void answerFriend(item, "accept")}>אישור</button>
-                  <button type="button" disabled={busyId !== null} onClick={() => void answerFriend(item, "decline")}>דחייה</button>
+                  <button type="button" disabled={busyId !== null} onClick={() => void answerFriend(item, "accept")}>Accept</button>
+                  <button type="button" disabled={busyId !== null} onClick={() => void answerFriend(item, "decline")}>Decline</button>
                 </div> : item.kind === "challenge" && item.gameId ? <div className="activity-actions">
-                  <button type="button" disabled={busyId !== null} onClick={() => void answerChallenge(item, "accept")}>אישור ומשחק</button>
-                  <button type="button" disabled={busyId !== null} onClick={() => void answerChallenge(item, "decline")}>דחייה</button>
-                </div> : item.href ? <Link href={item.href} onClick={close}>פתיחה</Link> : null}
+                  <button type="button" disabled={busyId !== null} onClick={() => void answerChallenge(item, "accept")}>Accept and play</button>
+                  <button type="button" disabled={busyId !== null} onClick={() => void answerChallenge(item, "decline")}>Decline</button>
+                </div> : item.href ? <Link href={item.href} onClick={close}>Open</Link> : null}
               </article>
-            )) : <div className="activity-empty"><span aria-hidden="true">✓</span><strong>הכול מעודכן</strong><p>הזמנות, תורות, בקשות ותוצאות יופיעו כאן.</p></div>}
+            )) : <div className="activity-empty"><span aria-hidden="true">✓</span><strong>You are all caught up</strong><p>Invitations, turns, requests, and results appear here.</p></div>}
           </div>
           {message ? <p className="activity-message" role="status">{message}</p> : null}
         </section>

@@ -6,6 +6,7 @@ import { NotificationTurnTest } from "./NotificationTurnTest";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -55,8 +56,8 @@ import { copyInvitationLink } from "@/lib/invitation-copy";
 import {
   actionEndpointSquares,
   capturedPiecesByVictimColor,
-  HEBREW_CHESS_PIECE_NAMES,
-  HEBREW_DIFFICULTY_LABELS,
+  CHESS_PIECE_NAMES,
+  DIFFICULTY_LABELS,
   checkedKingSquare as findCheckedKingSquare,
   gameStatusText,
   illegalDestinationMessage,
@@ -112,28 +113,28 @@ import { ResignationFinisher } from "./ResignationFinisher";
 import { TurnDeadline } from "./TurnDeadline";
 import { PERFORMANCE_MODE_EVENT } from "./PerformanceMode";
 
-const CONNECTION_MESSAGE = "החיבור נותק. נמשיך לנסות.";
+const CONNECTION_MESSAGE = "Connection lost. Reconnecting…";
 const FINISHER_DURATION_MS = 2_200;
 const REDUCED_FINISHER_DURATION_MS = 700;
 const OPENING_INTRO_DURATION_MS = 360;
-const HEBREW_VARIANTS: Record<GameVariantId, { name: string; loadout: string }> = {
-  standard: { name: "שחמט קלאסי", loadout: "מערך מלא" },
-  "pawn-riot": { name: "מרד החיילים", loadout: "מלך ושמונה חיילים" },
-  "half-army": { name: "חצי צבא", loadout: "מחצית מהכלים" },
-  "pawn-duel": { name: "דו-קרב חיילים", loadout: "מלך ושלושה חיילים" },
-  "mate-pawn": { name: "הכתרת חייל", loadout: "מלך וחייל מול מלך" },
-  "mate-rook": { name: "מט עם צריח", loadout: "מלך וצריח מול מלך" },
-  "mate-two-bishops": { name: "מט עם שני רצים", loadout: "מלך ושני רצים מול מלך" },
+const VARIANT_LABELS: Record<GameVariantId, { name: string; loadout: string }> = {
+  standard: { name: "Classic chess", loadout: "Full army" },
+  "pawn-riot": { name: "Pawn Riot", loadout: "King and eight pawns" },
+  "half-army": { name: "Half Army", loadout: "Half the pieces" },
+  "pawn-duel": { name: "Pawn Duel", loadout: "King and three pawns" },
+  "mate-pawn": { name: "Pawn Promotion", loadout: "King and pawn vs. king" },
+  "mate-rook": { name: "Rook Checkmate", loadout: "King and rook vs. king" },
+  "mate-two-bishops": { name: "Two-Bishop Checkmate", loadout: "King and two bishops vs. king" },
 };
-const HEBREW_SIDE_PANEL_LABELS: Record<SidePanel, string> = {
-  invite: "הזמנה",
-  captures: "כלים שנלקחו",
-  history: "מהלכים",
-  info: "מידע",
+const SIDE_PANEL_LABELS: Record<SidePanel, string> = {
+  invite: "Invite",
+  captures: "Captured pieces",
+  history: "Moves",
+  info: "Info",
 };
 
 function samePieceAgain(piece: PieceSymbol): string {
-  return `הזז שוב את ה${HEBREW_CHESS_PIECE_NAMES[piece]}, או סיים את התור.`;
+  return `Move the ${CHESS_PIECE_NAMES[piece]} again, or end your turn.`;
 }
 
 interface DragState {
@@ -171,6 +172,12 @@ interface PendingPromotion {
 
 type SidePanel = "invite" | "captures" | "history" | "info";
 type LoadGameResult = "ready" | "unchanged" | "denied" | "error";
+
+function TestGameDetails({ enabled, children }: { enabled: boolean; children: ReactNode }) {
+  return enabled
+    ? <details className="notification-test-game"><summary>View test game</summary>{children}</details>
+    : <>{children}</>;
+}
 
 export function GameRoom({ gameId }: { gameId: string }) {
   const [serverGame, setServerGame] = useState<GameSnapshot | null>(null);
@@ -374,7 +381,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     const hashHasSeat = hasSeatTokenInHash(hash);
     const linkedToken = readSeatTokenFromHash(hash);
     let usingSavedAccess = hashHasSeat && !linkedToken;
-    if (hashHasSeat && !linkedToken) setMessage("מפתח הגישה הפרטי בקישור אינו תקין. מנסים גישה שמורה במקום זאת.");
+    if (hashHasSeat && !linkedToken) setMessage("This private access link is invalid. Trying your saved access…");
     const previousToken = activeToken.current;
     let savedToken: string | null = null;
     try {
@@ -412,7 +419,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
         if (!canTrySavedAccess) break;
         if (token === linkedToken && linkedToken !== previousToken) {
           usingSavedAccess = true;
-          setMessage("קישור הגישה הפרטי לא התאים. מנסים גישה שמורה במקום זאת.");
+          setMessage("This private access link did not match. Trying your saved access…");
         }
       }
       if (!response) {
@@ -524,9 +531,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
     }
     entryNotice.current = consumed.notice;
     if (consumed.notice === "challenge-sent") {
-      setMessage("האתגר נשלח. מחכים שהחבר יאשר.");
+      setMessage("Challenge sent. Waiting for your friend to accept.");
     } else if (consumed.notice === "invitation-created") {
-      setMessage("ההזמנה נוצרה. יש לשתף את הקישור הפרטי. המשחק יתחיל רק לאחר ששחקן נוסף יאשר.");
+      setMessage("Invite ready. Share the private link. The game starts when another player accepts.");
       if (resolvedInvite) {
         sidePanelTrigger.current = null;
         setSidePanel("invite");
@@ -966,7 +973,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       expectedVersion: game.version,
       piece,
     };
-    const warning = chessCoachOn ? analyzeMoveRisk(game.fen, intent, "he") : null;
+    const warning = chessCoachOn ? analyzeMoveRisk(game.fen, intent, "en") : null;
     if (!confirmEveryMove && !warning) {
       void commitMove(intent);
       return;
@@ -999,7 +1006,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       || !moveIntentStillValid(intent, currentGame)
     ) {
       closeMoveConfirmation();
-      setMessage("העמדה השתנתה. יש לבחור שוב את המהלך.");
+      setMessage("The position changed. Choose your move again.");
       return;
     }
     moveCommitInFlight.current = true;
@@ -1081,17 +1088,17 @@ export function GameRoom({ gameId }: { gameId: string }) {
         if (!data.game) setOptimisticGame(null);
         setMessage(
           data.error?.code === "must_answer_check"
-            ? illegalDestinationMessage(true, "he")
-            : "המהלך לא הצליח.",
+            ? illegalDestinationMessage(true, "en")
+            : "The move failed.",
         );
         if (data.error?.code !== "stale_position") playInvalidSound();
       } else if (!data.game) {
-        setMessage("תשובת המהלך לא הייתה שלמה. מרעננים את הלוח…");
+        setMessage("The move response was incomplete. Refreshing the board…");
         await refreshAfterMutation(latestVersion.current);
         if (latestVersion.current <= authoritativeVersion) setOptimisticGame(null);
       }
     } catch {
-      setMessage("לא הצלחנו לשלוח את המהלך. מרעננים את הלוח…");
+      setMessage("Could not send your move. Refreshing the board…");
       await refreshAfterMutation(latestVersion.current);
       if (latestVersion.current <= authoritativeVersion) setOptimisticGame(null);
     } finally {
@@ -1123,11 +1130,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
       };
       if (data.game) acceptGame(data.game);
       if (!response.ok) {
-        setMessage("אי אפשר לדרוש תיקו כרגע.");
+        setMessage("You cannot claim a draw right now.");
         playInvalidSound();
       }
     } catch {
-      setMessage("לא הצלחנו לדרוש תיקו. מרעננים את הלוח…");
+      setMessage("Could not claim a draw. Refreshing the board…");
       await refreshAfterMutation(latestVersion.current);
     } finally {
       setBusy(false);
@@ -1146,7 +1153,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       setMessage(
         magicDraft
           ? samePieceAgain(magicDraft.piece)
-          : illegalDestinationMessage(game.check, "he"),
+          : illegalDestinationMessage(game.check, "en"),
       );
       playInvalidSound();
       return;
@@ -1186,7 +1193,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     ).find((move) =>
       move.to === to && (move.promotion ?? undefined) === promotion);
     if (!firstMove) {
-      setMessage("המהלך אינו חוקי.");
+      setMessage("That move is not legal.");
       playInvalidSound();
       return;
     }
@@ -1239,7 +1246,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     ).find((move) =>
       move.to === to && (move.promotion ?? undefined) === promotion);
     if (!selectedMove) {
-      setMessage("מהלך הקסם אינו חוקי.");
+      setMessage("That magic move is not legal.");
       playInvalidSound();
       return;
     }
@@ -1282,7 +1289,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     setSelected(selectedMove.to);
     setPromotionMove(null);
     setMessage(
-      `מהלך קסם ${nextContinuation.length + 1} מתוך ${next.maxMoves}. ${samePieceAgain(next.piece)}`,
+      `Magic move ${nextContinuation.length + 1} of ${next.maxMoves}. ${samePieceAgain(next.piece)}`,
     );
   }
 
@@ -1325,14 +1332,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
     if (piece?.color === game.you.color) {
       if (game.check && chess.moves({ square, verbose: true }).length === 0) {
         setSelected(null);
-        setMessage(pieceCannotAnswerCheckMessage("he"));
+        setMessage(pieceCannotAnswerCheckMessage("en"));
         playInvalidSound();
         return;
       }
       setSelected(square);
       setMessage("");
     } else if (selected) {
-      setMessage(illegalDestinationMessage(game.check, "he"));
+      setMessage(illegalDestinationMessage(game.check, "en"));
       playInvalidSound();
     } else {
       setSelected(null);
@@ -1406,8 +1413,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
     else {
       setSelected(current.from);
       setMessage(game?.check
-        ? illegalDestinationMessage(true, "he")
-        : "יש להניח את הכלי על משבצת מסומנת.");
+        ? illegalDestinationMessage(true, "en")
+        : "Drop the piece on a highlighted square.");
       playInvalidSound();
     }
   }
@@ -1455,7 +1462,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       markCopied();
       return;
     }
-    setMessage("אין גישה ללוח ההעתקה. אפשר לבחור ולהעתיק את קישור ההזמנה שלמטה.");
+    setMessage("Clipboard access is unavailable. Select and copy the invite link below.");
   }
 
   async function answerWaitingChallenge(action: "accept" | "decline") {
@@ -1474,7 +1481,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
         error?: { message?: unknown };
       } | null;
       if (!response.ok || !payload?.game) {
-        throw new Error("לא הצלחנו לעדכן את האתגר.");
+        throw new Error("Could not update the challenge.");
       }
       if (action === "decline") {
         window.location.assign("/app");
@@ -1482,9 +1489,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
       }
       acceptGame(payload.game);
       setSidePanel(null);
-      setMessage("האתגר אושר. המשחק התחיל.");
+      setMessage("Challenge accepted. The game has started.");
     } catch {
-      setMessage("לא הצלחנו לעדכן את האתגר.");
+      setMessage("Could not update the challenge.");
     } finally {
       setBusy(false);
     }
@@ -1511,7 +1518,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
         error?: { message?: string };
       };
       if (!response.ok || !data.game) {
-        setMessage("לא הצלחנו לסיים את המשחק.");
+        setMessage("Could not end the game.");
         return;
       }
       // Remove the modal/top-layer backdrop before mounting the board finisher.
@@ -1523,7 +1530,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       }
       acceptGame(data.game);
     } catch {
-      setMessage("לא הצלחנו לסיים את המשחק. מרעננים את הלוח…");
+      setMessage("Could not end the game. Refreshing the board…");
       await refreshAfterMutation(latestVersion.current);
     } finally {
       if (finisherStartedAt !== null) {
@@ -1539,28 +1546,28 @@ export function GameRoom({ gameId }: { gameId: string }) {
   }
 
   if (access === "loading") {
-    return <main className="game-shell" lang="he" dir="rtl" translate="no"><header className="topbar"><Brand locale="he" /></header><div className="loading-block"><span>מסדרים את הלוח…</span><Link className="secondary-button" href="/">חזרה למשחקים</Link></div></main>;
+    return <main className="game-shell" lang="en" dir="ltr" translate="no"><header className="topbar"><Brand locale="en" /></header><div className="loading-block"><span>Setting up the board…</span><Link className="secondary-button" href="/">Back to games</Link></div></main>;
   }
   if (access === "error") {
     return (
-      <main className="join-shell" lang="he" dir="rtl" translate="no"><header className="topbar"><Brand locale="he" /></header><section className="join-stage">
-        <div className="voxel-card state-card"><span className="big-glyph">↻</span><h1>החיבור נותק</h1>
-          <p>עדיין לא הצלחנו לטעון את הזירה. ChessRiot ימשיך לנסות אוטומטית.</p>
+      <main className="join-shell" lang="en" dir="ltr" translate="no"><header className="topbar"><Brand locale="en" /></header><section className="join-stage">
+        <div className="voxel-card state-card"><span className="big-glyph">↻</span><h1>Connection lost</h1>
+          <p>We could not load the game yet. ChessRiot will keep trying automatically.</p>
           <button className="secondary-button" type="button" onClick={() => {
             setAccess("loading");
             void loadGame();
-          }}>נסה שוב</button>
-          <Link className="quiet-button" href="/">חזרה למשחקים</Link>
+          }}>Try again</button>
+          <Link className="quiet-button" href="/">Back to games</Link>
         </div>
       </section></main>
     );
   }
   if (access === "denied") {
     return (
-      <main className="join-shell" lang="he" dir="rtl" translate="no"><header className="topbar"><Brand locale="he" /></header><section className="join-stage">
-        <div className="voxel-card state-card"><span className="big-glyph">⌁</span><h1>המשחק לא נמצא בחשבון שלך</h1>
-          <p>יש להשתמש בהזמנה שנשלחה לחשבון Google הזה, או לבקש מהחבר לפתוח אתגר חדש.</p>
-          <Link className="secondary-button" href="/">חזרה למשחקים שלך</Link>
+      <main className="join-shell" lang="en" dir="ltr" translate="no"><header className="topbar"><Brand locale="en" /></header><section className="join-stage">
+        <div className="voxel-card state-card"><span className="big-glyph">⌁</span><h1>This game is not in your account</h1>
+          <p>Use the invite sent to this Google account, or ask your friend to send a new challenge.</p>
+          <Link className="secondary-button" href="/">Back to your games</Link>
         </div>
       </section></main>
     );
@@ -1576,21 +1583,21 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const statusText = gameStatusText({
     game,
     viewingHistory,
-    historyLabel: replayFrameLabel(historyFrame, "he"),
+    historyLabel: replayFrameLabel(historyFrame, "en"),
     openingIntro,
     magicPiece: magicDraft?.piece,
     displayCheck,
-    locale: "he",
+    locale: "en",
   });
-  const historyStatusParts = replayFrameLabelParts(historyFrame, "he");
+  const historyStatusParts = replayFrameLabelParts(historyFrame, "en");
   const pendingMoveDescription = pendingMove
-    ? describeMoveIntentParts(pendingMove, "he")
+    ? describeMoveIntentParts(pendingMove, "en")
     : null;
   const draggedPiece = drag ? chess.get(drag.from) : null;
   return (
-    <main className="game-shell" lang="he" dir="rtl" translate="no" data-notification-test={Boolean(game?.notificationTest)}>
+    <main className="game-shell" lang="en" dir="ltr" translate="no" data-notification-test={Boolean(game?.notificationTest)}>
       <header className="topbar game-topbar">
-        <Brand locale="he" />
+        <Brand locale="en" />
       </header>
       {game.notificationTest ? <NotificationTurnTest game={game} onRefresh={() => void loadGame()} /> : null}
       <dialog
@@ -1609,12 +1616,12 @@ export function GameRoom({ gameId }: { gameId: string }) {
       >
           <section className="surrender-confirm">
             <span aria-hidden="true">⚑</span>
-            <h2 id="surrender-title">{game.status === "waiting" ? "לבטל את המשחק?" : "להיכנע?"}</h2>
+            <h2 id="surrender-title">{game.status === "waiting" ? "Cancel this game?" : "Resign?"}</h2>
             <p id="surrender-description">{game.status === "waiting"
-              ? "קישור ההזמנה יפסיק לעבוד."
-              : "המלך שלך יניף דגל לבן והיריב ינצח."}</p>
+              ? "The invite link will stop working."
+              : "Your king will raise a white flag and your opponent will win."}</p>
             <button className="danger-button" type="button" disabled={busy} onClick={() => void endGame()}>
-              {busy ? "מסיימים…" : game.status === "waiting" ? "בטל משחק" : "הנף דגל לבן"}
+              {busy ? "Ending…" : game.status === "waiting" ? "Cancel game" : "Raise the white flag"}
             </button>
             <button
               className="quiet-button"
@@ -1623,14 +1630,15 @@ export function GameRoom({ gameId }: { gameId: string }) {
               disabled={busy}
               onClick={() => setConfirmEnd(false)}
             >
-              המשך לשחק
+              Keep playing
             </button>
           </section>
       </dialog>
+      <TestGameDetails enabled={Boolean(game.notificationTest)}>
       <section className="game-layout" dir="ltr">
         <div
           className="board-column"
-          dir="rtl"
+          dir="ltr"
           aria-hidden={mobileToolsActive && sidePanel ? true : undefined}
           inert={mobileToolsActive && sidePanel ? true : undefined}
         >
@@ -1639,20 +1647,20 @@ export function GameRoom({ gameId }: { gameId: string }) {
               <span className="player-piece" aria-hidden="true">
                 <ChessPiece type="p" color="w" />
               </span>
-              <div className="player-card-copy" dir="rtl">
-                <small>לבן{game.you.color === "w" ? " • אתה" : ""}</small>
+              <div className="player-card-copy" dir="ltr">
+                <small>White{game.you.color === "w" ? " • You" : ""}</small>
                 <strong><bdi dir="auto">{game.players.white.name}</bdi></strong>
               </div>
               {!game.turnPaceDays ? <PlayerClock game={clockGame} color="w" /> : null}
             </div>
-            <div className="versus">נגד</div>
+            <div className="versus">vs.</div>
             <div className={`player-card black-player${game.you.color === "b" ? " you-player" : ""}`} dir="ltr">
               <span className="player-piece" aria-hidden="true">
                 <ChessPiece type="p" color="b" />
               </span>
-              <div className="player-card-copy" dir="rtl">
-                <small>שחור{game.you.color === "b" ? " • אתה" : ""}</small>
-                <strong>{game.players.black ? <bdi dir="auto">{game.players.black.name}</bdi> : "ממתינים…"}</strong>
+              <div className="player-card-copy" dir="ltr">
+                <small>Black{game.you.color === "b" ? " • You" : ""}</small>
+                <strong>{game.players.black ? <bdi dir="auto">{game.players.black.name}</bdi> : "Waiting…"}</strong>
               </div>
               {!game.turnPaceDays ? <PlayerClock game={clockGame} color="b" /> : null}
             </div>
@@ -1670,14 +1678,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
               aria-atomic="true"
               tabIndex={-1}
             >
-              <small>{viewingHistory ? "היסטוריית מהלכים" : magicDraft ? "מהלך קסם" : displayCheck && game.status !== "completed" ? "שח" : "מצב המשחק"}</small>
+              <small>{viewingHistory ? "Move history" : magicDraft ? "Magic move" : displayCheck && game.status !== "completed" ? "Check" : "Game status"}</small>
               <strong>{viewingHistory
                 ? historyStatusParts.map((part, index) => part.dir === "ltr"
                   ? <bdi dir="ltr" key={`${index}:${part.text}`}>{part.text}</bdi>
                   : <span key={`${index}:${part.text}`}>{part.text}</span>)
                 : statusText}</strong>
             </div>
-            {!viewingHistory && (ending || openingIntro || botThinking) ? <b>{ending ? "מסיימים את המשחק…" : openingIntro ? "לבן פותח…" : "Riot Bot חושב…"}</b> : null}
+            {!viewingHistory && (ending || openingIntro || botThinking) ? <b>{ending ? "Ending the game…" : openingIntro ? "White moves first…" : "Riot Bot is thinking…"}</b> : null}
             <HistoryControls
               currentPly={visibleHistoryPly}
               viewingHistory={viewingHistory}
@@ -1691,10 +1699,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
             <div className="variant-game-banner" role="note">
               <span aria-hidden="true">{variant.icon}</span>
               <div>
-                <strong>{variant.group === "mating-set" ? "תרגיל מט" : "מיני-משחק"} · {HEBREW_VARIANTS[variant.id].name}</strong>
+                <strong>{variant.group === "mating-set" ? "Checkmate practice" : "Mini-game"} · {VARIANT_LABELS[variant.id].name}</strong>
                 <small>{variant.group === "mating-set"
-                  ? `${HEBREW_VARIANTS[variant.id].loadout} · אתה משחק בלבן · מט מנצח`
-                  : `${HEBREW_VARIANTS[variant.id].loadout} · מהלכי שחמט רגילים · מט מנצח`}</small>
+                  ? `${VARIANT_LABELS[variant.id].loadout} · You play White · Checkmate wins`
+                  : `${VARIANT_LABELS[variant.id].loadout} · Standard chess moves · Checkmate wins`}</small>
               </div>
             </div>
           ) : null}
@@ -1702,7 +1710,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
             <div
               className="magic-turn-actions"
               role="group"
-              aria-label={`סיום או ביטול מהלך הקסם של ה${HEBREW_CHESS_PIECE_NAMES[magicDraft.piece]}`}
+              aria-label={`Finish or cancel the ${CHESS_PIECE_NAMES[magicDraft.piece]} magic move`}
             >
               <button
                 type="button"
@@ -1715,7 +1723,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                   magicDraft.continuation,
                 )}
               >
-                סיים תור
+                End turn
               </button>
               <button
                 type="button"
@@ -1727,7 +1735,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                   setMessage("");
                 }}
               >
-                בטל
+                Cancel
               </button>
             </div>
           ) : null}
@@ -1740,8 +1748,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
           ) : null}
 
           {game.claimableDraws.length > 0 ? (
-            <div className="draw-claims" role="group" aria-label="דרישות תיקו זמינות">
-              <span>אפשר לדרוש תיקו</span>
+            <div className="draw-claims" role="group" aria-label="Available draw claims">
+              <span>You can claim a draw</span>
               {game.claimableDraws.map((claim) => (
                 <button
                   type="button"
@@ -1750,8 +1758,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
                   onClick={() => void claimDraw(claim)}
                 >
                   {claim === "threefold_repetition"
-                    ? "דרוש תיקו בחזרה משולשת"
-                    : "דרוש תיקו בכלל 50 המהלכים"}
+                    ? "Claim draw: threefold repetition"
+                    : "Claim draw: 50-move rule"}
                 </button>
               ))}
             </div>
@@ -1764,10 +1772,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
             data-history={viewingHistory ? "true" : "false"}
           >
             {surrendering && !viewingHistory
-              ? <ResignationFinisher color={game.you.color} locale="he" />
+              ? <ResignationFinisher color={game.you.color} locale="en" />
               : null}
             {finisher && !viewingHistory && !activeEffect
-              ? <CheckmateFinisher finisher={finisher} locale="he" />
+              ? <CheckmateFinisher finisher={finisher} locale="en" />
               : null}
             <div
               className="chessboard"
@@ -1780,8 +1788,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 if (canMove && activeEffect) dismissBoardEffects();
               }}
               aria-label={viewingHistory
-                ? `לוח שחמט היסטורי, ${replayFrameLabel(historyFrame, "he")}`
-                : "לוח שחמט"}
+                ? `Chessboard replay, ${replayFrameLabel(historyFrame, "en")}`
+                : "Chessboard"}
             >
               {squares.map((square, index) => {
                 const piece = chess.get(square);
@@ -1804,7 +1812,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                   <button
                     type="button"
                     role="gridcell"
-                    aria-label={`${square}${piece ? ` ${piece.color === "w" ? "לבן" : "שחור"} ${HEBREW_CHESS_PIECE_NAMES[piece.type]}` : " ריקה"}${isCheckedKing ? ", בשח" : ""}${legal ? ", יעד חוקי" : ""}`}
+                    aria-label={`${square}${piece ? ` ${piece.color === "w" ? "White" : "Black"} ${CHESS_PIECE_NAMES[piece.type]}` : " empty"}${isCheckedKing ? ", in check" : ""}${legal ? ", legal destination" : ""}`}
                     aria-disabled={!canMove}
                     aria-selected={isSelected}
                     tabIndex={focusedSquare === square ? 0 : -1}
@@ -1837,7 +1845,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 <BoardActionAnimation
                   effect={activeEffect}
                   squares={squares}
-                  locale="he"
+                  locale="en"
                   reducedMotion={reducedMotion}
                   tacticalCelebrations={celebrateActiveEffect}
                   onComplete={() => finishBoardEffect(activeEffect.id)}
@@ -1869,8 +1877,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
 
         <nav
           className="mobile-game-tools"
-          dir="rtl"
-          aria-label="פרטי המשחק"
+          dir="ltr"
+          aria-label="Game details"
           aria-hidden={mobileToolsActive && sidePanel ? true : undefined}
           inert={mobileToolsActive && sidePanel ? true : undefined}
         >
@@ -1881,7 +1889,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
               aria-expanded={sidePanel === "invite"}
               onClick={(event) => openSidePanel("invite", event.currentTarget)}
             >
-              <span aria-hidden="true">⌁</span>{game.players.black ? "אתגר" : "הזמנה"}
+              <span aria-hidden="true">⌁</span>{game.players.black ? "Challenge" : "Invite"}
             </button>
           ) : null}
           <button
@@ -1889,57 +1897,57 @@ export function GameRoom({ gameId }: { gameId: string }) {
             aria-controls="game-detail-panel"
             aria-expanded={sidePanel === "captures"}
             onClick={(event) => openSidePanel("captures", event.currentTarget)}
-          ><span aria-hidden="true">♟</span>כלים</button>
+          ><span aria-hidden="true">♟</span>Pieces</button>
           <button
             type="button"
             aria-controls="game-detail-panel"
             aria-expanded={sidePanel === "history"}
             onClick={(event) => openSidePanel("history", event.currentTarget)}
-          ><span aria-hidden="true">↶</span>מהלכים</button>
+          ><span aria-hidden="true">↶</span>Moves</button>
           <button
             type="button"
             aria-controls="game-detail-panel"
             aria-expanded={sidePanel === "info"}
             onClick={(event) => openSidePanel("info", event.currentTarget)}
-          ><span aria-hidden="true">{game.magicRules ? "✦" : "i"}</span>{game.magicRules ? "עולם" : "מידע"}</button>
+          ><span aria-hidden="true">{game.magicRules ? "✦" : "i"}</span>{game.magicRules ? "World" : "Info"}</button>
         </nav>
         <button
           className="game-sidebar-backdrop"
           type="button"
           data-open={sidePanel && mobileToolsActive ? "true" : "false"}
-          aria-label="סגירת פרטי המשחק"
+          aria-label="Close game details"
           tabIndex={-1}
           onClick={closeSidePanel}
         />
         <aside
           id="game-detail-panel"
           className="game-sidebar"
-          dir="rtl"
+          dir="ltr"
           data-open={sidePanel ? "true" : "false"}
           role={mobileToolsActive && sidePanel ? "dialog" : undefined}
           aria-modal={mobileToolsActive && sidePanel ? true : undefined}
           aria-label={mobileToolsActive && sidePanel
-            ? game.magicRules && sidePanel === "info" ? "פרטי עולם המשחק" : `פרטי ${HEBREW_SIDE_PANEL_LABELS[sidePanel]}`
+            ? game.magicRules && sidePanel === "info" ? "World details" : `${SIDE_PANEL_LABELS[sidePanel]} details`
             : undefined}
           onKeyDown={trapSidePanelFocus}
         >
-          <button ref={sidePanelClose} className="side-panel-close" type="button" onClick={closeSidePanel} aria-label="סגירת פרטי המשחק">×</button>
+          <button ref={sidePanelClose} className="side-panel-close" type="button" onClick={closeSidePanel} aria-label="Close game details">×</button>
           {game.status === "waiting" ? (
             <div className="sidebar-panel" data-panel="invite" data-active={sidePanel === "invite"}><section className="side-card invite-card">
-              <span className="side-icon">⌁</span><h2>{game.players.black ? game.you.color === "w" ? "האתגר נשלח" : "התקבל אתגר" : "שיתוף הזמנה"}</h2>
+              <span className="side-icon">⌁</span><h2>{game.players.black ? game.you.color === "w" ? "Challenge sent" : "Challenge received" : "Share invite"}</h2>
               <p>{game.players.black
                 ? game.you.color === "w"
-                  ? <>מחכים ש־<bdi dir="auto">@{game.players.black.name}</bdi> יאשר.</>
-                  : <><bdi dir="auto">@{game.players.white.name}</bdi> הזמין אותך לאתגר. המשחק יתחיל לאחר האישור שלך.</>
-                : "יש לשתף את הקישור הפרטי. המשחק יישאר בהמתנה ויתחיל רק לאחר ששחקן אחר יאשר וישחק בשחור."}</p>
+                  ? <>Waiting for <bdi dir="auto">@{game.players.black.name}</bdi> to accept.</>
+                  : <><bdi dir="auto">@{game.players.white.name}</bdi> challenged you. Accept to start the game.</>
+                : "Share the private link. The game starts when another player accepts and takes Black."}</p>
               {game.players.black && game.you.color === "b"
                 ? <div className="waiting-challenge-actions">
-                  <button className="primary-button" type="button" disabled={busy} onClick={() => void answerWaitingChallenge("accept")}>{busy ? "מאשרים…" : "אשר ושחק"}</button>
-                  <button className="secondary-button" type="button" disabled={busy} onClick={() => void answerWaitingChallenge("decline")}>דחה</button>
+                  <button className="primary-button" type="button" disabled={busy} onClick={() => void answerWaitingChallenge("accept")}>{busy ? "Accepting…" : "Accept and play"}</button>
+                  <button className="secondary-button" type="button" disabled={busy} onClick={() => void answerWaitingChallenge("decline")}>Decline</button>
                 </div>
-                : inviteUrl ? <><button className="primary-button" onClick={() => void copyInvite()}>{inviteShared ? "הועתק ✓" : "העתק קישור הזמנה"}</button>
-                <input className="invite-field" dir="ltr" value={inviteUrl} readOnly onFocus={(event) => event.currentTarget.select()} aria-label="קישור הזמנה" /></> :
-                game.players.black ? null : <p className="form-error">קישור ההזמנה כבר אינו שמור במכשיר הזה.</p>}
+                : inviteUrl ? <><button className="primary-button" onClick={() => void copyInvite()}>{inviteShared ? "Copied ✓" : "Copy invite link"}</button>
+                <input className="invite-field" dir="ltr" value={inviteUrl} readOnly onFocus={(event) => event.currentTarget.select()} aria-label="Invite link" /></> :
+                game.players.black ? null : <p className="form-error">The invite link is no longer saved on this device.</p>}
             </section></div>
           ) : null}
           <div className="sidebar-panel" data-panel="captures" data-active={sidePanel === "captures"}><CapturedPiecesPanel
@@ -1949,40 +1957,40 @@ export function GameRoom({ gameId }: { gameId: string }) {
           <div className="sidebar-panel" data-panel="history" data-active={sidePanel === "history"}><MoveHistoryPanel
               moves={game.moves}
               currentPly={visibleHistoryPly}
-              locale="he"
+              locale="en"
             /></div>
           <div className="sidebar-panel" data-panel="info" data-active={sidePanel === "info"}>
             {game.magicRules ? (
               <section className="side-card world-game-card" role="note">
                 <span aria-hidden="true">✦</span>
                 <div>
-                  <strong>{game.world ? <>עולם <bdi dir="ltr">{game.world.displayCode}</bdi></> : "חוקי קסם ישנים"}</strong>
-                  <small>{game.magicRules.rules.map((rule) => magicRuleLabel(rule, "he")).join(" • ")}</small>
+                  <strong>{game.world ? <>World <bdi dir="ltr">{game.world.displayCode}</bdi></> : "Legacy magic rules"}</strong>
+                  <small>{game.magicRules.rules.map((rule) => magicRuleLabel(rule, "en")).join(" • ")}</small>
                   {game.world ? (
                     <p>
                       {game.world.creatorUsername
-                        ? <>נוצר בידי <bdi dir="auto">@{game.world.creatorUsername}</bdi></>
-                        : "נוצר בידי שחקן לשעבר"}
-                      <Link href={`/worlds/${game.world.code}`}>הצג עולם</Link>
+                        ? <>Created by <bdi dir="auto">@{game.world.creatorUsername}</bdi></>
+                        : "Created by a former player"}
+                      <Link href={`/worlds/${game.world.code}`}>View world</Link>
                     </p>
                   ) : null}
                 </div>
               </section>
             ) : null}
-            <section className="side-card rules-card"><span aria-hidden="true">i</span><div><strong>פרטי המשחק</strong><small>
+            <section className="side-card rules-card"><span aria-hidden="true">i</span><div><strong>Game details</strong><small>
               {game.magicRules
-                ? "שחמט קסם • "
-                : `${HEBREW_VARIANTS[variant.id].name} • ${game.variantId === "standard" ? "מערך רגיל" : "מיני-משחק"} • `}
+                ? "Magic chess • "
+                : `${VARIANT_LABELS[variant.id].name} • ${game.variantId === "standard" ? "Standard setup" : "Mini-game"} • `}
               {game.mode === "solo" && game.aiDifficulty
-                ? `Riot Bot רמה ${game.aiDifficulty} • ${HEBREW_DIFFICULTY_LABELS[game.aiDifficulty]}`
+                ? `Riot Bot level ${game.aiDifficulty} • ${DIFFICULTY_LABELS[game.aiDifficulty]}`
                 : `${game.turnPaceDays
-                  ? `${game.turnPaceDays} ${game.turnPaceDays === 1 ? "יום" : "ימים"} למהלך`
-                  : "ללא מגבלת זמן לתור"} • גרירה או הקשה • כל מהלך נשמר`}
+                  ? `${game.turnPaceDays} ${game.turnPaceDays === 1 ? "day" : "days"} per move`
+                  : "No turn time limit"} • Drag or tap • Every move is saved`}
             </small></div></section>
             <div className="mobile-only-game-info">
               {game.claimableDraws.length > 0 ? (
-                <div className="draw-claims" role="group" aria-label="דרישות תיקו זמינות">
-                  <span>אפשר לדרוש תיקו</span>
+                <div className="draw-claims" role="group" aria-label="Available draw claims">
+                  <span>You can claim a draw</span>
                   {game.claimableDraws.map((claim) => (
                     <button
                       type="button"
@@ -1991,8 +1999,8 @@ export function GameRoom({ gameId }: { gameId: string }) {
                       onClick={() => void claimDraw(claim)}
                     >
                       {claim === "threefold_repetition"
-                        ? "דרוש תיקו בחזרה משולשת"
-                        : "דרוש תיקו בכלל 50 המהלכים"}
+                        ? "Claim draw: threefold repetition"
+                        : "Claim draw: 50-move rule"}
                     </button>
                   ))}
                 </div>
@@ -2001,6 +2009,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
           </div>
         </aside>
       </section>
+      </TestGameDetails>
 
       {drag?.moved && draggedPiece ? (
         <span
@@ -2015,7 +2024,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
       <dialog
         className="modal-backdrop"
         ref={promotionDialog}
-        aria-label="בחירת כלי להכתרת החייל"
+        aria-label="Choose a piece for pawn promotion"
         onCancel={(event) => {
           event.preventDefault();
           setPromotionMove(null);
@@ -2026,11 +2035,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
         }}
       >
         {promotionMove ? (
-          <div className="promotion-card"><p>הכתר את החייל</p><div dir="ltr">
+          <div className="promotion-card"><p>Promote your pawn</p><div dir="ltr">
             {(["q", "r", "b", "n"] as Promotion[]).map((piece) => (
               <button
                 key={piece}
-                aria-label={`הכתרה ל${HEBREW_CHESS_PIECE_NAMES[piece]}`}
+                aria-label={`Promote to ${CHESS_PIECE_NAMES[piece]}`}
                 autoFocus={piece === "q"}
                 onClick={() => {
                   if (promotionMove.continuation) {
@@ -2043,7 +2052,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 <ChessPiece type={piece} color={game.you.color} />
               </button>
             ))}
-          </div><button className="cancel-promotion" onClick={() => setPromotionMove(null)}>בטל</button></div>
+          </div><button className="cancel-promotion" onClick={() => setPromotionMove(null)}>Cancel</button></div>
         ) : null}
       </dialog>
 
@@ -2076,14 +2085,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
         }}
       >
         <div className="move-confirm-card">
-          <small>{coachWarning ? "מאמן השחמט" : "אישור מהלך"}</small>
-          <h2 id="move-confirm-title">בטוח?</h2>
+          <small>{coachWarning ? "Chess coach" : "Confirm move"}</small>
+          <h2 id="move-confirm-title">Are you sure?</h2>
           <p id="move-confirm-description">
             {pendingMoveDescription
               ? pendingMoveDescription.map((part, index) => part.dir === "ltr"
                 ? <bdi dir="ltr" key={`${index}:${part.text}`}>{part.text}</bdi>
                 : <span key={`${index}:${part.text}`}>{part.text}</span>)
-              : "לאשר את המהלך?"}
+              : "Confirm this move?"}
           </p>
           {coachWarning ? (
             <div className="coach-warning">
@@ -2093,7 +2102,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 aria-controls="coach-risk-explanation"
                 onClick={() => setCoachExplanationOpen((current) => !current)}
               >
-                {coachExplanationOpen ? "הסתר הסבר" : "למה זה מסוכן?"}
+                {coachExplanationOpen ? "Hide explanation" : "Why is this risky?"}
               </button>
               {coachExplanationOpen ? (
                 <p id="coach-risk-explanation" role="status">{coachWarning.explanation}</p>
@@ -2107,7 +2116,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
               autoFocus
               onClick={cancelMoveConfirmation}
             >
-              המשך לחשוב
+              Keep thinking
             </button>
             <button
               className="primary-button"
@@ -2117,7 +2126,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 if (pendingMove) void commitMove(pendingMove);
               }}
             >
-              אשר מהלך
+              Confirm move
             </button>
           </div>
         </div>

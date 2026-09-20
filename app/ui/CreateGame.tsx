@@ -683,7 +683,7 @@ export function CreateGame() {
         <form className="voxel-card create-card" onSubmit={createGame} noValidate>
           <span className="card-kicker">NEW GAME · <PlayerHandle username={account.username} /></span>
           <h1>Start a new game</h1>
-          <Link href="/notification-test" style={{ display: "block", fontSize: 16, marginBottom: 18 }}>בדיקת התראות במכשיר אחד · 4 תורים</Link>
+          <Link href="/notification-test" style={{ display: "block", fontSize: 16, marginBottom: 18 }}>Test notifications on this device</Link>
           <GameVariantPicker
             value={variantId}
             disabled={busy || Boolean(appliedWorld) || magicApplyRetryPending}

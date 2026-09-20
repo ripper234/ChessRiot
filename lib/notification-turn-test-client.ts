@@ -12,11 +12,16 @@ export interface TurnTestReceipt {
   windowClients?: number | null;
 }
 
-export function turnTestRoundPassed(receipt: TurnTestReceipt | undefined): boolean {
+export function turnTestReceiptOpened(receipt: TurnTestReceipt | undefined): boolean {
   return Boolean(!receipt?.showRejectedAt && receipt?.receivedAt && receipt.shownAt && receipt.clickedAt
-    && receipt.openedAt && receipt.confirmedAt && receipt.visibleClients === 0
+    && receipt.openedAt && receipt.visibleClients === 0
     && receipt.receivedAt <= receipt.shownAt && receipt.shownAt <= receipt.clickedAt
-    && receipt.clickedAt <= receipt.openedAt && receipt.openedAt <= receipt.confirmedAt);
+    && receipt.clickedAt <= receipt.openedAt);
+}
+
+export function turnTestRoundPassed(receipt: TurnTestReceipt | undefined): boolean {
+  return Boolean(turnTestReceiptOpened(receipt) && receipt?.confirmedAt
+    && receipt.openedAt! <= receipt.confirmedAt);
 }
 
 export async function readTurnTestReceipts(gameId: string, version: number, openedGame: boolean): Promise<Record<number, TurnTestReceipt>> {
@@ -40,6 +45,6 @@ export async function confirmTurnTestReceipt(gameId: string, version: number): P
   const path = turnTestReceiptPath(gameId, version);
   const response = await cache.match(path);
   const value: TurnTestReceipt = response ? await response.json() : {};
-  if (!value.clickedAt || !value.openedAt || value.visibleClients !== 0) return;
+  if (!turnTestReceiptOpened(value)) throw new Error("This round is not ready to confirm.");
   await cache.put(path, new Response(JSON.stringify({ ...value, confirmedAt: Date.now() })));
 }

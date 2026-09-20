@@ -150,8 +150,8 @@ async function withPushOperationTimeout<T>(
 
 function unsupportedPushMessage(braveBrowser: boolean): string {
   return braveBrowser
-    ? "הודעות Push כבויות. ב־Brave הפעילו Use Google Services for Push Messaging ואז פתחו שוב את ChessRiot."
-    : "הדפדפן הזה אינו תומך בהתראות ChessRiot. השתמשו בגרסה עדכנית של Chrome, Edge, Firefox או Safari.";
+    ? "Push notifications are off. In Brave, enable Use Google Services for Push Messaging, then reopen ChessRiot."
+    : "This browser does not support ChessRiot notifications. Use an up-to-date version of Chrome, Edge, Firefox, or Safari.";
 }
 
 function storedValue(key: string): string | null {
@@ -302,7 +302,7 @@ export function AppUpdates() {
         cache: "no-store",
         credentials: "same-origin",
       });
-      if (!response.ok) throw new Error("לא הצלחנו לטעון את מצב החשבון.");
+      if (!response.ok) throw new Error("We could not load your account status.");
       const data = await response.json() as AuthSessionPayload;
       const name = data.signedIn === true
         && data.account
@@ -345,7 +345,7 @@ export function AppUpdates() {
     const url = new URL(window.location.href);
     if (url.searchParams.get("auth") !== "google_failed") return;
 
-    setGoogleAuthMessage("הכניסה עם Google לא הושלמה. נסו שוב.");
+    setGoogleAuthMessage("Google sign-in did not finish. Try again.");
     setGoogleAuthMessageIsError(true);
     setDialogOpen(true);
     if (!dialogRef.current?.open) dialogRef.current?.showModal();
@@ -692,7 +692,7 @@ export function AppUpdates() {
         if (!isCurrent()) return;
         if (config?.enabled !== true || typeof config.publicKey !== "string") {
           markPendingSetupFailed(
-            "ההתראות אינן מוגדרות כרגע. נסו שוב מאוחר יותר דרך ההגדרות.",
+            "Notifications are not configured yet. Try again later in Settings.",
             "push_reconcile_config_unavailable",
           );
           setTurnAlertsAvailable(false);
@@ -755,7 +755,7 @@ export function AppUpdates() {
           removeStoredValue(PUSH_DEVICE_OWNER_KEY);
           if (storedDecision === "setup-pending") {
             markPendingSetupFailed(
-              "ההתראות לא הופעלו. אפשר לנסות שוב מאוחר יותר דרך ההגדרות.",
+              "Notifications were not enabled. You can try again later in Settings.",
               "push_reconcile_permission_missing",
             );
           }
@@ -847,7 +847,7 @@ export function AppUpdates() {
             setLegacyTurnAlertsEnabled(false);
             setTurnAlertsStatusKnown(true);
             setTurnAlertsMessageIsError(true);
-            setTurnAlertsMessage("עדיין לא הצלחנו לכבות את ההתראות. נסו שוב דרך ההגדרות.");
+            setTurnAlertsMessage("We could not turn notifications off yet. Try again in Settings.");
             setPushReady(true);
             return;
           }
@@ -892,7 +892,7 @@ export function AppUpdates() {
             storeValue(notificationOfferDecisionKey(username), "enabled");
             setNotificationOfferDecision("enabled");
             setTurnAlertsMessageIsError(false);
-            setTurnAlertsMessage("ההתראות פעילות במכשיר הזה.");
+            setTurnAlertsMessage("Notifications are on for this device.");
           }
           legacyEnabled = false;
         } else {
@@ -901,7 +901,7 @@ export function AppUpdates() {
           removeStoredValue(PUSH_DEVICE_OWNER_KEY);
           if (storedDecision === "setup-pending") {
             markPendingSetupFailed(
-              "ההתראות מורשות, אבל המכשיר לא נשמר. נסו שוב דרך ההגדרות.",
+              "Notifications are allowed, but this device was not registered. Try again in Settings.",
               "push_reconcile_server_status_disabled",
             );
           }
@@ -914,11 +914,11 @@ export function AppUpdates() {
       } catch (error) {
         if (!isCurrent()) return;
         const pendingFailed = markPendingSetupFailed(
-          pushSetupRecoveryMessage(error, braveBrowser, "he"),
+          pushSetupRecoveryMessage(error, braveBrowser, "en"),
           pushSetupTelemetryCode("reconcile", error),
         );
         if (!pendingFailed) {
-          markPushStatusUnknown("לא הצלחנו לאמת את מצב ההתראות. נסו שוב לפני שינוי ההגדרה.");
+          markPushStatusUnknown("We could not verify your notification status. Try again before changing this setting.");
         } else {
           setTurnAlertsStatusKnown(true);
           setTurnAlertsEnabled(false);
@@ -971,12 +971,12 @@ export function AppUpdates() {
       : Notification.permission;
     setTurnAlertsMessageIsError(permission === "denied" || permission === "unsupported");
     setTurnAlertsMessage(permission === "denied"
-      ? "ההתראות עדיין חסומות. ודאו ששתי ההרשאות מופעלות, חזרו ל־ChessRiot ולחצו שוב."
+      ? "Notifications are still blocked. Check that both permissions are enabled, return to ChessRiot, and try again."
       : permission === "granted"
-        ? "ההרשאה זוהתה. בודקים ומחזירים את ההתראות למכשיר הזה…"
+        ? "Permission detected. Checking and restoring notifications on this device…"
         : permission === "default"
-          ? "החסימה הוסרה. הפעילו את התראות ChessRiot כאן כדי להשלים את ההגדרה."
-          : "הדפדפן הזה אינו תומך בהתראות ChessRiot.");
+          ? "Notifications are unblocked. Enable ChessRiot notifications here to finish setup."
+          : "This browser does not support ChessRiot notifications.");
     setTurnAlertsRefresh((value) => value + 1);
   }
 
@@ -1105,7 +1105,7 @@ export function AppUpdates() {
         headers: requestHeaders(null, true),
         body: JSON.stringify({ endpoint: subscriptionPayload?.endpoint ?? null }),
       });
-      if (!response.ok) throw new Error("ההתנתקות לא הצליחה.");
+      if (!response.ok) throw new Error("Sign-out failed.");
       if (subscription) {
         void withPushOperationTimeout(
           subscription.unsubscribe(),
@@ -1120,7 +1120,7 @@ export function AppUpdates() {
       publishAuthSessionChanged(false);
       window.location.assign(pathname === "/" ? "/" : "/app");
     } catch {
-      setGoogleAuthMessage("לא הצלחנו להתנתק. נסו שוב.");
+      setGoogleAuthMessage("We could not sign you out. Try again.");
       setGoogleAuthMessageIsError(true);
     } finally {
       setGoogleAuthBusy(false);
@@ -1172,7 +1172,7 @@ export function AppUpdates() {
       storeValue(PUSH_DEVICE_OWNER_KEY, username);
       setNotificationOfferDecision("enabled");
       storeValue(notificationOfferDecisionKey(username), "enabled");
-      setTurnAlertsMessage("ההתראות פעילות במכשיר הזה.");
+      setTurnAlertsMessage("Notifications are on for this device.");
       if (!dialogOpen) window.requestAnimationFrame(() => triggerRef.current?.focus());
     } catch (error) {
       if (!isCurrent()) return;
@@ -1186,7 +1186,7 @@ export function AppUpdates() {
       storeValue(notificationOfferDecisionKey(username), "setup-failed");
       reportClientEvent("client.error", pushSetupTelemetryCode("manual", error));
       setTurnAlertsMessageIsError(true);
-      setTurnAlertsMessage(pushSetupRecoveryMessage(error, braveBrowser, "he"));
+      setTurnAlertsMessage(pushSetupRecoveryMessage(error, braveBrowser, "en"));
     } finally {
       setTurnAlertsBusy(false);
     }
@@ -1209,7 +1209,7 @@ export function AppUpdates() {
       if (subscription) {
         const payload = browserPushPayload(subscription);
         if (!payload) {
-          throw new Error("הדפדפן החזיר הרשמה חלקית להתראות.");
+          throw new Error("The browser returned an incomplete notification subscription.");
         }
         const response = await fetchWithReadTimeout("/api/me/push-devices", {
           method: "DELETE",
@@ -1223,7 +1223,7 @@ export function AppUpdates() {
         });
         if (!response.ok) {
           const data: unknown = await withPushOperationTimeout(response.json()).catch(() => null);
-          throw new Error(apiErrorMessage(data, "לא הצלחנו לכבות את ההתראות."));
+          throw new Error(apiErrorMessage(data, "We could not turn notifications off."));
         }
         response.body?.cancel();
         if (!isCurrent()) return;
@@ -1236,14 +1236,14 @@ export function AppUpdates() {
       removeStoredValue(PUSH_DEVICE_OWNER_KEY);
       setNotificationOfferDecision("disabled");
       storeValue(notificationOfferDecisionKey(username), "disabled");
-      setTurnAlertsMessage("ההתראות כבויות במכשיר הזה.");
+      setTurnAlertsMessage("Notifications are off for this device.");
     } catch (error) {
       if (!isCurrent()) return;
       setTurnAlertsMessageIsError(true);
       setTurnAlertsMessage(
         error instanceof Error
           ? error.message
-          : "לא הצלחנו לכבות את ההתראות.",
+          : "We could not turn notifications off.",
       );
     } finally {
       setTurnAlertsBusy(false);
@@ -1270,18 +1270,18 @@ export function AppUpdates() {
       if (!isCurrent()) return;
       const payload = subscription ? browserPushPayload(subscription) : null;
       if (!payload) {
-        throw new Error("חיבור ההתראות של הדפדפן כבר אינו פעיל. כבו את ההתראות והפעילו אותן מחדש.");
+        throw new Error("The browser notification connection is no longer active. Turn notifications off, then on again.");
       }
       const requestId = generateUuid();
       const localResult = await registerLocalPushDiagnostic(
         registration,
         requestId,
         navigator.serviceWorker,
-        "he",
+        "en",
       );
       if (!isCurrent()) return;
       if (localResult === "missing") {
-        throw new Error("הדפדפן קיבל את בקשת ההתראה המקומית אך לא שמר אותה. הפעילו מחדש את הדפדפן ונסו שוב.");
+        throw new Error("The browser accepted the local notification request but did not retain it. Restart the browser and try again.");
       }
       receiptWaiter = createPushDiagnosticReceiptWaiter(
         navigator.serviceWorker,
@@ -1300,17 +1300,17 @@ export function AppUpdates() {
       });
       if (!isCurrent()) return;
       if (!response.ok) {
-        throw new Error(apiErrorMessage(result, "בדיקת ההתראה בשרת נכשלה."));
+        throw new Error(apiErrorMessage(result, "The server notification test failed."));
       }
       const outcome = result && typeof result === "object"
         ? (result as { outcome?: unknown }).outcome
         : null;
       if (outcome !== "accepted") {
         throw new Error(outcome === "provider_auth"
-          ? "בדיקת התצוגה בדפדפן הצליחה, אך ספק ה־Push דחה את פרטי הגישה של ChessRiot."
+          ? "The browser notification check passed, but the push provider rejected the ChessRiot credentials."
           : outcome === "stale"
-            ? "בדיקת התצוגה בדפדפן הצליחה, אך ספק ה־Push דיווח שחיבור ההתראות פג. הפעילו את ההתראות מחדש."
-            : "בדיקת התצוגה בדפדפן הצליחה, אך ה־Push מהשרת לא התקבל. נסו שוב בעוד רגע.");
+            ? "The browser notification check passed, but the push provider reported an expired notification connection. Enable notifications again."
+            : "The browser notification check passed, but the server push was not accepted. Try again in a moment.");
       }
       const receipt = await receiptWaiter.wait();
       receiptWaiter = null;
@@ -1320,26 +1320,26 @@ export function AppUpdates() {
       const interacted = stages.has("notification_clicked");
       const notificationActive = stages.has("notification_active");
       const localEvidence = localResult === "active"
-        ? "הדפדפן שמר את ההתראה המקומית."
+        ? "The browser retained the local notification."
         : localResult === "clicked"
-          ? "ההתראה המקומית נפתחה."
-          : "הדפדפן יצר את ההתראה המקומית, אך היא נסגרה לפני בדיקת השמירה.";
+          ? "The local notification was opened."
+          : "The browser created the local notification, but it closed before we could check whether it was retained.";
       if (!interacted && !notificationActive) {
-        const browserName = braveBrowser ? "Brave" : "הדפדפן";
+        const browserName = braveBrowser ? "Brave" : "the browser";
         const restart = braveBrowser
-          ? "הפעילו מחדש את Brave, ודאו ששירותי Google להעברת הודעות Push פעילים ונסו שוב."
-          : "הפעילו מחדש את הדפדפן ונסו שוב.";
-        let detail = "שירות ה־Push קיבל את הבקשה, אך ChessRiot לא קיבל אישור מה־worker הפעיל בתוך 15 שניות.";
+          ? "Restart Brave, check that Google services for push messaging are enabled, and try again."
+          : "Restart the browser and try again.";
+        let detail = "The push service accepted the request, but ChessRiot received no confirmation from the active background worker within 15 seconds.";
         if (stages.has("show_rejected")) {
-          detail = `ה־worker הפעיל קיבל את הבקשה, אך ${browserName} דחה יצירת התראה קבועה.`;
+          detail = `The active background worker received the request, but ${browserName} rejected creation of a persistent notification.`;
         } else if (stages.has("notification_closed")) {
-          detail = "ה־worker הפעיל יצר את התראת השרת, אך היא נסגרה לפני בדיקת השמירה. לכן לא ניתן לאשר שבאנר אכן הוצג.";
+          detail = "The active background worker created the server notification, but it closed before we could check whether it was retained. We cannot confirm that a banner appeared.";
         } else if (stages.has("notification_missing")) {
-          detail = `ה־worker הפעיל יצר את התראת השרת, אך ${browserName} לא שמר אותה.`;
+          detail = `The active background worker created the server notification, but ${browserName} did not retain it.`;
         } else if (stages.has("show_resolved")) {
-          detail = `ה־worker הפעיל קיבל את הבקשה ו־${browserName} אישר את קריאת ההתראה, אך ChessRiot לא הצליח לאמת שהיא נשמרה.`;
+          detail = `The active background worker received the request and ${browserName} accepted the notification call, but ChessRiot could not verify that the notification was retained.`;
         } else if (stages.has("push_received")) {
-          detail = `ה־worker הפעיל קיבל את הבקשה, אך ${browserName} לא סיים את קריאת ההתראה בתוך 15 שניות.`;
+          detail = `The active background worker received the request, but ${browserName} did not finish the notification call within 15 seconds.`;
         }
         const recovery = stages.has("show_rejected")
           || stages.has("show_resolved")
@@ -1348,7 +1348,7 @@ export function AppUpdates() {
             brave: braveBrowser,
             mobile: mobileNotificationSurface,
             windows: windowsPlatform,
-            locale: "he",
+            locale: "en",
           })
           : restart;
         setTurnAlertsMessageIsError(true);
@@ -1359,24 +1359,24 @@ export function AppUpdates() {
       }
       setTurnAlertsMessage([
         interacted
-          ? `אומת: ${localEvidence} ה־worker הפעיל קיבל את ה־Push מהשרת, וההתראה נפתחה.`
-          : `אומת: ${localEvidence} ה־worker הפעיל קיבל את ה־Push מהשרת ושמר את ההתראה.`,
+          ? `Verified: ${localEvidence} The active background worker received the server push, and the notification was opened.`
+          : `Verified: ${localEvidence} The active background worker received the server push and retained the notification.`,
         interacted
           ? ""
           : pushPresentationRecoveryMessage({
             brave: braveBrowser,
             mobile: mobileNotificationSurface,
             windows: windowsPlatform,
-            locale: "he",
+            locale: "en",
           }),
       ].filter(Boolean).join(" "));
     } catch (error) {
       if (!isCurrent()) return;
       setTurnAlertsMessageIsError(true);
       const detail = error instanceof Error ? error.message : "";
-      setTurnAlertsMessage(/[\u0590-\u05ff]/.test(detail)
+      setTurnAlertsMessage(detail.trim()
         ? detail
-        : "בדיקת ההתראה נכשלה. טענו מחדש את ChessRiot ונסו שוב.");
+        : "The notification test failed. Reload ChessRiot and try again.");
     } finally {
       receiptWaiter?.cancel();
       if (pushDiagnosticAbortRef.current === controller) {
@@ -1391,15 +1391,15 @@ export function AppUpdates() {
     legacyTurnAlertsEnabled,
   );
   const notificationToggleDetail = turnAlertsEnabled
-    ? "התראות החשבון פעילות במכשיר הזה"
+    ? "Account notifications are on for this device"
     : legacyTurnAlertsEnabled
-      ? "פעיל רק למשחקים ישנים"
-      : "בקשות חברות, תורות והודעות שירות";
+      ? "On for older games only"
+      : "Friend requests, turns, and service messages";
   const notificationToggleStatus = turnAlertsEnabled
-    ? "פעיל"
+    ? "On"
     : legacyTurnAlertsEnabled
-      ? "מוגבל"
-      : "כבוי";
+      ? "Limited"
+      : "Off";
   const notificationPermission = typeof Notification === "undefined"
     ? "unsupported"
     : Notification.permission;
@@ -1428,17 +1428,17 @@ export function AppUpdates() {
         className={styles.launcher}
         type="button"
         ref={triggerRef}
-        lang="he"
-        dir="rtl"
+        lang="en"
+        dir="ltr"
         translate="no"
         aria-label={showNotificationSettingsBadge
-          ? "פתיחת הגדרות ChessRiot לטיפול בהתראות"
+          ? "Open ChessRiot settings to fix notifications"
           : releaseDot
-            ? "פתיחת תפריט ChessRiot, יש גרסה חדשה"
-            : "פתיחת תפריט ChessRiot"}
+            ? "Open ChessRiot menu, new version available"
+            : "Open ChessRiot menu"}
         aria-expanded={dialogOpen}
         aria-haspopup="dialog"
-        title="הגדרות"
+        title="Settings"
         data-turn-alert-offer={showNotificationSettingsBadge ? "true" : undefined}
         data-notification-blocked={showBlockedNotificationRecovery ? "true" : undefined}
         onClick={openDialog}
@@ -1452,8 +1452,8 @@ export function AppUpdates() {
       {showNotificationSettingsBadge ? (
         <aside
           className={styles.notificationRecoveryBanner}
-          lang="he"
-          dir="rtl"
+          lang="en"
+          dir="ltr"
           translate="no"
           role="alert"
           aria-labelledby="notification-recovery-title"
@@ -1461,11 +1461,11 @@ export function AppUpdates() {
           <span aria-hidden="true">🔔</span>
           <div>
             <strong id="notification-recovery-title">{showBlockedNotificationRecovery
-              ? "ההתראות חסומות במכשיר"
-              : "התראות תור אינן פעילות במכשיר הזה"}</strong>
+              ? "Notifications are blocked on this device"
+              : "Turn alerts are off for this device"}</strong>
             <small>{showBlockedNotificationRecovery
-              ? "לא יגיעו התראות תור ובקשות חברות עד לתיקון ההרשאה."
-              : "כדי לקבל התראה כשהיריב משחק, גם כשהאפליקציה סגורה, צריך להפעיל אותן כאן."}</small>
+              ? "Turn alerts and friend requests cannot arrive until you fix the permissions."
+              : "Enable notifications here to hear when your opponent moves, even with the app closed."}</small>
             {turnAlertsMessageIsError && turnAlertsMessage
               ? <small role="status">{turnAlertsMessage}</small>
               : null}
@@ -1475,23 +1475,23 @@ export function AppUpdates() {
               ? openDialog
               : () => void enableTurnAlerts()
           }>{showBlockedNotificationRecovery || !pushPublicKey
-              ? "פתיחת הוראות בהגדרות"
-              : turnAlertsBusy ? "מפעילים…" : "הפעלת התראות"}</button>
+              ? "Show setup instructions"
+              : turnAlertsBusy ? "Enabling…" : "Enable notifications"}</button>
           {!showBlockedNotificationRecovery ? (
             <button type="button" disabled={turnAlertsBusy} onClick={() => {
               if (!googleUsername) return;
               storeValue(notificationOfferDecisionKey(googleUsername), "dismissed");
               setNotificationOfferDecision("dismissed");
               setTurnAlertsRefresh((value) => value + 1);
-            }}>לא עכשיו</button>
+            }}>Not now</button>
           ) : null}
         </aside>
       ) : null}
       <dialog
         className={styles.dialog}
         ref={dialogRef}
-        lang="he"
-        dir="rtl"
+        lang="en"
+        dir="ltr"
         translate="no"
         aria-labelledby="app-menu-title"
         onClose={() => {
@@ -1506,28 +1506,28 @@ export function AppUpdates() {
           <div className={styles.heading}>
             <div>
               <p>CHESSRIOT</p>
-              <h2 id="app-menu-title">הגדרות</h2>
+              <h2 id="app-menu-title">Settings</h2>
             </div>
-            <button className={styles.close} type="button" onClick={closeDialog} aria-label="סגירה">×</button>
+            <button className={styles.close} type="button" onClick={closeDialog} aria-label="Close">×</button>
           </div>
 
-          <nav className={styles.quickLinks} aria-label="תפריט ChessRiot">
-            <Link href="/app" onClick={closeDialog}><span aria-hidden="true">♟</span>משחק חדש</Link>
-            <Link href="/history" onClick={closeDialog}><span aria-hidden="true">↶</span>היסטוריה</Link>
-            <Link href="/changelog" onClick={closeDialog}><span aria-hidden="true">✦</span>מה חדש</Link>
+          <nav className={styles.quickLinks} aria-label="ChessRiot menu">
+            <Link href="/app" onClick={closeDialog}><span aria-hidden="true">♟</span>New game</Link>
+            <Link href="/history" onClick={closeDialog}><span aria-hidden="true">↶</span>History</Link>
+            <Link href="/changelog" onClick={closeDialog}><span aria-hidden="true">✦</span>What’s new</Link>
           </nav>
 
           {googleAuthReady && (googleAuthAvailable || googleAccountName || googleAuthMessage) ? (
             <details className={styles.group} open>
-              <summary><span aria-hidden="true">●</span><b>חשבון</b></summary>
+              <summary><span aria-hidden="true">●</span><b>Account</b></summary>
               <div className={styles.groupBody}>
                 {googleAccountName ? (
                   <>
-                    <p>מחוברים בתור <strong><bdi dir="auto">{googleAccountName}</bdi></strong>. כל משחק שיוצרים או מצטרפים אליו נשמר אוטומטית.</p>
-                    <Link className={styles.communityAction} href="/history" onClick={closeDialog}>צפייה בהיסטוריית המשחקים</Link>
-                    <Link className={styles.communityAction} href="/privacy-center" onClick={closeDialog}>פרטיות ונתונים</Link>
+                    <p>Signed in as <strong><bdi dir="auto">{googleAccountName}</bdi></strong>. Every game you create or join is saved automatically.</p>
+                    <Link className={styles.communityAction} href="/history" onClick={closeDialog}>View game history</Link>
+                    <Link className={styles.communityAction} href="/privacy-center" onClick={closeDialog}>Privacy and data</Link>
                     <button className={styles.action} type="button" onClick={startTutorial}>
-                      פתיחת הדרכה קצרה
+                      Start a quick tutorial
                     </button>
                     <button
                       className={styles.action}
@@ -1535,14 +1535,14 @@ export function AppUpdates() {
                       disabled={googleAuthBusy}
                       onClick={() => void signOutGoogle()}
                     >
-                      {googleAuthBusy ? "מתנתקים…" : "התנתקות"}
+                      {googleAuthBusy ? "Signing out…" : "Sign out"}
                     </button>
                   </>
                 ) : (
                   <>
-                    <p>התחברו באמצעות חשבון Google רשום כדי לשחק ולשמור את כל המשחקים בהיסטוריה.</p>
+                    <p>Sign in with your registered Google account to play and keep every game in your history.</p>
                     <button className={styles.action} type="button" onClick={startGoogleLogin}>
-                      המשך עם Google
+                      Continue with Google
                     </button>
                   </>
                 )}
@@ -1563,11 +1563,11 @@ export function AppUpdates() {
             open={appearanceOpen}
             onToggle={(event) => setAppearanceOpen(event.currentTarget.open)}
           >
-            <summary><span aria-hidden="true">◈</span><b>מראה וערכת עיצוב</b></summary>
+            <summary><span aria-hidden="true">◈</span><b>Appearance and theme</b></summary>
             <div className={styles.groupBody}>
-              <p>משנה את מראה האפליקציה, כולל מסכים, תפריטים, לוח, כלים, מוזיקה ואפקטים.</p>
+              <p>Change the look of the app, including screens, menus, board, pieces, music, and effects.</p>
               {dialogOpen && appearanceOpen ? <fieldset className={styles.skinGrid}>
-              <legend className="visually-hidden">ערכת העיצוב של ChessRiot</legend>
+              <legend className="visually-hidden">ChessRiot theme</legend>
               {THEMES.map((theme) => (
                 <label data-selected={selectedTheme === theme.id} key={theme.id}>
                   <input
@@ -1596,26 +1596,26 @@ export function AppUpdates() {
           </details>
 
           <details className={styles.group}>
-            <summary><span aria-hidden="true">♫</span><b>צלילים, מוזיקה ועוצמה</b></summary>
+            <summary><span aria-hidden="true">♫</span><b>Sound, music, and volume</b></summary>
             <div className={styles.groupBody}>
               <label className={styles.toggleRow}>
                 <input type="checkbox" checked={soundOn} onChange={toggleSoundEffects} />
-                <span><strong>אפקטים קוליים</strong><small>מהלכים, הכאות, שח ותוצאות</small></span>
-                <b>{soundOn ? "פעיל" : "כבוי"}</b>
+                <span><strong>Sound effects</strong><small>Moves, captures, checks, and results</small></span>
+                <b>{soundOn ? "On" : "Off"}</b>
               </label>
               <label className={styles.volumeControl}>
-                <span>עוצמת האפקטים</span>
+                <span>Effects volume</span>
                 <output>{Math.round(effectsVolume * 100)}%</output>
                 <input type="range" min="0" max="1" step="0.05" value={effectsVolume}
                   onChange={(event) => changeEffectsVolume(Number(event.currentTarget.value))} />
               </label>
               <label className={styles.toggleRow}>
                 <input type="checkbox" checked={musicOn} onChange={toggleMusic} />
-                <span><strong>מוזיקה</strong><small>מוזיקת רקע לפי ערכת העיצוב</small></span>
-                <b>{musicOn ? "פעילה" : "כבויה"}</b>
+                <span><strong>Music</strong><small>Background music matched to your theme</small></span>
+                <b>{musicOn ? "On" : "Off"}</b>
               </label>
               <label className={styles.volumeControl}>
-                <span>עוצמת המוזיקה</span>
+                <span>Music volume</span>
                 <output>{Math.round(musicVolume * 100)}%</output>
                 <input type="range" min="0" max="1" step="0.05" value={musicVolume}
                   onChange={(event) => changeMusicVolume(Number(event.currentTarget.value))} />
@@ -1624,11 +1624,11 @@ export function AppUpdates() {
           </details>
 
           <details className={styles.group}>
-            <summary><span aria-hidden="true">✓</span><b>עזרה במשחק</b></summary>
+            <summary><span aria-hidden="true">✓</span><b>Game assistance</b></summary>
             <div className={styles.groupBody}>
-              <label className={styles.toggleRow}><input type="checkbox" checked={chessCoachOn} onChange={toggleCoach} /><span><strong>מאמן שחמט</strong><small>אזהרה לפני מהלכים מסוכנים</small></span><b>{chessCoachOn ? "פעיל" : "כבוי"}</b></label>
-              <label className={styles.toggleRow}><input type="checkbox" checked={tacticalCelebrationsOn} onChange={toggleCelebrations} /><span><strong>חגיגות למהלכים מצוינים</strong><small>חגיגה על מזלגות וזכייה בחומר</small></span><b>{tacticalCelebrationsOn ? "פעיל" : "כבוי"}</b></label>
-              <label className={styles.toggleRow}><input type="checkbox" checked={confirmEveryMove} onChange={toggleMoveConfirmation} /><span><strong>אישור כל מהלך</strong><small>בקשת אישור לפני שליחת כל מהלך</small></span><b>{confirmEveryMove ? "פעיל" : "כבוי"}</b></label>
+              <label className={styles.toggleRow}><input type="checkbox" checked={chessCoachOn} onChange={toggleCoach} /><span><strong>Chess coach</strong><small>Warnings before risky moves</small></span><b>{chessCoachOn ? "On" : "Off"}</b></label>
+              <label className={styles.toggleRow}><input type="checkbox" checked={tacticalCelebrationsOn} onChange={toggleCelebrations} /><span><strong>Celebrate great moves</strong><small>Celebrate forks and material gains</small></span><b>{tacticalCelebrationsOn ? "On" : "Off"}</b></label>
+              <label className={styles.toggleRow}><input type="checkbox" checked={confirmEveryMove} onChange={toggleMoveConfirmation} /><span><strong>Confirm every move</strong><small>Ask before sending each move</small></span><b>{confirmEveryMove ? "On" : "Off"}</b></label>
             </div>
           </details>
 
@@ -1638,43 +1638,43 @@ export function AppUpdates() {
               className={styles.section}
               aria-labelledby="notification-settings-title"
             >
-              <h3 id="notification-settings-title"><span aria-hidden="true">♟</span> התראות</h3>
+              <h3 id="notification-settings-title"><span aria-hidden="true">♟</span> Notifications</h3>
               <p>
-                קבלו בקשות חברות, התראות תור והודעות שירות או בדיקה במכשיר הזה, גם כש־ChessRiot סגור.
+                Get friend requests, turn alerts, and service or test messages on this device, even with ChessRiot closed.
               </p>
               {!pushReady ? (
-                <p className={styles.note} role="status">בודקים את מצב ההתראות…</p>
+                <p className={styles.note} role="status">Checking notification status…</p>
               ) : !turnAlertsStatusKnown && turnAlertsSupported && turnAlertsAvailable && pushPublicKey ? (
                 <div>
-                  <p className={styles.note} role="alert">לא הצלחנו לאמת את מצב ההתראות. נסו שוב לפני שינוי ההגדרה.</p>
+                  <p className={styles.note} role="alert">We could not verify your notification status. Try again before changing this setting.</p>
                   <button
                     className={styles.action}
                     type="button"
                     onClick={() => setTurnAlertsRefresh((value) => value + 1)}
-                  >בדיקה חוזרת של ההתראות</button>
+                  >Recheck notifications</button>
                 </div>
               ) : !turnAlertsSupported ? (
                 <p className={styles.note}>{unsupportedPushMessage(braveBrowser)}</p>
               ) : !turnAlertsAvailable || !pushPublicKey ? (
-                <p className={styles.note}>ההתראות אינן מוגדרות בסביבת ChessRiot הזו.</p>
+                <p className={styles.note}>Notifications are not configured for this ChessRiot environment.</p>
               ) : notificationPermission === "denied" ? (
                 <div className={styles.permissionRecovery} role="alert">
-                  <strong>ההתראות חסומות בהגדרות המכשיר.</strong>
+                  <strong>Notifications are blocked in your device settings.</strong>
                   {androidPlatform ? (
                     <ol>
-                      <li>פתחו את הגדרות Android ובחרו אפליקציות ← Chrome. אם ChessRiot הותקן כאפליקציה, בחרו ChessRiot במקום Chrome.</li>
-                      <li>בחרו התראות והפעילו אישור התראות.</li>
-                      <li>ב־Chrome פתחו ⋮ ← הגדרות ← הגדרות אתרים ← התראות ← <bdi dir="ltr">{notificationHostname}</bdi> ובחרו אישור.</li>
-                      <li>חזרו ל־ChessRiot ולחצו על הכפתור למטה.</li>
+                      <li>Open Android Settings, then Apps → Chrome. If ChessRiot is installed as an app, select ChessRiot instead of Chrome.</li>
+                      <li>Choose Notifications and turn on Allow notifications.</li>
+                      <li>In Chrome, open ⋮ → Settings → Site settings → Notifications → <bdi dir="ltr">{notificationHostname}</bdi> and choose Allow.</li>
+                      <li>Return to ChessRiot and use the button below.</li>
                     </ol>
                   ) : (
-                    <p>אפשרו ל־ChessRiot התראות גם בהגדרות האתר בדפדפן וגם בהגדרות ההתראות של המכשיר, ואז חזרו לכאן.</p>
+                    <p>Allow ChessRiot notifications in both your browser’s site settings and your device’s notification settings, then return here.</p>
                   )}
                   <button
                     className={styles.action}
                     type="button"
                     onClick={recheckNotificationPermission}
-                  >בדקתי, נסו שוב</button>
+                  >I checked, try again</button>
                 </div>
               ) : (
                 <label className={styles.toggleRow}>
@@ -1684,13 +1684,13 @@ export function AppUpdates() {
                     disabled={!pushReady || turnAlertsBusy}
                     onChange={() => void (notificationToggle.checked ? disableTurnAlerts() : enableTurnAlerts())}
                   />
-                  <span><strong>התראות CHESSRIOT</strong><small>{turnAlertsBusy ? "שומרים…" : notificationToggleDetail}</small></span>
+                  <span><strong>CHESSRIOT notifications</strong><small>{turnAlertsBusy ? "Saving…" : notificationToggleDetail}</small></span>
                   <b>{notificationToggleStatus}</b>
                 </label>
               )}
-              <Link className={styles.communityAction} href="/notification-test" onClick={closeDialog}>בדיקה מלאה במכשיר אחד · 4 תורים</Link>
+              <Link className={styles.communityAction} href="/notification-test" onClick={closeDialog}>Full one-device test · 4 turns</Link>
               {legacyTurnAlertsEnabled && !turnAlertsEnabled ? (
-                <p className={styles.note}>התראות תור עדיין פעילות רק במשחקים ישנים. כבו את ההגדרה כדי לבטל אותן.</p>
+                <p className={styles.note}>Turn alerts are still on for older games only. Turn this setting off to disable them.</p>
               ) : null}
               {turnAlertsEnabled && turnAlertsStatusKnown ? (
                 <button
@@ -1698,7 +1698,7 @@ export function AppUpdates() {
                   type="button"
                   disabled={turnAlertsBusy}
                   onClick={() => void testTurnAlerts()}
-                >{turnAlertsBusy ? "בודקים…" : "בדיקת המכשיר הזה"}</button>
+                >{turnAlertsBusy ? "Checking…" : "Test this device"}</button>
               ) : null}
               {turnAlertsMessage ? (
                 <>
@@ -1713,7 +1713,7 @@ export function AppUpdates() {
                       href="https://support.brave.app/hc/en-us/articles/360058972091-Push-Notification-Test"
                       target="_blank"
                       rel="noopener noreferrer"
-                    >הפעלת הבדיקה הרשמית של Brave</a>
+                    >Run the official Brave test</a>
                   ) : null}
                 </>
               ) : null}
@@ -1722,40 +1722,40 @@ export function AppUpdates() {
 
           {activeGameId ? (
             <section className={styles.section} aria-labelledby="game-settings-title">
-              <h3 id="game-settings-title"><span aria-hidden="true">♜</span> המשחק הנוכחי</h3>
+              <h3 id="game-settings-title"><span aria-hidden="true">♜</span> Current game</h3>
               {gameMenuState && gameMenuState.status !== "completed" ? (
                 <button
                   className={`${styles.action} ${styles.danger}`}
                   type="button"
                   onClick={requestSurrender}
                 >
-                  {gameMenuState?.status === "waiting" ? "ביטול המשחק" : "כניעה"}
+                  {gameMenuState?.status === "waiting" ? "Cancel game" : "Resign"}
                 </button>
               ) : null}
             </section>
           ) : null}
 
           <details className={styles.group}>
-            <summary><span aria-hidden="true">✎</span><b>שליחת משוב</b></summary>
+            <summary><span aria-hidden="true">✎</span><b>Send feedback</b></summary>
             <div className={styles.groupBody}><FeedbackForm /></div>
           </details>
 
           <details className={styles.group}>
-            <summary><span aria-hidden="true">↗</span><b>אפליקציה, עדכונים וקהילה</b></summary>
+            <summary><span aria-hidden="true">↗</span><b>App, updates, and community</b></summary>
             <div className={styles.groupBody}>
               <p>
                 {availableVersion
-                  ? <>גרסה <bdi dir="ltr">v{availableVersion}</bdi> מוכנה. טענו מחדש כדי להשתמש בה.</>
-                  : <>מותקנת גרסה <bdi dir="ltr">v{APP_VERSION}</bdi>.</>}
+                  ? <>Version <bdi dir="ltr">v{availableVersion}</bdi> is ready. Reload to use it.</>
+                  : <>Version <bdi dir="ltr">v{APP_VERSION}</bdi> is installed.</>}
               </p>
               {availableVersion ? (
                 <button className={styles.action} type="button" onClick={() => window.location.reload()}>
-                  טעינה מחדש של העדכון
+                  Reload to update
                 </button>
               ) : null}
               {!installed && installPrompt ? (
                 <button className={styles.action} type="button" onClick={() => void installApp()}>
-                  התקנת CHESSRIOT
+                  Install CHESSRIOT
                 </button>
               ) : null}
               <a
@@ -1764,7 +1764,7 @@ export function AppUpdates() {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                הצטרפות לקהילת WhatsApp
+                Join the WhatsApp community
               </a>
             </div>
           </details>

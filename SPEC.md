@@ -1,4 +1,4 @@
-# ChessRiot v0.28.0 specification
+# ChessRiot v0.29.0 specification
 
 ## v0.27.8 notification recovery
 
@@ -16,16 +16,17 @@
   focus, or navigation fails. The closed-app worker still displays turn pushes
   without relying on a running page.
 - Sites still has no verified autonomous wake after the request budget. A
-  physical two-Android closed-app test is required before claiming end-to-end
-  delivery; provider acceptance and simulated-worker tests are not that proof.
+  physical Android acceptance test is required before claiming end-to-end
+  delivery. The four-round one-phone flow supplies that test; provider acceptance
+  and simulated-worker tests are not that proof.
 
-## v0.27.7 mobile recovery, activity, and Hebrew game correction
+## Mobile recovery and activity (language updated in v0.29.0)
 
 - Every protected game, game-invitation, referral, account-gate, Activity, and
-  Settings loading state renders its native Hebrew copy synchronously. These
-  surfaces declare Hebrew and opt out of automatic page translation before the
-  first paint, while chessboards, coordinates, notation, codes, links, and
-  clocks retain their exact left-to-right order.
+  Settings loading state renders English synchronously with lang=en and
+  left-to-right direction. Chessboards, coordinates, notation, codes, links, and
+  clocks retain their exact left-to-right order. Usernames and user-authored
+  content retain their original language and directional isolation.
 - Initial session, referral, invitation, and game reads are bounded through
   both response headers and JSON body consumption. On protected routes a
   stalled or disconnected read exposes an immediate safe route home and manual
@@ -1176,3 +1177,24 @@ This file and `MVP.md` are the source of truth for the current milestone.
   migration before running this Worker against an existing local database, as
   the Sites publisher does before hosted deployment. New runtime ALTERs are not
   used to duplicate migration ownership.
+
+## v0.29.0: simpler acceptance test and English default
+
+- The app defaults to English for public and protected screens, loading and
+  recovery states, menus, game messages, animation callsites, dates and push
+  diagnostics. Existing optional Hebrew presentation helpers remain supported;
+  usernames, chat content and user-authored world descriptions are not translated.
+- The one-phone test presents one current instruction and one primary action:
+  start, send a round, leave the app, confirm the real Android notification, then
+  start the next round. Confirmation never sends the next move automatically.
+- The complete four-round evidence report, exact-device binding, server delay,
+  real chess turns, background/closed-window distinctions, cancellation, expiry,
+  and recovery remain. Results and the real board/history are collapsed by default.
+  Game dialogs remain outside collapsed content so global game controls still work.
+- Setup and read failures offer retry. Permanent failures, missing earlier evidence,
+  expired or stopped tests and wrong/disabled devices offer a fresh test. A saved
+  move immediately displays the leave-app instruction while its snapshot refreshes.
+- Full completion still requires all four ordered, nonvisible receipt/display/tap/
+  exact-game-open/user-confirmation records. Confirmation cannot certify partial,
+  out-of-order, rejected-display or foreground evidence, and exhausted tests never
+  offer a fifth move.

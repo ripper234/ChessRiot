@@ -55,6 +55,6 @@ describe("PlayerClock", () => {
     );
     expect(html).toContain("player-clock");
     expect(html).toContain('dir="ltr"');
-    expect(html).toContain("הזמן שחלף לשחקן לבן");
+    expect(html).toContain("White elapsed time");
   });
 });

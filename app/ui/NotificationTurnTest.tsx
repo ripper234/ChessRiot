@@ -11,6 +11,7 @@ import { pushEndpointHash, setPushConsentEnabled } from "@/lib/push-client";
 import { notificationOfferDecisionKey, PUSH_DEVICE_OWNER_KEY } from "@/lib/pwa";
 import { fetchJsonWithReadTimeout } from "@/lib/client-recovery";
 import { confirmTurnTestReceipt, readTurnTestReceipts, turnTestRoundPassed, type TurnTestReceipt } from "@/lib/notification-turn-test-client";
+import { notificationTestFlow } from "@/lib/notification-turn-test-flow";
 import styles from "./NotificationTurnTest.module.css";
 
 interface Round { gameVersion: number; status: string; attempts: number }
@@ -24,7 +25,10 @@ export function NotificationTurnTest({ game, onRefresh }: { game?: GameSnapshot;
   const [progress, setProgress] = useState<Progress | null>(null);
   const [receipts, setReceipts] = useState<Record<number, TurnTestReceipt>>({});
   const [now, setNow] = useState(() => Date.now());
-  const [armed, setArmed] = useState(false);
+  const [submittedVersion, setSubmittedVersion] = useState<number | null>(null);
+  const [setupAttempt, setSetupAttempt] = useState(0);
+  const [readError, setReadError] = useState("");
+  const [deviceIssue, setDeviceIssue] = useState("");
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const pending = useRef<{ playerToken: string; inviteToken: string; requestId: string } | null>(null);
@@ -35,7 +39,7 @@ export function NotificationTurnTest({ game, onRefresh }: { game?: GameSnapshot;
     let cancelled = false;
     void (async () => {
       if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
-        throw new Error("הדפדפן הזה אינו תומך בהתראות. פתחו את ChessRiot ב־Chrome במכשיר ה־Android שברצונכם לבדוק.");
+        throw new Error("This browser does not support notifications. Open ChessRiot in Chrome on the Android phone you want to test.");
       }
       const [auth, config, registration] = await Promise.all([
         fetchJsonWithReadTimeout<{ account?: { username?: string } }>("/api/auth/session"),
@@ -43,28 +47,39 @@ export function NotificationTurnTest({ game, onRefresh }: { game?: GameSnapshot;
         preparePushServiceWorker(),
       ]);
       if (!auth.response.ok || !auth.data?.account?.username || !config.response.ok || !config.data?.enabled || !config.data.publicKey) {
-        throw new Error("לא ניתן להכין את הבדיקה. ודאו שאתם מחוברים ונסו לרענן.");
+        throw new Error("Could not prepare the test. Check your connection and try again.");
       }
       await ensureCurrentPushDiagnosticWorker(registration);
       if (!cancelled) setSetup({ username: auth.data.account.username, publicKey: config.data.publicKey, registration });
     })().catch((e: Error) => { if (!cancelled) setError(e.message); });
     return () => { cancelled = true; };
-  }, [game]);
+  }, [game, setupAttempt]);
 
   const refreshProgress = useCallback(async () => {
     if (!game) return;
     try {
       const registration = await navigator.serviceWorker.getRegistration("/");
       const subscription = await registration?.pushManager.getSubscription();
-      if (!subscription) throw new Error("ההתראות במכשיר הזה אינן רשומות. חזרו לדף הבדיקה והפעילו אותן.");
+      if (!subscription) {
+        setDeviceIssue("Notifications are not connected on this phone. Start again to connect them.");
+        return;
+      }
       const { response, data } = await fetchJsonWithReadTimeout<Progress>(`/api/games/${game.id}/notification-test?endpointHash=${await pushEndpointHash(subscription.endpoint)}`);
-      if (!response.ok || !data?.rounds) throw new Error(response.status === 409
-        ? "הבדיקה הזו שייכת למכשיר אחר. התחילו בדיקה חדשה במכשיר הזה."
-        : "לא הצלחנו לטעון את התוצאות. נסו שוב.");
+      if (response.status === 409 || response.status === 404) {
+        setDeviceIssue("This test belongs to another device or is no longer available. Start a test on this phone.");
+        return;
+      }
+      if (!response.ok || !data?.rounds) throw new Error("Could not check the result yet. Check your connection and try again.");
+      const nextReceipts = await readTurnTestReceipts(game.id, game.version,
+        window.location.pathname === `/g/${game.id}` && document.visibilityState === "visible" && document.hasFocus());
+      if (!mounted.current) return;
       setProgress(data);
-      setReceipts(await readTurnTestReceipts(game.id, game.version, window.location.pathname === `/g/${game.id}` && document.visibilityState === "visible" && document.hasFocus()));
-      setError("");
-    } catch (e) { setError(e instanceof Error ? e.message : "לא הצלחנו לקרוא את תוצאות הבדיקה."); }
+      setReceipts(nextReceipts);
+      setDeviceIssue("");
+      setReadError("");
+    } catch {
+      if (mounted.current) setReadError("Could not check the result yet. Check your connection and try again.");
+    }
   }, [game]);
 
   useEffect(() => {
@@ -73,7 +88,8 @@ export function NotificationTurnTest({ game, onRefresh }: { game?: GameSnapshot;
     const refresh = () => { if (document.visibilityState === "visible") void refreshProgress(); };
     const timer = window.setInterval(() => { setNow(Date.now()); refresh(); }, 2_000);
     document.addEventListener("visibilitychange", refresh);
-    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", refresh); };
+    window.addEventListener("focus", refresh);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", refresh); window.removeEventListener("focus", refresh); };
   }, [game, refreshProgress]);
 
   async function start() {
@@ -83,19 +99,19 @@ export function NotificationTurnTest({ game, onRefresh }: { game?: GameSnapshot;
     try {
       // Ask directly in the tap handler, before network work loses user activation.
       if (Notification.permission !== "granted" && await Notification.requestPermission() !== "granted") {
-        throw new Error("יש לאפשר התראות בהגדרות האתר ובהגדרות Android ואז לנסות שוב.");
+        throw new Error("Allow notifications in your browser and Android settings, then try again.");
       }
       if (!mounted.current) return;
       const diagnosticStorage = await caches.open("chessriot-turn-test-v1");
       await diagnosticStorage.put("/__chessriot_turn_test_probe__", new Response("ready"));
-      if (!await diagnosticStorage.match("/__chessriot_turn_test_probe__")) throw new Error("הדפדפן אינו מאפשר לשמור תוצאות. נסו חלון רגיל במקום גלישה פרטית.");
+      if (!await diagnosticStorage.match("/__chessriot_turn_test_probe__")) throw new Error("This browser cannot save test results. Use a regular window instead of private browsing.");
       await diagnosticStorage.delete("/__chessriot_turn_test_probe__");
       localStorage.setItem(notificationOfferDecisionKey(setup.username), "setup-pending");
       let timeout: ReturnType<typeof setTimeout> | undefined;
       const registration = registerPushDevice({ registration: setup.registration, publicKey: setup.publicKey, expectedUsername: setup.username });
       const subscription = await Promise.race([
         registration,
-        new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error("הפעלת ההתראות מתעכבת. רעננו את הדף ונסו שוב.")), 15_000); }),
+        new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error("Notification setup timed out. Try again.")), 15_000); }),
       ]).finally(() => { if (timeout) clearTimeout(timeout); });
       if (!mounted.current) return;
       localStorage.setItem(notificationOfferDecisionKey(setup.username), "enabled");
@@ -107,11 +123,11 @@ export function NotificationTurnTest({ game, onRefresh }: { game?: GameSnapshot;
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ ...pending.current, mode: "solo", difficulty: 1, variantId: "standard", notificationTestEndpoint: subscription.endpoint }),
       });
-      if (!response.ok || !data?.game) throw new Error(data?.error?.message || "לא הצלחנו להתחיל את הבדיקה.");
+      if (!response.ok || !data?.game) throw new Error(data?.error?.message || "Could not start the test. Try again.");
       localStorage.setItem(playerKey(data.game.id), pending.current.playerToken);
       rememberGame(data.game);
       if (mounted.current) window.location.assign(`/g/${data.game.id}`);
-    } catch (e) { setError(e instanceof Error ? e.message : "לא הצלחנו להתחיל את הבדיקה."); }
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not start the test. Try again."); }
     finally { if (mounted.current) setBusy(false); window.dispatchEvent(new Event("chessriot:external-push-setup-end")); }
   }
 
@@ -123,17 +139,17 @@ export function NotificationTurnTest({ game, onRefresh }: { game?: GameSnapshot;
         const legal = new Chess(game.fen).moves({ verbose: true });
         const preferred = ["e2e4", "g1f3", "b1c3", "d2d3"];
         const move = preferred.map((squares) => legal.find((m) => `${m.from}${m.to}` === squares)).find(Boolean) ?? legal[0];
-        if (!move) throw new Error("אין מהלך זמין. התחילו בדיקה חדשה.");
+        if (!move) throw new Error("No legal move is available. Start a new test.");
         pendingMove.current = { from: move.from, to: move.to, ...(move.promotion ? { promotion: move.promotion } : {}), expectedVersion: game.version, requestId: generateUuid() };
       }
       const { response, data } = await fetchJsonWithReadTimeout<{ game?: GameSnapshot; error?: { message?: string } }>(`/api/games/${game.id}/moves`, {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(pendingMove.current),
       });
-      if (!response.ok || !data?.game) throw new Error(data?.error?.message || "המהלך לא נשמר. נסו שוב.");
+      if (!response.ok || !data?.game) throw new Error(data?.error?.message || "The move could not be confirmed. Try again.");
       pendingMove.current = null;
-      setArmed(true);
+      setSubmittedVersion(data.game.version);
       onRefresh?.();
-    } catch (e) { setError(e instanceof Error ? e.message : "המהלך לא נשמר. נסו שוב."); }
+    } catch (e) { setError(e instanceof Error ? e.message : "The move could not be confirmed. Try again."); }
     finally { setBusy(false); }
   }
 
@@ -146,55 +162,120 @@ export function NotificationTurnTest({ game, onRefresh }: { game?: GameSnapshot;
           method: "POST", headers: { "content-type": "application/json" },
           body: JSON.stringify({ expectedVersion: game.version, requestId: generateUuid() }),
         });
-        if (!response.ok) { onRefresh?.(); throw new Error("המשחק השתנה. לחצו שוב כדי לסיים את הבדיקה."); }
+        if (!response.ok) { onRefresh?.(); throw new Error("The game just changed. Tap again to finish the test."); }
       }
       window.location.assign(destination);
-    } catch (e) { setError(e instanceof Error ? e.message : "לא הצלחנו לסיים. נסו שוב."); }
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not finish the test. Try again."); }
     finally { setBusy(false); }
   }
 
-  const passed = [2, 4, 6, 8].filter((v) => turnTestRoundPassed(receipts[v])).length;
-  const pendingReply = Boolean(game && game.turn !== game.you.color && game.status === "active");
-  const done = Boolean(game && game.plyCount >= 8);
-  const expired = Boolean(game?.notificationTest && now >= game.notificationTest.expiresAt);
-  const currentReceipt = game ? receipts[game.version] : undefined;
-  const canConfirm = Boolean(currentReceipt?.clickedAt && currentReceipt.openedAt && !currentReceipt.confirmedAt && currentReceipt.visibleClients === 0);
-  const readyForNext = !game || game.version === 0 || turnTestRoundPassed(currentReceipt);
-  return <section className={styles.panel} lang="he" dir="rtl" aria-labelledby="turn-test-title">
-    <div className={styles.heading}><span aria-hidden="true">♞</span><div>
-      <p>מכשיר אחד · יריב אוטומטי · 4 תורים</p>
-      <h1 id="turn-test-title">בדיקת התראות מלאה</h1>
-    </div></div>
+  async function confirmRound() {
+    if (!game || busy) return;
+    setBusy(true); setError("");
+    try {
+      await confirmTurnTestReceipt(game.id, game.version);
+      await refreshProgress();
+    } catch { setError("Could not save your confirmation. Try again."); }
+    finally { if (mounted.current) setBusy(false); }
+  }
+
+  const effectiveVersion = Math.max(game?.version ?? 0, submittedVersion ?? 0);
+  const pendingReply = Boolean(game?.status === "active" && (game.turn !== game.you.color || effectiveVersion > game.version));
+  const roundVersion = Math.min(8, Math.max(2, Math.ceil(effectiveVersion / 2) * 2));
+  const currentDelivery = progress?.rounds.find((r) => r.gameVersion === roundVersion);
+  const flow = notificationTestFlow({
+    version: effectiveVersion,
+    pendingReply,
+    completed: game?.status === "completed",
+    expired: Boolean(game?.notificationTest && now >= game.notificationTest.expiresAt),
+    deviceEnabled: progress?.deviceEnabled,
+    deviceIssue,
+    deliveryFailed: currentDelivery?.status === "dead" || currentDelivery?.status === "stale",
+    receipts,
+  });
+  const refreshing = Boolean(readError && flow.phase !== "blocked" && flow.phase !== "complete");
+  const late = Boolean(pendingReply && game?.notificationTest?.replyDueAt && now > game.notificationTest.replyDueAt + 20_000);
+  const time = (timestamp?: number) => timestamp ? new Date(timestamp).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "Not yet";
+  const retryRead = () => { setError(""); onRefresh?.(); void refreshProgress(); };
+
+  return <section className={styles.panel} lang="en" dir="ltr" aria-labelledby="turn-test-title">
+    <p className={styles.eyebrow}>THIS PHONE · 4 ROUNDS</p>
+    <h1 id="turn-test-title">{game ? "Notification test" : "Test your notifications"}</h1>
     {!game ? <>
-      <p>בודקים את מכשיר ה־Android הזה בלבד. Riot Bot ישחק נגדכם, וישלח התראת תור אמיתית גם כש־ChessRiot סגור.</p>
-      <ol><li>לוחצים על ״המהלך הבא״.</li><li>עוברים למסך הבית או נועלים את הטלפון. בתור השלישי נסו גם לסגור את ChessRiot מרשימת האפליקציות האחרונות (או לסגור את הלשונית).</li><li>ממתינים להתראה, מקישים עליה וחוזרים למשחק. חוזרים כך 4 פעמים.</li></ol>
-      <p>לא צריך מכשיר נוסף או חשבון נוסף. אל תבחרו ״אילוץ עצירה״ בהגדרות Android.</p>
-      <button type="button" onClick={() => void start()} disabled={!setup || busy}>{busy ? "מכינים את המשחק…" : setup ? "הפעלת התראות והתחלת בדיקה" : "מכינים את הבדיקה…"}</button>
-      <Link href="/app">חזרה למשחקים</Link>
+      <p>Check real game notifications on this Android. No second device needed.</p>
+      <p>We will guide you through four rounds: leave the app, then tap the notification to return.</p>
+      {error ? <p className={styles.error} role="alert">{error}</p> : null}
+      {!setup && error ? <button type="button" onClick={() => { setError(""); setSetupAttempt((v) => v + 1); }}>Try setup again</button>
+        : <button type="button" onClick={() => void start()} disabled={!setup || busy}>{busy ? "Connecting this phone…" : setup ? "Start test" : "Preparing…"}</button>}
+      <details className={styles.details}><summary>How the test works</summary>
+        <p>Each round plays a real move against Riot Bot. It replies after about eight seconds and sends a normal turn notification only to this phone.</p>
+        <p>We check delivery, your tap, and return to the correct game. You confirm that Android actually showed the notification. One round also asks you to close the app.</p>
+        <p>Use Home, lock the phone, or close the app from Recents. Do not use Android’s Force stop.</p>
+      </details>
+      <Link className={styles.exit} href="/app">Back to games</Link>
     </> : <>
-      <p className={styles.summary} role="status">{passed === 4 ? "הבדיקה הושלמה: 4 התראות התקבלו כשהאפליקציה לא הייתה גלויה, והקשה עליהן פתחה את המשחק." : `${passed} מתוך 4 תורים אומתו במכשיר הזה`}</p>
-      {pendingReply || (armed && game.version === 0) ? <p className={styles.instruction} role="status"><strong>עכשיו עברו למסך הבית או נעלו את הטלפון.</strong><br />Riot Bot ישיב כ־8 שניות אחרי המהלך. כשההתראה תגיע, הקישו עליה.{game.plyCount === 5 ? " בתור הזה נסו גם לסגור את ChessRiot מרשימת האפליקציות האחרונות, או לסגור את הלשונית בדפדפן." : ""}</p> : null}
-      {!pendingReply && game.status === "active" && !done && readyForNext && !expired ? <button type="button" onClick={() => void nextMove()} disabled={busy || !progress?.deviceEnabled}>{busy ? "שומרים את המהלך…" : `המהלך הבא · תור ${Math.floor(game.plyCount / 2) + 1} מתוך 4`}</button> : null}
-      {canConfirm ? <button type="button" onClick={() => {
-        void confirmTurnTestReceipt(game.id, game.version).then(refreshProgress).catch(() => setError("לא הצלחנו לשמור את האישור. נסו שוב."));
-      }}>ראיתי התראת Android והקשה עליה פתחה את המשחק הזה</button> : null}
-      {!pendingReply && game.version > 0 && !readyForNext && !canConfirm ? <p className={styles.instruction}>התור עדיין לא אומת. חזרו דרך ההתראה שבמגירת ההתראות. אם לא הופיעה התראה, בדקו למטה היכן נעצרה הבדיקה.</p> : null}
-      {pendingReply && game.notificationTest?.replyDueAt && now > game.notificationTest.replyDueAt + 20_000 ? <p role="alert">התשובה מתעכבת. הבדיקה עדיין לא עברה. אפשר לרענן או להתחיל בדיקה חדשה.</p> : null}
-      {game.status === "completed" && passed < 4 ? <p>המשחק הסתיים לפני השלמת הבדיקה. התחילו בדיקה חדשה.</p> : null}
-      {expired ? <p role="alert">תוקף הבדיקה הסתיים. התחילו בדיקה חדשה.</p> : null}
-      <ol className={styles.rounds}>{[2, 4, 6, 8].map((v, index) => {
-        const receipt = receipts[v]; const delivery = progress?.rounds.find((r) => r.gameVersion === v);
-        return <li key={v} data-passed={turnTestRoundPassed(receipt)}><strong>תור {index + 1}{turnTestRoundPassed(receipt) ? " · עבר" : ""}</strong>
-          <span>{delivery ? delivery.status === "sent" ? "השרת שלח" : `שליחה: ${delivery.status === "dead" || delivery.status === "stale" ? "נכשלה" : "ממתינה"}` : "ממתין למהלך"}
-            {receipt?.receivedAt ? " · המכשיר קיבל" : ""}{receipt?.shownAt ? " · הדפדפן יצר התראה" : ""}{receipt?.showRejectedAt ? " · ההצגה נכשלה" : ""}{receipt?.clickedAt ? " · הוקשה" : ""}{receipt?.openedAt ? " · המשחק נפתח" : ""}</span>
-          {receipt?.receivedAt && receipt.windowClients === 0 ? <small>כל מסכי ChessRiot היו סגורים בזמן הקבלה.</small> : null}
-          {receipt?.receivedAt && receipt.visibleClients !== 0 ? <small>ChessRiot היה גלוי או שלא ניתן לאמת שהיה סגור. התור אינו נחשב לבדיקה עם האפליקציה סגורה.</small> : null}
-        </li>;
-      })}</ol>
-      <p className={styles.note}>״השרת שלח״ לבדו אינו הוכחה להתראה בטלפון. תור עובר רק לאחר קבלה כשהאפליקציה אינה גלויה, הקשה, פתיחת המשחק ואישור שלכם.</p>
-      {progress && !progress.deviceEnabled ? <p role="alert">ההתראות במכשיר הזה בוטלו. יש להפעיל אותן מחדש.</p> : null}
-      <div className={styles.links}><button type="button" className={styles.secondary} onClick={() => { onRefresh?.(); void refreshProgress(); }}>רענון התוצאות</button><button type="button" className={styles.secondary} disabled={busy} onClick={() => void finishTest("/notification-test")}>בדיקה חדשה</button><button type="button" className={styles.secondary} disabled={busy} onClick={() => void finishTest("/app")}>סיום וחזרה למשחקים</button></div>
+      <ol className={styles.progress} aria-label={`${flow.passed} of 4 rounds verified`}>
+        {[2, 4, 6, 8].map((v, i) => <li key={v} data-passed={turnTestRoundPassed(receipts[v])} aria-current={flow.phase !== "complete" && flow.round === i + 1 ? "step" : undefined}>
+          <span aria-hidden="true">{turnTestRoundPassed(receipts[v]) ? "✓" : i + 1}</span><small>Round {i + 1}{turnTestRoundPassed(receipts[v]) ? " verified" : ""}</small>
+        </li>)}
+      </ol>
+      <div className={styles.step} aria-live="polite" aria-atomic="true">
+        {refreshing ? <><h2>Let’s check the result</h2><p>{readError}</p></> :
+          flow.phase === "complete" ? <><h2>All four rounds verified</h2><p>You received and opened all four notifications while ChessRiot was off screen.</p></> :
+          flow.phase === "blocked" ? <><h2>This test needs a restart</h2><p>{flow.reason}</p></> :
+          flow.phase === "checking" ? <><h2>Checking this phone…</h2><p>Your test results will appear here.</p></> :
+          flow.phase === "confirm" ? <><h2>Did you see the notification?</h2><p>Confirm that you saw the Android notification and tapped it to return to this game.</p></> :
+          flow.phase === "ready" ? <>
+            <h2>{flow.passed ? `Round ${flow.passed} verified` : "Ready for round 1?"}</h2>
+            <p>{flow.round === 3 ? "After tapping below, close ChessRiot from Recents, or close its browser tab. Tap the notification to return."
+              : "Tap below, then go Home or lock your phone. Tap the notification to return."}</p>
+            <p className={styles.note}>Riot Bot replies after about eight seconds.</p>
+          </> : <>
+            <h2>{pendingReply ? flow.round === 3 ? "Close ChessRiot now" : "Lock your phone now" : "Tap your notification"}</h2>
+            <p>{pendingReply ? flow.round === 3
+              ? "Close it from Recents or close this browser tab. Tap the notification when it arrives."
+              : "Or go to your Home screen. Tap the notification when it arrives."
+              : "Swipe down to open Android notifications, then tap the ChessRiot turn notification."}</p>
+            {pendingReply ? <p className={styles.note}>The reply takes about eight seconds. You do not need to keep this page open.</p> : null}
+          </>}
+      </div>
+      {error ? <p className={styles.error} role="alert">{error}</p> : null}
+      {refreshing ? <button type="button" disabled={busy} onClick={retryRead}>Try again</button> :
+        flow.phase === "complete" ? <button type="button" disabled={busy} onClick={() => void finishTest("/app")}>{busy ? "Finishing…" : "Done"}</button> :
+        flow.phase === "blocked" ? <button type="button" disabled={busy} onClick={() => void finishTest("/notification-test")}>{busy ? "Restarting…" : "Restart test"}</button> :
+        flow.phase === "confirm" ? <button type="button" disabled={busy} onClick={() => void confirmRound()}>{busy ? "Saving…" : "Yes, I saw it and tapped it"}</button> :
+        flow.phase === "ready" ? <button type="button" disabled={busy} onClick={() => void nextMove()}>{busy ? "Starting this round…" : `Send notification ${flow.round}`}</button> : null}
+      {late ? <p className={styles.note} role="status">The reply is taking longer than expected. This round has not passed yet.</p> : null}
+      <details className={styles.details}><summary>Need help?</summary>
+        <p>If nothing arrives, check Android and browser notification permissions for ChessRiot. Do not use Force stop.</p>
+        <p>If you returned manually, open Android’s notification drawer and tap the ChessRiot notification. A server send alone does not pass the test.</p>
+        <div className={styles.actions}>
+          <button type="button" className={styles.secondary} disabled={busy} onClick={retryRead}>Check again</button>
+          <button type="button" className={styles.secondary} disabled={busy} onClick={() => void finishTest("/notification-test")}>Start a new test</button>
+        </div>
+      </details>
+      <details className={styles.details}><summary>Full test results · {flow.passed}/4 verified</summary>
+        <p className={styles.note}>Each round requires receipt while the app is off screen, notification creation, your tap, this game opening, and your confirmation, in that order.</p>
+        <ol className={styles.rounds}>{[2, 4, 6, 8].map((v, index) => {
+          const receipt = receipts[v]; const delivery = progress?.rounds.find((r) => r.gameVersion === v);
+          return <li key={v} data-passed={turnTestRoundPassed(receipt)}>
+            <strong>Round {index + 1} · {turnTestRoundPassed(receipt) ? "Verified" : "Not verified"}</strong>
+            <dl>
+              <dt>Server delivery</dt><dd>{delivery?.status === "sent" ? "Push provider accepted" : delivery?.status ?? "No move yet"}{delivery ? ` · ${delivery.attempts} attempt(s)` : ""}</dd>
+              <dt>Phone received</dt><dd>{time(receipt?.receivedAt)}</dd>
+              <dt>Notification created</dt><dd>{receipt?.showRejectedAt ? `Failed at ${time(receipt.showRejectedAt)}` : time(receipt?.shownAt)}</dd>
+              <dt>Notification tapped</dt><dd>{time(receipt?.clickedAt)}</dd>
+              <dt>Correct game opened</dt><dd>{time(receipt?.openedAt)}</dd>
+              <dt>You confirmed</dt><dd>{time(receipt?.confirmedAt)}</dd>
+              <dt>Visible app windows</dt><dd>{receipt?.visibleClients ?? "Unknown"}</dd>
+              <dt>Open app windows</dt><dd>{receipt?.windowClients ?? "Unknown"}</dd>
+            </dl>
+            {receipt?.receivedAt && receipt.windowClients === 0 ? <small>All ChessRiot windows were closed when this arrived.</small> : null}
+          </li>;
+        })}</ol>
+        <p className={styles.note}>This phone: {progress ? progress.deviceEnabled ? "notifications enabled" : "notifications disabled" : "checking"}. Test expires at {time(progress?.expiresAt ?? game.notificationTest?.expiresAt)}.</p>
+      </details>
+      {flow.phase !== "complete" ? <button type="button" className={styles.exit} disabled={busy} onClick={() => void finishTest("/app")}>Exit test</button> : null}
     </>}
-    {error ? <p className={styles.error} role="alert">{error}</p> : null}
   </section>;
 }

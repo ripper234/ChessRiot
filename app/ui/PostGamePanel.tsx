@@ -3,23 +3,23 @@ import { useEffect, useRef, useState } from "react";
 import type { GameSnapshot, Termination } from "@/lib/game-types";
 
 const REASON_LABELS: Record<Termination, string> = {
-  checkmate: "מט",
-  resignation: "כניעה",
-  stalemate: "פט",
-  insufficient_material: "אין מספיק כלים למט",
-  threefold_repetition: "חזרה משולשת",
-  fivefold_repetition: "חזרה מחומשת",
-  fifty_move: "כלל 50 המהלכים",
-  seventy_five_move: "כלל 75 המהלכים",
-  cancelled: "המשחק בוטל",
-  timeout: "הזמן נגמר",
-  draw: "תיקו",
+  checkmate: "Checkmate",
+  resignation: "Resignation",
+  stalemate: "Stalemate",
+  insufficient_material: "Insufficient material",
+  threefold_repetition: "Threefold repetition",
+  fivefold_repetition: "Fivefold repetition",
+  fifty_move: "50-move rule",
+  seventy_five_move: "75-move rule",
+  cancelled: "Game cancelled",
+  timeout: "Time ran out",
+  draw: "Draw",
 };
 
 function outcomeHeading(game: GameSnapshot): string {
-  if (game.outcome?.reason === "cancelled") return "המשחק בוטל";
-  if (!game.outcome || game.outcome.winner === null) return "המשחק הסתיים בתיקו";
-  return game.outcome.winner === game.you.color ? "ניצחת" : "הפסדת";
+  if (game.outcome?.reason === "cancelled") return "Game cancelled";
+  if (!game.outcome || game.outcome.winner === null) return "The game is a draw";
+  return game.outcome.winner === game.you.color ? "You won" : "You lost";
 }
 
 export function PostGamePanel({
@@ -68,31 +68,31 @@ export function PostGamePanel({
         error?: { message?: unknown };
       };
       if (!response.ok || typeof payload.url !== "string") {
-        throw new Error("לא הצלחנו ליצור קישור לסיכום המשחק.");
+        throw new Error("Could not create a game recap link.");
       }
       setRecapUrl(payload.url);
       const data = {
-        title: `${game.players.white.name} נגד ${game.players.black?.name ?? "Riot Bot"} ב־ChessRiot`,
-        text: "אפשר לצפות שוב במשחק ChessRiot שהסתיים.",
+        title: `${game.players.white.name} vs ${game.players.black?.name ?? "Riot Bot"} on ChessRiot`,
+        text: "Replay this completed ChessRiot game.",
         url: payload.url,
       };
       if (typeof navigator.share === "function") {
         try {
           await navigator.share(data);
-          setShareMessage("הסיכום שותף. כל מי שיש לו את הקישור יכול לראות את השמות והמהלכים.");
+          setShareMessage("Recap shared. Anyone with the link can see player names and moves.");
           return;
         } catch (error) {
           if (error instanceof DOMException && error.name === "AbortError") {
-            setShareMessage("קישור הסיכום מוכן.");
+            setShareMessage("The recap link is ready.");
             return;
           }
         }
       }
       await navigator.clipboard.writeText(payload.url);
-      setShareMessage("קישור הסיכום הועתק. כל מי שיש לו את הקישור יכול לראות את השמות והמהלכים.");
+      setShareMessage("Recap link copied. Anyone with the link can see player names and moves.");
     } catch {
       setShareError(true);
-      setShareMessage("לא הצלחנו ליצור קישור לסיכום המשחק.");
+      setShareMessage("Could not create a game recap link.");
     } finally {
       setShareBusy(false);
     }
@@ -109,32 +109,32 @@ export function PostGamePanel({
       });
       if (!response.ok) throw new Error();
       setRecapUrl("");
-      setShareMessage("קישור הסיכום כבר אינו פעיל.");
+      setShareMessage("The recap link is no longer active.");
     } catch {
       setShareError(true);
-      setShareMessage("לא הצלחנו להפוך את הסיכום לפרטי. יש לנסות שוב.");
+      setShareMessage("Could not make the recap private. Try again.");
     } finally {
       setShareBusy(false);
     }
   }
 
   return (
-    <section className="post-game-panel" dir="rtl" aria-labelledby="post-game-title" role="region">
-      <button className="post-game-dismiss" type="button" onClick={onDismiss} aria-label="סגירת תוצאת המשחק">×</button>
-      <small>תוצאה סופית</small>
+    <section className="post-game-panel" dir="ltr" aria-labelledby="post-game-title" role="region">
+      <button className="post-game-dismiss" type="button" onClick={onDismiss} aria-label="Close game result">×</button>
+      <small>Final result</small>
       <h2 id="post-game-title" ref={titleRef} tabIndex={-1}>{outcomeHeading(game)}</h2>
-      <p>{game.outcome ? REASON_LABELS[game.outcome.reason] : "המשחק הסתיים"}</p>
+      <p>{game.outcome ? REASON_LABELS[game.outcome.reason] : "Game over"}</p>
       <div className="post-game-actions">
-        <Link className="primary-button" href={`/app?${setup}`}>שחק שוב</Link>
-        <button className="secondary-button" type="button" onClick={onReview}>צפה במהלכים</button>
+        <Link className="primary-button" href={`/app?${setup}`}>Play again</Link>
+        <button className="secondary-button" type="button" onClick={onReview}>Review moves</button>
         <button className="secondary-button" type="button" disabled={shareBusy} onClick={() => void shareRecap()}>
-          {shareBusy ? "מכינים…" : "שתף סיכום"}
+          {shareBusy ? "Preparing…" : "Share recap"}
         </button>
-        <Link className="quiet-button" href="/">חזרה למשחקים</Link>
+        <Link className="quiet-button" href="/">Back to games</Link>
       </div>
       {recapUrl ? <div className="post-game-recap-link">
-        <input dir="ltr" aria-label="קישור ציבורי לסיכום" value={recapUrl} readOnly onFocus={(event) => event.currentTarget.select()} />
-        <button type="button" disabled={shareBusy} onClick={() => void stopSharing()}>הפסק שיתוף</button>
+        <input dir="ltr" aria-label="Public recap link" value={recapUrl} readOnly onFocus={(event) => event.currentTarget.select()} />
+        <button type="button" disabled={shareBusy} onClick={() => void stopSharing()}>Stop sharing</button>
       </div> : null}
       {shareMessage ? <small className={shareError ? "form-error" : "form-success"} role={shareError ? "alert" : "status"}>{shareMessage}</small> : null}
     </section>

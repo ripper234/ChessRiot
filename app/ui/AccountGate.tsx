@@ -89,13 +89,13 @@ function writeNotificationDecision(username: string, decision: string): void {
 function usernameValidationMessage(
   validation: Exclude<ReturnType<typeof validateUsername>, { ok: true }>,
 ): string {
-  if (validation.code === "required") return "בחרו שם משתמש.";
-  if (validation.code === "length") return "השתמשו ב־3–20 תווים.";
+  if (validation.code === "required") return "Choose a username.";
+  if (validation.code === "length") return "Use 3–20 characters.";
   if (validation.code === "characters") {
-    return "התחילו באות והשתמשו באותיות מכל שפה, מספרים, נקודות, מקפים או קווים תחתיים.";
+    return "Start with a letter. Use letters from any language, numbers, periods, hyphens, or underscores.";
   }
-  if (validation.code === "reserved") return "שם המשתמש הזה שמור. בחרו שם אחר.";
-  return "בחרו שם משתמש שמתאים לכולם.";
+  if (validation.code === "reserved") return "That username is reserved. Choose another.";
+  return "Choose a username appropriate for everyone.";
 }
 
 function shouldRunNotificationPermissionStep(
@@ -195,7 +195,7 @@ export function AccountGate({ children }: { children: ReactNode }) {
       } catch {
         setState({
           kind: "error",
-          message: "לא הצלחנו לטעון את החשבון. בדקו את החיבור ונסו שוב.",
+          message: "Your account could not load. Check your connection and try again.",
         });
         return "error";
       }
@@ -280,17 +280,17 @@ export function AccountGate({ children }: { children: ReactNode }) {
   }, [refresh, state.kind]);
 
   if (state.kind === "loading") {
-    return <GateShell><div className="auth-loading" role="status">פותחים את הזירה… <Link className="quiet-button" href="/">חזרה לדף הבית</Link></div></GateShell>;
+    return <GateShell><div className="auth-loading" role="status">Opening the arena… <Link className="quiet-button" href="/">Back to home</Link></div></GateShell>;
   }
   if (state.kind === "error") {
     return (
       <GateShell>
         <section className="auth-card" role="alert">
           <span className="auth-glyph" aria-hidden="true">↻</span>
-          <h1>החיבור לא הצליח</h1>
-          <p>{state.message} נמשיך לנסות אוטומטית.</p>
-          <button className="primary-button" type="button" onClick={() => void refresh()}>נסו שוב</button>
-          <Link className="secondary-button" href="/">חזרה לדף הבית</Link>
+          <h1>Could not connect</h1>
+          <p>{state.message} We’ll keep trying automatically.</p>
+          <button className="primary-button" type="button" onClick={() => void refresh()}>Try again</button>
+          <Link className="secondary-button" href="/">Back to home</Link>
         </section>
       </GateShell>
     );
@@ -326,8 +326,8 @@ export function AccountGate({ children }: { children: ReactNode }) {
 
 function GateShell({ children }: { children: ReactNode }) {
   return (
-    <main className="auth-shell" lang="he" dir="rtl" translate="no">
-      <header className="topbar"><Brand locale="he" /></header>
+    <main className="auth-shell" lang="en" dir="ltr" translate="no">
+      <header className="topbar"><Brand locale="en" /></header>
       <div className="auth-stage">{children}</div>
     </main>
   );
@@ -355,9 +355,9 @@ function SignInScreen({ available }: { available: boolean }) {
     <GateShell>
       <section className="auth-card sign-in-card">
         <span className="auth-glyph" aria-hidden="true">♞</span>
-        <p className="auth-kicker">חשבון ChessRiot שלך</p>
-        <h1>נכנסים ומשחקים</h1>
-        <p>כל המשחקים, החברים וההתקדמות נשמרים יחד בכל מכשיר.</p>
+        <p className="auth-kicker">Your ChessRiot account</p>
+        <h1>Sign in and play</h1>
+        <p>Your games, friends, and progress stay with you on every device.</p>
         <button
           className="google-sign-in"
           type="button"
@@ -365,11 +365,11 @@ function SignInScreen({ available }: { available: boolean }) {
           onClick={startGoogleLogin}
         >
           <span aria-hidden="true">G</span>
-          המשך עם Google
+          Continue with Google
         </button>
-        {!available ? <p className="form-error">הכניסה עם Google אינה זמינה כרגע.</p> : null}
+        {!available ? <p className="form-error">Google sign-in is unavailable right now.</p> : null}
         <small className="auth-legal">
-          בהמשך הפעולה אתם מסכימים ל<Link href="/terms">תנאים</Link> ומאשרים שקראתם את <Link href="/privacy">מדיניות הפרטיות</Link>.
+          By continuing, you agree to the <Link href="/terms">Terms</Link> and confirm that you have read the <Link href="/privacy">Privacy Policy</Link>.
         </small>
       </section>
     </GateShell>
@@ -403,7 +403,7 @@ function UsernameScreen({
       return;
     }
     if (!confirmed) {
-      setError(`אשרו ש־@${validated.username} הוא שם המשתמש הקבוע הרצוי.`);
+      setError(`Confirm that @${validated.username} is the permanent username you want.`);
       return;
     }
     setBusy(true);
@@ -424,12 +424,12 @@ function UsernameScreen({
       };
       if (!response.ok || typeof payload.account?.username !== "string") {
         setError(payload.error?.code === "unavailable"
-          ? "שם המשתמש הזה כבר תפוס. בחרו שם אחר."
+          ? "That username is taken. Choose another."
           : payload.error?.code === "rate_limited"
-            ? "בוצעו יותר מדי ניסיונות. נסו שוב מאוחר יותר."
+            ? "Too many attempts. Try again later."
             : payload.error?.code === "already_set"
-              ? "כבר נבחר שם משתמש לחשבון הזה."
-              : "לא הצלחנו לשמור את שם המשתמש.");
+              ? "This account already has a username."
+              : "Your username could not be saved.");
         return;
       }
       publishAuthSessionChanged(true);
@@ -458,7 +458,7 @@ function UsernameScreen({
         onComplete({ kind: "ready", session });
       }
     } catch {
-      setError("לא הצלחנו לשמור את שם המשתמש. נסו שוב.");
+      setError("Your username could not be saved. Try again.");
     } finally {
       setBusy(false);
     }
@@ -468,10 +468,10 @@ function UsernameScreen({
     <GateShell>
       <form className="auth-card username-card" onSubmit={submit} autoComplete="off" noValidate>
         <span className="auth-glyph" aria-hidden="true">@</span>
-        <p className="auth-kicker">עוד שלב אחד</p>
-        <h1>בחירת שם משתמש</h1>
-        <p>חברים יוכלו למצוא ולהזמין אתכם באמצעותו.</p>
-        <label htmlFor="account-username">שם משתמש</label>
+        <p className="auth-kicker">One more step</p>
+        <h1>Choose a username</h1>
+        <p>Friends can use it to find you and invite you to play.</p>
+        <label htmlFor="account-username">Username</label>
         <div className="username-field"><span aria-hidden="true">@</span><input
           id="account-username"
           name="chessriotPlayerHandle"
@@ -495,7 +495,7 @@ function UsernameScreen({
             setError("");
           }}
         /></div>
-        <small id="username-guidance">3–20 תווים. מתחילים באות. אפשר להשתמש באותיות מכל שפה, מספרים, נקודות, מקפים וקווים תחתיים. שם המשתמש ייחודי וצריך להתאים לכולם.</small>
+        <small id="username-guidance">3–20 characters, starting with a letter. Letters from any language, numbers, periods, hyphens, and underscores are allowed. Your username must be unique and appropriate for everyone.</small>
         <label className="username-confirmation">
           <input
             type="checkbox"
@@ -506,14 +506,14 @@ function UsernameScreen({
               setError("");
             }}
           />
-          <span>אני מאשר את <strong><span aria-hidden="true">@</span><bdi dir="auto">{username || "שם-משתמש"}</bdi></strong>. ברור לי שאפשר לבחור פעם אחת בלבד ולא ניתן לשנות אחר כך.</span>
+          <span>I confirm <strong><span aria-hidden="true">@</span><bdi dir="auto">{username || "username"}</bdi></strong>. I understand that I can choose once and cannot change it later.</span>
         </label>
         {visibleError ? <p className="form-error" id="username-error" role="alert" aria-live="polite">{visibleError}</p> : null}
         <button className="primary-button" type="submit" disabled={busy}>
-          {busy ? "שומרים…" : "שמירת שם המשתמש"}
+          {busy ? "Saving…" : "Save username"}
         </button>
         <small className="auth-legal">
-          <Link href="/terms">תנאים</Link> · <Link href="/privacy">פרטיות</Link>
+          <Link href="/terms">Terms</Link> · <Link href="/privacy">Privacy</Link>
         </small>
       </form>
     </GateShell>
@@ -627,19 +627,19 @@ function NotificationOnboarding({
     <GateShell>
       <section className="auth-card notification-onboarding-card" aria-labelledby="notification-onboarding-title">
         <span className="auth-glyph" aria-hidden="true">♟</span>
-        <p className="auth-kicker">התראות תור</p>
-        <h1 id="notification-onboarding-title">לא מפספסים תור.</h1>
-        <p>קבלו בקשות חברות, התראות תור והודעות שירות מזדמנות במכשיר הזה, גם כש־ChessRiot סגור.</p>
-        <small>לא חובה. ההפעלה תפתח בקשת הרשאה חד־פעמית מהדפדפן. אפשר לבחור לא עכשיו ולהמשיך לשחק בלי התראות. תמיד אפשר לשנות זאת בהגדרות.</small>
-        {loading ? <p className="notification-onboarding-status" role="status">בודקים אם אפשר להפעיל התראות…</p> : null}
+        <p className="auth-kicker">Turn notifications</p>
+        <h1 id="notification-onboarding-title">Never miss your turn.</h1>
+        <p>Get friend requests, turn alerts, and occasional service updates on this device, even when ChessRiot is closed.</p>
+        <small>Optional. Enabling notifications opens a one-time browser permission request. Choose Not now to keep playing without notifications. You can change this in Settings.</small>
+        {loading ? <p className="notification-onboarding-status" role="status">Checking notification support…</p> : null}
         <div className="notification-onboarding-actions">
           <button
             className="primary-button"
             type="button"
             disabled={busy || loading || !publicKey || !registration}
             onClick={() => void enableNotifications()}
-          >{loading ? "בודקים…" : busy ? "פותחים…" : "הפעלת התראות"}</button>
-          <button className="secondary-button" type="button" onClick={() => finish("dismissed")}>לא עכשיו</button>
+          >{loading ? "Checking…" : busy ? "Opening…" : "Enable notifications"}</button>
+          <button className="secondary-button" type="button" onClick={() => finish("dismissed")}>Not now</button>
         </div>
       </section>
     </GateShell>
