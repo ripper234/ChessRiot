@@ -2,6 +2,8 @@ export interface PushDrainResult {
   attempted: number;
   failed: number;
   hasMore?: boolean;
+  /** Earliest durable row eligibility, including any active claim lease. */
+  nextAttemptAt?: number | null;
 }
 
 export type PushDrain = (limit?: number) => Promise<PushDrainResult>;
@@ -36,6 +38,7 @@ function canStartRound(
 interface LaneRoundResult {
   failed: boolean;
   hasMore: boolean;
+  nextAttemptAt?: number | null;
 }
 
 async function drainLane(
@@ -48,6 +51,7 @@ async function drainLane(
     return {
       failed: result.failed > 0,
       hasMore: result.hasMore === true,
+      nextAttemptAt: result.nextAttemptAt,
     };
   } catch (error) {
     try {
@@ -59,52 +63,12 @@ async function drainLane(
   }
 }
 
-async function drainAvailableRows(
-  drainTurns: PushDrain,
-  drainAccounts: PushDrain,
-  turns: boolean,
-  accounts: boolean,
-  startedAt: number,
-  now: () => number,
-  onLaneError?: PushDrainPolicyOptions["onLaneError"],
-): Promise<{
-  turnsFailed: boolean;
-  accountsFailed: boolean;
-  turnsHaveMore: boolean;
-  accountsHaveMore: boolean;
-}> {
-  let activeTurns = turns;
-  let activeAccounts = accounts;
-  let turnsFailed = false;
-  let accountsFailed = false;
-  let first = true;
-
-  while (
-    (activeTurns || activeAccounts)
-    && (first || canStartRound(startedAt, 0, now))
-  ) {
-    first = false;
-    const [turnResult, accountResult] = await Promise.all([
-      activeTurns
-        ? drainLane("turn", drainTurns, onLaneError)
-        : Promise.resolve({ failed: false, hasMore: false }),
-      activeAccounts
-        ? drainLane("account", drainAccounts, onLaneError)
-        : Promise.resolve({ failed: false, hasMore: false }),
-    ]);
-    turnsFailed ||= activeTurns && turnResult.failed;
-    accountsFailed ||= activeAccounts && accountResult.failed;
-    activeTurns = activeTurns && turnResult.hasMore;
-    activeAccounts = activeAccounts && accountResult.hasMore;
-    if (turnResult.failed || accountResult.failed) break;
-  }
-
-  return {
-    turnsFailed,
-    accountsFailed,
-    turnsHaveMore: activeTurns,
-    accountsHaveMore: activeAccounts,
-  };
+interface LaneState {
+  name: PushDrainLane;
+  drain: PushDrain;
+  hasMore: boolean;
+  retryAt: number | null;
+  retryIndex: number;
 }
 
 export async function runBoundedPushDrain(
@@ -115,34 +79,41 @@ export async function runBoundedPushDrain(
   const now = options.now ?? Date.now;
   const sleep = options.sleep ?? sleepFor;
   const startedAt = now();
-  let round = await drainAvailableRows(
-    drainTurns,
-    drainAccounts,
-    true,
-    true,
-    startedAt,
-    now,
-    options.onLaneError,
-  );
+  const lanes: LaneState[] = [
+    { name: "turn", drain: drainTurns, hasMore: true, retryAt: null, retryIndex: 0 },
+    { name: "account", drain: drainAccounts, hasMore: true, retryAt: null, retryIndex: 0 },
+  ];
 
-  for (let retry = 0; retry < REQUEST_PUSH_WAKE_DELAYS_MS.length; retry += 1) {
-    const retryTurns = round.turnsFailed;
-    const retryAccounts = round.accountsFailed;
-    if (!retryTurns && !retryAccounts) return;
+  // Bound rounds as well as elapsed time: a contended database may report due
+  // rows without claiming one, and fake/low-resolution clocks need not advance.
+  for (let round = 0; round < 32; round += 1) {
+    const nextWake = Math.min(...lanes.map((lane) => lane.hasMore
+      ? now()
+      : lane.retryAt ?? Infinity));
+    if (!Number.isFinite(nextWake)) return;
+    const delay = Math.max(0, nextWake - now());
+    if (round > 0 && !canStartRound(startedAt, delay, now)) return;
+    if (delay > 0) await sleep(delay);
+    if (round > 0 && !canStartRound(startedAt, 0, now)) return;
 
-    const delayMs = REQUEST_PUSH_WAKE_DELAYS_MS[retry];
-    if (!canStartRound(startedAt, delayMs, now)) return;
-    await sleep(delayMs);
-    if (!canStartRound(startedAt, 0, now)) return;
-
-    round = await drainAvailableRows(
-      drainTurns,
-      drainAccounts,
-      retryTurns || round.turnsHaveMore,
-      retryAccounts || round.accountsHaveMore,
-      startedAt,
-      now,
-      options.onLaneError,
-    );
+    const dueAt = now();
+    await Promise.all(lanes.map(async (lane) => {
+      const retryDue = lane.retryAt !== null && lane.retryAt <= dueAt;
+      if (!lane.hasMore && !retryDue) return;
+      if (retryDue) lane.retryAt = null;
+      const result = await drainLane(lane.name, lane.drain, options.onLaneError);
+      lane.hasMore = result.hasMore;
+      if (result.nextAttemptAt !== undefined) {
+        lane.retryAt = result.nextAttemptAt;
+      } else if (result.failed && lane.retryAt === null) {
+        const retryDelay = REQUEST_PUSH_WAKE_DELAYS_MS[lane.retryIndex];
+        if (retryDelay !== undefined) {
+          lane.retryAt = now() + retryDelay;
+          lane.retryIndex += 1;
+        }
+      }
+      // A successful *different* device must not erase an earlier failure's
+      // wake. Conversely, a future retry must never delay currently due rows.
+    }));
   }
 }

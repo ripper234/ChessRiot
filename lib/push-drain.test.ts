@@ -24,6 +24,65 @@ function fakeClock() {
 }
 
 describe("bounded request-time push drain", () => {
+  it("uses durable retry times after successful unrelated devices and across wakes", async () => {
+    const clock = fakeClock();
+    const attempts: number[] = [];
+    await runBoundedPushDrain(async () => {
+      attempts.push(clock.now());
+      if (attempts.length === 1) {
+        return { attempted: 0, failed: 0, hasMore: false, nextAttemptAt: 1_000 };
+      }
+      if (attempts.length === 2) {
+        return { attempted: 1, failed: 1, hasMore: true, nextAttemptAt: 1_000 };
+      }
+      if (attempts.length === 3) {
+        return { attempted: 1, failed: 0, hasMore: false, nextAttemptAt: 3_000 };
+      }
+      return { attempted: 1, failed: 0, hasMore: false, nextAttemptAt: null };
+    }, async () => ({ attempted: 0, failed: 0, nextAttemptAt: null }), clock);
+    expect(attempts).toEqual([0, 1_000, 1_000, 3_000]);
+  });
+
+  it("tries healthy devices immediately even when another target times out", async () => {
+    const clock = fakeClock();
+    const attempts: number[] = [];
+    await runBoundedPushDrain(
+      async () => {
+        attempts.push(clock.now());
+        if (attempts.length === 1) {
+          clock.advance(5_000);
+          return { attempted: 1, failed: 1, hasMore: true };
+        }
+        return { attempted: 1, failed: 0, hasMore: false };
+      },
+      async () => ({ attempted: 0, failed: 0 }),
+      clock,
+    );
+    expect(attempts[1]).toBe(5_000);
+    expect(attempts).toHaveLength(3);
+  });
+
+  it("does not delay a healthy lane behind repeated failures in another lane", async () => {
+    const clock = fakeClock();
+    const accountAttempts: number[] = [];
+    let turns = 0;
+    await runBoundedPushDrain(
+      async () => {
+        turns += 1;
+        clock.advance(5_000);
+        return { attempted: 1, failed: 1, hasMore: false };
+      },
+      async () => {
+        accountAttempts.push(clock.now());
+        return { attempted: 1, failed: 0, hasMore: accountAttempts.length < 3 };
+      },
+      clock,
+    );
+    expect(accountAttempts).toHaveLength(3);
+    expect(accountAttempts[1]).toBe(5_000);
+    expect(turns).toBe(2);
+  });
+
   it("stops after the first successful round", async () => {
     const clock = fakeClock();
     let turnCalls = 0;
@@ -112,7 +171,7 @@ describe("bounded request-time push drain", () => {
     expect(clock.sleeps).toEqual([]);
   });
 
-  it("prioritizes a failed lane's short retry over a healthy slow backlog", async () => {
+  it("retries a failed lane while continuing a healthy slow backlog", async () => {
     const clock = fakeClock();
     let turnCalls = 0;
     let accountCalls = 0;
@@ -133,7 +192,7 @@ describe("bounded request-time push drain", () => {
 
     expect(turnCalls).toBe(2);
     expect(accountCalls).toBeGreaterThan(1);
-    expect(clock.sleeps).toEqual([REQUEST_PUSH_WAKE_DELAYS_MS[0]]);
+    expect(clock.sleeps).toEqual([]);
   });
 
   it("isolates a lane exception and still retries the healthy lane", async () => {

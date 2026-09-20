@@ -9,6 +9,7 @@ import {
   notificationDecisionKeepsPushSubscription,
   notificationPermissionWasAttempted,
   pushSubscriptionNeedsReplacement,
+  recoverNotificationDecision,
   resumableNotificationDecision,
   shouldAttemptNotificationPermission,
   shouldEnterNotificationPermissionFlow,
@@ -29,6 +30,17 @@ class MemoryStorage {
 }
 
 describe("device notification permission attempt", () => {
+  it("preserves confirmed device consent when only the local preference is lost", () => {
+    const input = { permission: "granted" as const, accountDecision: null, serverEnabled: true };
+    expect(recoverNotificationDecision(input)).toBe("enabled");
+    expect(recoverNotificationDecision({ ...input, serverEnabled: false })).toBeNull();
+    expect(recoverNotificationDecision({ ...input, permission: "default" })).toBeNull();
+    expect(recoverNotificationDecision({ ...input, permission: "denied" })).toBeNull();
+    for (const decision of ["disabled", "dismissed", "unavailable"]) {
+      expect(recoverNotificationDecision({ ...input, accountDecision: decision })).toBe(decision);
+    }
+  });
+
   it("is eligible only once while browser permission is undecided", () => {
     expect(shouldAttemptNotificationPermission({
       supported: true,

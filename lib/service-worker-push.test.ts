@@ -53,6 +53,7 @@ const client = {
   focus,
 };
 const matchAll = vi.fn(async () => [client]);
+const openWindow = vi.fn<(path: string) => Promise<undefined>>(async () => undefined);
 
 beforeEach(() => {
   listeners.clear();
@@ -62,10 +63,11 @@ beforeEach(() => {
   postMessage.mockClear();
   focus.mockClear();
   matchAll.mockClear();
+  openWindow.mockReset();
   const worker = {
     location: { origin: "https://dev.chessriot.gg" },
     registration: { showNotification, getNotifications },
-    clients: { matchAll, openWindow: vi.fn(async () => undefined) },
+    clients: { matchAll, openWindow },
     skipWaiting: vi.fn(async () => undefined),
     addEventListener: (type: string, listener: WorkerListener) => {
       listeners.set(type, listener);
@@ -109,6 +111,33 @@ async function dispatchPush(payload: unknown): Promise<void> {
 }
 
 describe("service-worker push display", () => {
+  it.each(["enumerate", "focus", "navigate-focus"])(
+    "opens the exact game when an existing client fails at %s",
+    async (failure) => {
+      const path = "/g/11111111-1111-4111-8111-111111111111";
+      if (failure === "enumerate") {
+        matchAll.mockRejectedValueOnce(new Error("client disappeared"));
+      } else {
+        const brokenFocus = vi.fn(async () => { throw new Error("cannot focus"); });
+        matchAll.mockResolvedValueOnce([{
+          ...client,
+          url: `https://dev.chessriot.gg${failure === "focus" ? path : "/app"}`,
+          focus: brokenFocus,
+          ...(failure === "navigate-focus"
+            ? { navigate: async () => ({ focus: brokenFocus }) }
+            : {}),
+        }]);
+      }
+      let completion = Promise.resolve();
+      listeners.get("notificationclick")!({
+        notification: { data: { path }, close: vi.fn() },
+        waitUntil: (promise) => { completion = promise as Promise<void>; },
+      });
+      await completion;
+      expect(openWindow).toHaveBeenCalledWith(path);
+    },
+  );
+
   it("shows a turn alert with a fixed title and game route", async () => {
     const gameId = "11111111-1111-4111-8111-111111111111";
     await dispatchPush({
@@ -342,7 +371,7 @@ describe("service-worker push display", () => {
     });
     expect(reply).toHaveBeenCalledWith({
       type: "chessriot:push-worker-version-response",
-      version: "0.27.5",
+      version: "0.27.8",
     });
   });
 

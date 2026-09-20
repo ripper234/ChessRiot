@@ -95,6 +95,15 @@ describe("PWA release state", () => {
     expect(shouldBadgeAccountNotificationSettings({ ...ready, mobile: false })).toBe(false);
     expect(shouldBadgeAccountNotificationSettings({ ...ready, decision: "dismissed" })).toBe(false);
     expect(shouldBadgeAccountNotificationSettings({ ...ready, decision: "setup-failed" })).toBe(true);
+    expect(shouldBadgeAccountNotificationSettings({
+      ...ready, activeGameId: null, decision: "enabled", permission: "granted",
+    })).toBe(true);
+    expect(shouldBadgeAccountNotificationSettings({
+      ...ready, activeGameId: null, decision: "setup-pending", permission: "granted",
+    })).toBe(true);
+    expect(shouldBadgeAccountNotificationSettings({
+      ...ready, decision: "enabled", enabled: true,
+    })).toBe(false);
     expect(shouldBadgeAccountNotificationSettings({ ...ready, decision: "onboarding" })).toBe(true);
     expect(shouldBadgeAccountNotificationSettings({
       ...ready,

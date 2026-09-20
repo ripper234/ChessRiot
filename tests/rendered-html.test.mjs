@@ -425,7 +425,7 @@ test("renders the public home and mandatory account-gated play routes", async ()
   assert.match(appUpdatesSource, /fetchJsonWithReadTimeout<unknown>\("\/api\/me\/push-devices\/test"/);
   assert.match(
     appUpdatesSource,
-    /showBlockedNotificationRecovery \? \([\s\S]*?className=\{styles\.notificationRecoveryBanner\}[\s\S]*?<button type="button" onClick=\{openDialog\}>פתיחת הוראות בהגדרות<\/button>/,
+    /showNotificationSettingsBadge \? \([\s\S]*?className=\{styles\.notificationRecoveryBanner\}[\s\S]*?showBlockedNotificationRecovery[\s\S]*?openDialog[\s\S]*?enableTurnAlerts/,
   );
   assert.match(
     appUpdatesSource,
@@ -456,10 +456,10 @@ test("renders the public home and mandatory account-gated play routes", async ()
   assert.match(appUpdatesSource, /registration\.unregister\(\)/);
   assert.match(appUpdatesSource, /setPushConsentEnabled\(false\)/);
   assert.match(appUpdatesStyles, /\.turnAlertBadge\s*\{[\s\S]*?position:\s*absolute/);
-  assert.match(appUpdatesStyles, /\.notificationRecoveryBanner\s*\{[\s\S]*?position:\s*fixed/);
+  assert.match(appUpdatesStyles, /\.notificationRecoveryBanner\s*\{[\s\S]*?position:\s*relative/);
   assert.match(
     appUpdatesStyles,
-    /\.notificationRecoveryBanner\s*\{[\s\S]*?right:\s*calc\(166px \+ env\(safe-area-inset-right\)\)/,
+    /\.notificationRecoveryBanner\s*\{[^}]*margin:\s*calc\(max\(12px, env\(safe-area-inset-top\)\) \+ 58px\) auto 12px/,
   );
   assert.doesNotMatch(appUpdatesStyles, /\.notificationOutcome\s*\{/);
   assert.doesNotMatch(appUpdatesSource, /className=\{styles\.notificationOutcome\}/);

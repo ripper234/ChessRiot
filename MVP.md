@@ -65,11 +65,12 @@
   during signed-in entry, with **Enable notifications** and **Not now** always
   available, fail-open background setup, stage-specific manual Settings
   recovery, and visible legacy per-game consent preserved until explicitly
-  changed. A browser-level Android block is the one exception: it produces a
-  prominent non-blocking recovery control above signed-in play until the player
-  rechecks permission. Eligible opponent-turn and friend-request
+  changed. Eligible incomplete setup has a dismissible recovery control above
+  content; a browser-level Android block stays prominent until the player
+  rechecks permission. Notices never overlay the board. Eligible opponent-turn and friend-request
   deliveries receive an immediate attempt and up to two bounded request-time
-  retries; durable later retries resume on subsequent non-health API traffic
+  retries, with first attempts ahead of retries and each row's durable eligibility
+  respected; later retries resume on subsequent non-health API traffic
 - Pointer and touch drag-and-drop with tap, click, and keyboard fallback
 - A visible keyboard skip link, forced-colors support, strong focus states,
   coarse-pointer targets, and Save-Data/slow-link presentation and polling
