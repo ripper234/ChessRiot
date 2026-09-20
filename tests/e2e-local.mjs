@@ -177,6 +177,7 @@ function createRuntime({
   bucketName = `${databaseName}-bucket`,
   extraBindings = {},
   outboundService = defaultOutboundService,
+  applyMigrations = true,
 } = {}) {
   const runtime = new Miniflare({
     modules: modulePaths.map((path) => ({ type: "ESModule", path })),
@@ -206,7 +207,7 @@ function createRuntime({
   const wrapped = new Proxy(runtime, {
     get(target, key) {
       if (key === "dispatchFetch") return async (...args) => {
-        await ensureTestMigrations(target);
+        if (applyMigrations) await ensureTestMigrations(target);
         return target.dispatchFetch(...args);
       };
       const value = Reflect.get(target, key, target);
@@ -1506,6 +1507,7 @@ async function verifyV20Upgrade() {
 async function verifyHealthIsReadOnly() {
   const healthRuntime = createRuntime({
     databaseName: "chessriot-health-readonly-e2e",
+    applyMigrations: false, // Deliberately empty database: health must never create tables.
   });
   try {
     const response = await healthRuntime.dispatchFetch(`${origin}/api/health`);
@@ -1527,6 +1529,7 @@ async function verifyStorageContinuityMirror() {
   const originalRuntime = createRuntime({
     databaseName: "chessriot-continuity-original-e2e",
     bucketName,
+    applyMigrations: false, // This fault fixture intentionally supplies only the invariant table.
   });
   try {
     const database = await originalRuntime.getD1Database("DB");
@@ -1561,6 +1564,7 @@ async function verifyStorageContinuityMirror() {
   const swappedRuntime = createRuntime({
     databaseName: "chessriot-continuity-swapped-e2e",
     bucketName,
+    applyMigrations: false, // Exercise the original empty replacement-database failure.
   });
   try {
     const response = await swappedRuntime.dispatchFetch(`${origin}/api/auth/session`, {
