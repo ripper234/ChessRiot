@@ -164,6 +164,20 @@ export function notificationDecisionKeepsPushSubscription(
     || accountDecision === "setup-failed";
 }
 
+export function recoverNotificationDecision(input: {
+  permission: NotificationPermission;
+  accountDecision: string | null;
+  serverEnabled: boolean;
+}): string | null {
+  // The account-scoped registry confirms this exact device was opted in.
+  // A missing local preference is not an explicit request to revoke it.
+  return input.accountDecision === null
+    && input.permission === "granted"
+    && input.serverEnabled
+    ? "enabled"
+    : input.accountDecision;
+}
+
 export function shouldRepairPushSubscription(input: {
   permission: NotificationPermission;
   accountDecision: string | null;

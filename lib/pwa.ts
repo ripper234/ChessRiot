@@ -83,6 +83,8 @@ export function shouldBadgeAccountNotificationSettings(input: {
     && input.decision !== "dismissed";
   const needsRecovery = input.decision === "setup-failed"
     || input.decision === "onboarding"
+    || input.decision === "setup-pending"
+    || input.decision === "enabled"
     || permissionBlocked;
   return (Boolean(input.activeGameId) || needsRecovery)
     && input.mobile

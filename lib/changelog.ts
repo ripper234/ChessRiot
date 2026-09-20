@@ -12,6 +12,19 @@ const commitSource = (sha: string) => `${REPOSITORY_URL}/commit/${sha}`;
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.27.8",
+    date: "2026-09-20",
+    title: "Recover notification setup and unblock healthy devices",
+    summary: "Notification recovery is visible, existing device consent survives lost local preferences, and failing endpoints no longer hold up other devices.",
+    changes: [
+      "Prioritized first delivery attempts and used durable retry and lease times to drain each notification lane within its request budget.",
+      "Preserved an account-confirmed device registration when its local preference is missing, while respecting explicit disable and dismiss choices.",
+      "Added an optional, in-flow setup recovery notice with visible errors and a Not now action; notification taps recover when Android retires a window.",
+      "Verified mixed-device failures, future leases, retry recovery without additional requests, and four alternating opponent turns in the built Worker. Physical Android delivery and long-outage recovery remain separate verification requirements.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.27.8`,
+  },
+  {
     version: "0.27.7",
     date: "2026-08-15",
     title: "Recover games and notifications without stale screens",

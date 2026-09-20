@@ -1,4 +1,23 @@
-# ChessRiot v0.27.7 specification
+# ChessRiot v0.27.8 specification
+
+## v0.27.8 notification recovery
+
+- First attempts precede retries across account and legacy turn targets. Each
+  lane reports its earliest durable eligibility, including the claim lease,
+  so healthy targets continue immediately and successful unrelated rows do
+  not erase a failed target's wake. The 25-second request budget still applies.
+- A missing local decision cannot revoke an existing, current-account device
+  registration while browser permission is granted. Explicit dismiss/disable
+  choices remain authoritative, including changes made during the status read.
+- Eligible mobile setup and recovery notices appear above content, never over
+  the board, with Enable and Not now. Setup errors remain visible at the action.
+  Browser-blocked recovery continues to direct the player to Settings.
+- Notification clicks fall back to opening the exact game if client enumeration,
+  focus, or navigation fails. The closed-app worker still displays turn pushes
+  without relying on a running page.
+- Sites still has no verified autonomous wake after the request budget. A
+  physical two-Android closed-app test is required before claiming end-to-end
+  delivery; provider acceptance and simulated-worker tests are not that proof.
 
 ## v0.27.7 mobile recovery, activity, and Hebrew game correction
 

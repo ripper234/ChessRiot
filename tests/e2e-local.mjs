@@ -1548,6 +1548,124 @@ async function verifyStorageContinuityMirror() {
   }
 }
 
+async function verifyPushRecoveryAndBidirectionalTurns() {
+  const sends = [];
+  let failOnce = null;
+  const isolated = createRuntime({
+    databaseName: "notification-recovery-e2e",
+    outboundService: async (outbound) => {
+      const url = new URL(outbound.url);
+      if (url.hostname !== "fcm.googleapis.com") return new Response(null, { status: 502 });
+      sends.push({ url: outbound.url, at: Date.now() });
+      if (outbound.url === failOnce) {
+        failOnce = null;
+        return new Response(null, { status: 503 });
+      }
+      return new Response(null, { status: 201 });
+    },
+  });
+  try {
+    const white = accountForLabel("Recovery White");
+    const black = accountForLabel("Recovery Black");
+    const whiteToken = secret();
+    const blackToken = secret();
+    const invitation = secret();
+    const created = await body(await request(isolated, "/api/games", {
+      method: "POST", accountEmail: white.email, accountName: white.displayName,
+      body: JSON.stringify({ displayName: white.displayName, mode: "multiplayer",
+        playerToken: whiteToken, inviteToken: invitation, requestId: randomUUID() }),
+    }));
+    const joined = await body(await request(isolated, `/api/invitations/${invitation}/join`, {
+      method: "POST", accountEmail: black.email, accountName: black.displayName,
+      body: JSON.stringify({ displayName: black.displayName, playerToken: blackToken }),
+    }));
+    const gameId = created.game.id;
+    const database = await isolated.getD1Database("DB");
+    const subscription = (name) => ({
+      endpoint: `https://fcm.googleapis.com/fcm/send/recovery-${name}`,
+      expirationTime: null,
+      keys: { p256dh: pushClientPublicKey, auth: randomBytes(16).toString("base64url") },
+    });
+    const legacy = subscription("legacy");
+    const device = subscription("device");
+    const register = async (account, sub) => {
+      assert.equal((await request(isolated, "/api/me/push-devices", {
+        method: "PUT", accountEmail: account.email, accountName: account.displayName,
+        body: JSON.stringify({ requestId: randomUUID(), expectedUsername: usernameForAccount(account), subscription: sub }),
+      })).status, 200);
+    };
+    await register(white, device);
+    assert.equal((await request(isolated, `/api/games/${gameId}/push-subscriptions`, {
+      method: "PUT", headers: { authorization: `Bearer ${whiteToken}` },
+      body: JSON.stringify({ requestId: randomUUID(), subscription: legacy }),
+    })).status, 200);
+    const parentA = await database.prepare("SELECT id FROM push_subscriptions WHERE endpoint = ?").bind(legacy.endpoint).first();
+    const parentB = await database.prepare("SELECT id FROM push_devices WHERE endpoint = ?").bind(device.endpoint).first();
+    const rowA = randomUUID();
+    const rowB = randomUUID();
+    const oldAt = new Date(Date.now() - 2000).toISOString();
+    const newAt = new Date(Date.now() - 1000).toISOString();
+    await database.batch([
+      database.prepare(`INSERT INTO push_deliveries
+        (id, subscription_id, game_id, game_version, kind, status, attempt_count, next_attempt_at, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'your_turn', 'failed', 1, 0, ?, ?)`)
+        .bind(rowA, parentA.id, gameId, joined.game.version, oldAt, oldAt),
+      database.prepare(`INSERT INTO push_turn_deliveries
+        (id, device_id, game_id, game_version, kind, status, attempt_count, next_attempt_at, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'your_turn', 'pending', 0, 0, ?, ?)`)
+        .bind(rowB, parentB.id, gameId, joined.game.version, newAt, newAt),
+    ]);
+    const wake = async () => {
+      assert.equal((await isolated.dispatchFetch(`${origin}/api/push/config`)).status, 200);
+    };
+    const sent = async (table, id) => (await database.prepare(`SELECT status FROM ${table} WHERE id = ?`).bind(id).first())?.status === "sent";
+    await wake();
+    assert.equal(await waitFor(async () => await sent("push_deliveries", rowA) && await sent("push_turn_deliveries", rowB), 5000), true);
+    assert.deepEqual(sends.map((send) => send.url), [device.endpoint, legacy.endpoint], "fresh device precedes an older failed legacy target");
+
+    const leaseUntil = Date.now() + 800;
+    await database.prepare(`UPDATE push_turn_deliveries SET status = 'failed', attempt_count = 1,
+      next_attempt_at = ?, lease_until = ?, lease_token = 'existing-claim' WHERE id = ?`)
+      .bind(leaseUntil - 400, leaseUntil, rowB).run();
+    await wake();
+    assert.equal(await waitFor(() => sent("push_turn_deliveries", rowB), 4000), true);
+    assert.equal(sends.length, 3);
+    assert.ok(sends[2].at >= leaseUntil, "a future-only wake respects the current lease");
+
+    await database.batch([
+      database.prepare("UPDATE push_deliveries SET status = 'pending', attempt_count = 0, next_attempt_at = 0 WHERE id = ?").bind(rowA),
+      database.prepare("UPDATE push_turn_deliveries SET status = 'pending', attempt_count = 0, next_attempt_at = 0 WHERE id = ?").bind(rowB),
+    ]);
+    failOnce = legacy.endpoint;
+    await wake();
+    assert.equal(await waitFor(async () => await sent("push_deliveries", rowA) && await sent("push_turn_deliveries", rowB), 6000), true);
+    assert.deepEqual(sends.slice(3).map((send) => send.url), [legacy.endpoint, device.endpoint, legacy.endpoint], "A fails, B succeeds, A retries without another application request");
+
+    await database.prepare("DELETE FROM push_subscriptions WHERE id = ?").bind(parentA.id).run();
+    const blackDevice = subscription("black");
+    await register(black, blackDevice);
+    let version = joined.game.version;
+    const beforeMoves = sends.length;
+    for (const [index, [from, to]] of [["e2", "e4"], ["e7", "e5"], ["g1", "f3"], ["b8", "c6"]].entries()) {
+      const token = index % 2 === 0 ? whiteToken : blackToken;
+      const response = await request(isolated, `/api/games/${gameId}/moves`, {
+        method: "POST", headers: { authorization: `Bearer ${token}` },
+        body: JSON.stringify({ from, to, expectedVersion: version, requestId: randomUUID() }),
+      });
+      assert.equal(response.status, 200);
+      version = (await body(response)).game.version;
+      assert.equal(await waitFor(async () => (await database.prepare(`SELECT COUNT(*) AS count FROM push_turn_deliveries
+        WHERE game_id = ? AND game_version = ? AND status = 'sent'`).bind(gameId, version).first()).count === 1, 5000), true);
+    }
+    assert.deepEqual(sends.slice(beforeMoves).map((send) => send.url), [blackDevice.endpoint, device.endpoint, blackDevice.endpoint, device.endpoint], "four alternating moves notify only the opponent exactly once");
+    console.log("E2E passed: notification fairness, lease recovery, traffic-free short retry, and four bidirectional turns");
+  } finally {
+    await isolated.dispose();
+  }
+}
+
+await verifyPushRecoveryAndBidirectionalTurns();
+
 await verifyFullMigrationChain();
 await verifyAnalyticsAsFirstRequest();
 await verifyV20Upgrade();

@@ -4,7 +4,7 @@ Play at [chessriot.gg](https://chessriot.gg), read the
 [release history](https://chessriot.gg/changelog), or
 [join the WhatsApp community](https://chat.whatsapp.com/FaBgiUgl73vLdeqzcqx0vX).
 
-ChessRiot v0.27.7 is a mobile-first chess game for solo play against Riot Bot
+ChessRiot v0.27.8 is a mobile-first chess game for solo play against Riot Bot
 or asynchronous play with someone you know. Playing requires a Google account;
 every game, friend, and result follows the player across devices.
 

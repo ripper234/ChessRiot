@@ -57,13 +57,12 @@
 }
 
 .notificationRecoveryBanner {
-  position: fixed;
-  top: calc(max(12px, env(safe-area-inset-top)) + 58px);
-  right: max(12px, env(safe-area-inset-right));
+  position: relative;
+  margin: calc(max(12px, env(safe-area-inset-top)) + 58px) auto 12px;
   z-index: 29;
   width: min(620px, calc(100vw - 24px - env(safe-area-inset-left) - env(safe-area-inset-right)));
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
@@ -75,8 +74,8 @@
 }
 .notificationRecoveryBanner > span { font-size: 21px; }
 .notificationRecoveryBanner div { min-width: 0; display: grid; gap: 3px; }
-.notificationRecoveryBanner strong { font: 900 12px/1.2 var(--display); }
-.notificationRecoveryBanner small { color: #ffdadd; font: 650 10px/1.35 var(--ui); }
+.notificationRecoveryBanner strong { font: 900 16px/1.2 var(--display); }
+.notificationRecoveryBanner small { color: #ffdadd; font: 650 14px/1.35 var(--ui); }
 .notificationRecoveryBanner button {
   min-height: 38px;
   padding: 0 11px;
@@ -84,7 +83,7 @@
   color: #231114;
   background: #fff0d0;
   cursor: pointer;
-  font: 850 10px/1.2 var(--ui);
+  font: 850 14px/1.2 var(--ui);
 }
 .notificationRecoveryBanner button:focus-visible {
   outline: 3px solid var(--electric-blue);
@@ -312,9 +311,7 @@
     font-size: 19px;
   }
   .notificationRecoveryBanner {
-    top: max(8px, env(safe-area-inset-top));
-    right: calc(166px + env(safe-area-inset-right));
-    width: min(560px, calc(100vw - 178px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+    margin-top: calc(max(8px, env(safe-area-inset-top)) + 48px);
   }
 }
 

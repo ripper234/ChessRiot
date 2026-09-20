@@ -39,10 +39,11 @@
   runtime configuration.
 - Completing a changed release always includes deploying the exact tested source to Development. Development tracks the newest release automatically.
 - Small, low-risk changes may land on `main` and deploy directly to Development. Complicated or high-risk work belongs on `feature/*` and must use an isolated preview before merge.
-- Promotion between environments is manual only. Development → Production
-  requires Ron's explicit button click. A push, merge, passing test, successful
-  build, agent action, scheduled job, or completed Dev deployment must never
-  promote Production automatically.
+- Promotion between environments requires Ron's explicit approval, either by
+  clicking the Control promotion action or by authorizing production deployment
+  in the current chat. An agent may carry out that approved promotion after
+  Development validation. A push, merge, passing test, successful build,
+  scheduled job, or completed Dev deployment alone never authorizes Production.
 - Keep `lib/changelog.ts` newest first and add one concise entry for every release before deployment.
 - Every new important server action must be covered by the central request observer or emit a typed event through `recordEvent`. Never log names, tokens, token hashes, invitation/private URLs, URL fragments, IP addresses, user agents, FENs, raw bodies, or arbitrary exception messages.
 - Preserve request correlation, environment, app version, bounded retention, and the rule that unchanged polling does not create telemetry. Account-wide move-alert polling through `/api/me/games` is an operational read and must remain excluded.

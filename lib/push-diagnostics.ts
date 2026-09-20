@@ -1,7 +1,7 @@
 export const PUSH_DIAGNOSTIC_RECEIPT_TYPE = "chessriot:push-diagnostic-receipt";
 export const PUSH_DIAGNOSTIC_WORKER_VERSION_REQUEST_TYPE = "chessriot:push-worker-version-request";
 export const PUSH_DIAGNOSTIC_WORKER_VERSION_RESPONSE_TYPE = "chessriot:push-worker-version-response";
-export const PUSH_DIAGNOSTIC_WORKER_VERSION = "0.27.5";
+export const PUSH_DIAGNOSTIC_WORKER_VERSION = "0.27.8";
 export const LOCAL_PUSH_DIAGNOSTIC_EVENT_TYPE = "chessriot:local-push-diagnostic-event";
 export const LOCAL_PUSH_DIAGNOSTIC_TAG_PREFIX = "chessriot-local-diagnostic-v1:";
 export const PUSH_DIAGNOSTIC_RECEIPT_TIMEOUT_MS = 15_000;

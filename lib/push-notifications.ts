@@ -7,6 +7,7 @@ import { findAccountByUsername } from "./accounts";
 import { turnDeadlineExpired } from "./game-deadlines";
 import type { Color, TurnPaceDays } from "./game-types";
 import { recordEvent } from "./observability";
+import type { PushDrainResult } from "./push-drain";
 import {
   vapidPrivateJwk,
   vapidPublicKey,
@@ -114,47 +115,23 @@ async function expireUndeliverableRows(
   return result.meta.changes ?? 0;
 }
 
-async function hasDueAccountDelivery(nowMs: number): Promise<boolean> {
-  const pending = await getDatabase().prepare(`SELECT 1 AS pending
-    FROM push_account_deliveries
+async function nextDeliveryAttempt(
+  lane: "turn" | "account",
+  nowMs: number,
+): Promise<number | null> {
+  const source = lane === "account"
+    ? "SELECT status, next_attempt_at, lease_until, attempt_count, created_at FROM push_account_deliveries"
+    : `SELECT status, next_attempt_at, lease_until, attempt_count, created_at FROM push_turn_deliveries
+       UNION ALL
+       SELECT status, next_attempt_at, lease_until, attempt_count, created_at FROM push_deliveries`;
+  const row = await getDatabase().prepare(`SELECT
+      MIN(MAX(next_attempt_at, COALESCE(lease_until, 0))) AS next_attempt_at
+    FROM (${source})
     WHERE status IN ('pending', 'failed')
-      AND next_attempt_at <= ?
-      AND (lease_until IS NULL OR lease_until <= ?)
-      AND attempt_count < ?
-      AND created_at >= ?
-    LIMIT 1`)
-    .bind(
-      nowMs,
-      nowMs,
-      MAX_DELIVERY_ATTEMPTS,
-      new Date(nowMs - DELIVERY_MAX_AGE_MS).toISOString(),
-    )
-    .first<{ pending: number }>();
-  return Boolean(pending);
-}
-
-async function hasDueTurnDelivery(nowMs: number): Promise<boolean> {
-  const pending = await getDatabase().prepare(`SELECT 1 AS pending FROM (
-      SELECT status, next_attempt_at, lease_until, attempt_count, created_at
-      FROM push_turn_deliveries
-      UNION ALL
-      SELECT status, next_attempt_at, lease_until, attempt_count, created_at
-      FROM push_deliveries
-    )
-    WHERE status IN ('pending', 'failed')
-      AND next_attempt_at <= ?
-      AND (lease_until IS NULL OR lease_until <= ?)
-      AND attempt_count < ?
-      AND created_at >= ?
-    LIMIT 1`)
-    .bind(
-      nowMs,
-      nowMs,
-      MAX_DELIVERY_ATTEMPTS,
-      new Date(nowMs - DELIVERY_MAX_AGE_MS).toISOString(),
-    )
-    .first<{ pending: number }>();
-  return Boolean(pending);
+      AND attempt_count < ? AND created_at >= ?`)
+    .bind(MAX_DELIVERY_ATTEMPTS, new Date(nowMs - DELIVERY_MAX_AGE_MS).toISOString())
+    .first<{ next_attempt_at: number | null }>();
+  return row?.next_attempt_at ?? null;
 }
 
 export type PushServiceMessageResult =
@@ -1362,7 +1339,7 @@ async function claimDelivery(nowMs: number): Promise<ClaimedPushDelivery | null>
         AND (lease_until IS NULL OR lease_until <= ?)
         AND attempt_count < ?
         AND created_at >= ?
-      ORDER BY CASE WHEN status = 'failed' THEN 0 ELSE 1 END,
+      ORDER BY CASE WHEN attempt_count = 0 THEN 0 ELSE 1 END,
         next_attempt_at ASC, created_at ASC, id ASC, source ASC
       LIMIT 1`)
       .bind(
@@ -1637,7 +1614,7 @@ async function claimAccountDelivery(nowMs: number): Promise<ClaimedAccountDelive
         AND (lease_until IS NULL OR lease_until <= ?)
         AND attempt_count < ?
         AND created_at >= ?
-      ORDER BY CASE WHEN status = 'failed' THEN 0 ELSE 1 END,
+      ORDER BY CASE WHEN attempt_count = 0 THEN 0 ELSE 1 END,
         next_attempt_at ASC, created_at ASC, id ASC
       LIMIT 1`)
       .bind(
@@ -1797,12 +1774,12 @@ async function sendClaimedAccountPush(
 
 export async function drainPendingAccountNotifications(
   limit = MAX_DEVICES_PER_ACCOUNT,
-): Promise<{ attempted: number; failed: number; hasMore: boolean }> {
+): Promise<PushDrainResult> {
   await ensureSchema();
   const nowMs = Date.now();
   const reapedDead = await expireUndeliverableRows("push_account_deliveries", nowMs);
-  const pending = await hasDueAccountDelivery(nowMs);
-  if (!pending) {
+  const pendingAt = await nextDeliveryAttempt("account", nowMs);
+  if (pendingAt === null || pendingAt > nowMs) {
     if (reapedDead > 0) {
       await recordEvent({
         event: "push.account_delivery",
@@ -1811,7 +1788,7 @@ export async function drainPendingAccountNotifications(
         metadata: { attempted: 0, reapedDead },
       });
     }
-    return { attempted: 0, failed: 0, hasMore: false };
+    return { attempted: 0, failed: 0, hasMore: false, nextAttemptAt: pendingAt };
   }
   const config = await runtimeConfig();
   if (!config) {
@@ -1820,7 +1797,7 @@ export async function drainPendingAccountNotifications(
       outcome: "failure",
       errorCode: "push_configuration_invalid",
     });
-    return { attempted: 0, failed: 0, hasMore: false };
+    return { attempted: 0, failed: 0, hasMore: false, nextAttemptAt: null };
   }
   const counts = { sent: 0, failed: 0, stale: 0, dead: 0, superseded: 0 };
   const providerCounts = {
@@ -1841,19 +1818,20 @@ export async function drainPendingAccountNotifications(
     else if (result.provider === "endpoint_rejected") providerCounts.endpointRejected += 1;
   }
   const attempted = Object.values(counts).reduce((sum, count) => sum + count, 0);
-  const hasMore = await hasDueAccountDelivery(Date.now());
-  if (attempted === 0) return { attempted: 0, failed: 0, hasMore };
+  const nextAttemptAt = await nextDeliveryAttempt("account", Date.now());
+  const hasMore = nextAttemptAt !== null && nextAttemptAt <= Date.now();
+  if (attempted === 0) return { attempted: 0, failed: 0, hasMore, nextAttemptAt };
   await recordEvent({
     event: "push.account_delivery",
     outcome: counts.failed > 0 && counts.sent === 0 ? "failure" : "success",
     metadata: { attempted, reapedDead, ...counts, ...providerCounts },
   });
-  return { attempted, failed: counts.failed, hasMore };
+  return { attempted, failed: counts.failed, hasMore, nextAttemptAt };
 }
 
 export async function drainPendingTurnNotifications(
   limit = MAX_DELIVERIES_PER_DRAIN,
-): Promise<{ attempted: number; failed: number; hasMore: boolean }> {
+): Promise<PushDrainResult> {
   await ensureSchema();
   const nowMs = Date.now();
   const reapedDead = (
@@ -1861,8 +1839,8 @@ export async function drainPendingTurnNotifications(
   ) + (
     await expireUndeliverableRows("push_deliveries", nowMs)
   );
-  const pending = await hasDueTurnDelivery(nowMs);
-  if (!pending) {
+  const pendingAt = await nextDeliveryAttempt("turn", nowMs);
+  if (pendingAt === null || pendingAt > nowMs) {
     if (reapedDead > 0) {
       await recordEvent({
         event: "push.turn_delivery",
@@ -1871,7 +1849,7 @@ export async function drainPendingTurnNotifications(
         metadata: { attempted: 0, reapedDead },
       });
     }
-    return { attempted: 0, failed: 0, hasMore: false };
+    return { attempted: 0, failed: 0, hasMore: false, nextAttemptAt: pendingAt };
   }
   const config = await runtimeConfig();
   if (!config) {
@@ -1880,7 +1858,7 @@ export async function drainPendingTurnNotifications(
       outcome: "failure",
       errorCode: "push_configuration_invalid",
     });
-    return { attempted: 0, failed: 0, hasMore: false };
+    return { attempted: 0, failed: 0, hasMore: false, nextAttemptAt: null };
   }
   const counts = { sent: 0, failed: 0, stale: 0, dead: 0, superseded: 0 };
   const boundedLimit = Math.max(1, Math.min(MAX_DELIVERIES_PER_DRAIN, Math.floor(limit)));
@@ -1891,12 +1869,13 @@ export async function drainPendingTurnNotifications(
     counts[outcome] += 1;
   }
   const attempted = Object.values(counts).reduce((sum, count) => sum + count, 0);
-  const hasMore = await hasDueTurnDelivery(Date.now());
-  if (attempted === 0) return { attempted: 0, failed: 0, hasMore };
+  const nextAttemptAt = await nextDeliveryAttempt("turn", Date.now());
+  const hasMore = nextAttemptAt !== null && nextAttemptAt <= Date.now();
+  if (attempted === 0) return { attempted: 0, failed: 0, hasMore, nextAttemptAt };
   await recordEvent({
     event: "push.turn_delivery",
     outcome: counts.failed > 0 && counts.sent === 0 ? "failure" : "success",
     metadata: { attempted, reapedDead, ...counts },
   });
-  return { attempted, failed: counts.failed, hasMore };
+  return { attempted, failed: counts.failed, hasMore, nextAttemptAt };
 }

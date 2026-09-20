@@ -53,6 +53,7 @@ import {
 import {
   notificationDecisionKeepsPushSubscription,
   pushSubscriptionNeedsReplacement,
+  recoverNotificationDecision,
   resumableNotificationDecision,
   shouldRepairPushSubscription,
 } from "@/lib/notification-permission";
@@ -703,8 +704,8 @@ export function AppUpdates() {
         );
         if (!isCurrent()) return;
         const permissionGranted = Notification.permission === "granted";
-        const storedDecision = storedValue(decisionKey);
-        const keepSubscription = notificationDecisionKeepsPushSubscription(storedDecision);
+        let storedDecision = storedValue(decisionKey);
+        let keepSubscription = notificationDecisionKeepsPushSubscription(storedDecision);
         let subscription = await runPushSetupStage(
           "subscription_read",
           () => withPushOperationTimeout(registration.pushManager.getSubscription()),
@@ -793,6 +794,20 @@ export function AppUpdates() {
         if (!isCurrent()) return;
         let enabled = status.enabled === true;
         let legacyEnabled = status.legacy === true && Boolean(subscription);
+        // Another tab can change the choice while the status request is in flight.
+        storedDecision = storedValue(decisionKey);
+        keepSubscription = notificationDecisionKeepsPushSubscription(storedDecision);
+
+        const recoveredDecision = recoverNotificationDecision({
+          permission: Notification.permission,
+          accountDecision: storedDecision,
+          serverEnabled: enabled && Boolean(subscription),
+        });
+        if (recoveredDecision !== storedDecision && recoveredDecision) {
+          storeValue(decisionKey, recoveredDecision);
+          setNotificationOfferDecision(recoveredDecision);
+          keepSubscription = notificationDecisionKeepsPushSubscription(recoveredDecision);
+        }
 
         if (subscription && keepSubscription && pushSubscriptionNeedsReplacement({
           expirationTime: subscription.expirationTime,
@@ -1423,7 +1438,7 @@ export function AppUpdates() {
           <span className={styles.turnAlertBadge} aria-hidden="true">🔔</span>
         ) : null}
       </button>
-      {showBlockedNotificationRecovery ? (
+      {showNotificationSettingsBadge ? (
         <aside
           className={styles.notificationRecoveryBanner}
           lang="he"
@@ -1434,10 +1449,31 @@ export function AppUpdates() {
         >
           <span aria-hidden="true">🔔</span>
           <div>
-            <strong id="notification-recovery-title">ההתראות חסומות במכשיר</strong>
-            <small>לא יגיעו התראות תור ובקשות חברות עד לתיקון ההרשאה.</small>
+            <strong id="notification-recovery-title">{showBlockedNotificationRecovery
+              ? "ההתראות חסומות במכשיר"
+              : "התראות תור אינן פעילות במכשיר הזה"}</strong>
+            <small>{showBlockedNotificationRecovery
+              ? "לא יגיעו התראות תור ובקשות חברות עד לתיקון ההרשאה."
+              : "כדי לקבל התראה כשהיריב משחק, גם כשהאפליקציה סגורה, צריך להפעיל אותן כאן."}</small>
+            {turnAlertsMessageIsError && turnAlertsMessage
+              ? <small role="status">{turnAlertsMessage}</small>
+              : null}
           </div>
-          <button type="button" onClick={openDialog}>פתיחת הוראות בהגדרות</button>
+          <button type="button" disabled={turnAlertsBusy} onClick={
+            showBlockedNotificationRecovery || !pushPublicKey
+              ? openDialog
+              : () => void enableTurnAlerts()
+          }>{showBlockedNotificationRecovery || !pushPublicKey
+              ? "פתיחת הוראות בהגדרות"
+              : turnAlertsBusy ? "מפעילים…" : "הפעלת התראות"}</button>
+          {!showBlockedNotificationRecovery ? (
+            <button type="button" disabled={turnAlertsBusy} onClick={() => {
+              if (!googleUsername) return;
+              storeValue(notificationOfferDecisionKey(googleUsername), "dismissed");
+              setNotificationOfferDecision("dismissed");
+              setTurnAlertsRefresh((value) => value + 1);
+            }}>לא עכשיו</button>
+          ) : null}
         </aside>
       ) : null}
       <dialog

@@ -1,7 +1,7 @@
 const STATIC_CACHE = "chessriot-static-v2";
 const PUSH_CONSENT_CACHE = "chessriot-push-consent-v1";
 const PUSH_CONSENT_PATH = "/__chessriot_push_consent__";
-const PUSH_DIAGNOSTIC_WORKER_VERSION = "0.27.5";
+const PUSH_DIAGNOSTIC_WORKER_VERSION = "0.27.8";
 const PUSH_DIAGNOSTIC_RECEIPT_TYPE = "chessriot:push-diagnostic-receipt";
 const LOCAL_PUSH_DIAGNOSTIC_EVENT_TYPE = "chessriot:local-push-diagnostic-event";
 const PUSH_DIAGNOSTIC_WORKER_VERSION_REQUEST_TYPE = "chessriot:push-worker-version-request";
@@ -364,27 +364,37 @@ self.addEventListener("notificationclick", (event) => {
       await postPushDiagnosticStage(diagnosticId, "notification_clicked");
     }
     if (remoteDiagnostic || localDiagnostic) event.notification.close();
-    return self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(async (clients) => {
-      const matching = clients.find((client) => {
-        try {
-          const clientUrl = new URL(client.url);
-          return `${clientUrl.pathname}${clientUrl.search}` === path;
-        } catch {
-          return false;
-        }
-      });
-      if (matching) return matching.focus();
-      const existing = clients.find((client) => client.visibilityState === "visible") ?? clients[0];
-      if (existing) {
-        try {
-          const navigated = await existing.navigate(path);
-          if (navigated) return navigated.focus();
-        } catch {
-          // Open a new window when Android refuses to navigate an existing client.
-        }
+    let clients = [];
+    try {
+      clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    } catch {
+      // Android may retire clients between the click and enumeration.
+    }
+    const matching = clients.find((client) => {
+      try {
+        const clientUrl = new URL(client.url);
+        return `${clientUrl.pathname}${clientUrl.search}` === path;
+      } catch {
+        return false;
       }
-      return self.clients.openWindow(path);
     });
+    if (matching) {
+      try {
+        return await matching.focus();
+      } catch {
+        // A suspended client may no longer be focusable. Open the exact game.
+      }
+    }
+    const existing = clients.find((client) => client.visibilityState === "visible") ?? clients[0];
+    if (existing) {
+      try {
+        const navigated = await existing.navigate(path);
+        if (navigated) return await navigated.focus();
+      } catch {
+        // Open a new window when Android refuses to navigate an existing client.
+      }
+    }
+    return self.clients.openWindow(path);
   })());
 });
 

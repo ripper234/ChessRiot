@@ -5,7 +5,7 @@
 | Role | Canonical hostname | Data | Source behavior |
 |---|---|---|---|
 | Development | `dev.chessriot.gg` | Isolated D1 and R2 | Receives each reviewed release |
-| Production | `chessriot.gg` | Isolated D1 and R2 | Manual owner promotion only |
+| Production | `chessriot.gg` | Isolated D1 and R2 | Explicit owner approval in Control or chat |
 | Control | `control.chessriot.gg` | Owner-only Control state | Observes and promotes, never serves games |
 
 Staging is retired. The legacy `*.ripper234.chatgpt.site` addresses may remain
@@ -55,11 +55,24 @@ delivery guarantee. The coordinator starts another retry only when its
 25-second target leaves reserve for that round. Each lane claims at most one
 target per batch, independent lanes cannot cancel each other, and healthy due
 backlog continues only while there is room for another bounded provider call.
+Unattempted devices have priority over retries. Each lane reports its earliest
+database retry/lease time, so a failed target cannot delay healthy due work or
+lose its wake when another device succeeds. A future-only row is retried inside
+the remaining budget even if the current drain attempted no sends.
 Slow backlog therefore remains unleased for a later wake instead of relying on
 work beyond the platform's post-response limit. Later durable attempts still
 need subsequent non-health API traffic. The dormant `scheduled` handler remains
 artifact-validated for migration to a compatible host, but current Production
 decisions must use the Sites behavior above.
+
+For a missing Android alert, first inspect the recipient's active device
+registration. Browser permission alone is insufficient, and no server fix can
+create an Android subscription without the browser's opt-in. The mobile recovery
+notice offers Enable and Not now; explicit dismiss/disable choices are preserved.
+The server's current-account opt-in survives loss of only the local preference.
+Run TEST THIS DEVICE on each intended receiving device, then alternate at least
+four turns with the receiving app closed and check exact-game navigation.
+Record provider acceptance separately from actual Android presentation.
 
 Never restore the retired `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`, or
 `SESSION_SIGNING_SECRET` values unless the product deliberately reintroduces
@@ -117,8 +130,10 @@ After deployment:
    move while the PWA is backgrounded or closed. Provider acceptance alone is
    not proof of an operating-system banner. Do not expect a recurring Sites
    Worker event until the hosting capability is explicitly added and verified.
-7. Do not promote Production until the owner reviews Development and clicks the
-   explicit Control action.
+7. Promote Production only with Ron's explicit approval, either through the
+   Control promotion action or in the current chat. An agent may carry out a
+   chat-approved promotion after validating Development. Passing checks or
+   deploying Development alone does not authorize Production.
 8. After promotion, confirm Development and Production report the same version
    and source fingerprint, then repeat legal-page, OAuth, account-gate, and the
    small Production OpenAI smoke test. Do not copy users, friends, games, or
