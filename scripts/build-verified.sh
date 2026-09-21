@@ -4,6 +4,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ "${SITES_ENV_READY:-}" != "1" ]]; then
   exec "${script_dir}/sites-env.sh" -- "$0" "$@"
 fi
+npm audit --omit=dev --audit-level=high
 "${SITES_PROJECT_ROOT}/node_modules/.bin/eslint" . --ignore-pattern dist --ignore-pattern .next
 "${SITES_PROJECT_ROOT}/node_modules/.bin/tsc" --noEmit
 "${SITES_PROJECT_ROOT}/node_modules/.bin/vitest" run --maxWorkers=2

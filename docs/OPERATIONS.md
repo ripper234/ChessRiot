@@ -97,7 +97,7 @@ homepage, `/privacy`, and `/terms` in Google Branding and consent setup.
 
 ## Release gate
 
-`npm run build` runs lint, TypeScript, the unit/component suite, the production
+`npm run build` runs the production dependency security audit, lint, TypeScript, the unit/component suite, the production
 artifact build, binding/migration validation, rendered-output checks, and the
 Miniflare end-to-end suite. GitHub CI repeats the gate, audits production
 dependencies, and uploads a 14-day CycloneDX SBOM.
@@ -189,8 +189,8 @@ add `includeSubDomains` only when every intended subdomain is HTTPS-only.
 ## One Android, four-turn acceptance test
 
 1. On the Android being tested, open `https://chessriot.gg/notification-test` and
-   sign in. Select **הפעלת התראות והתחלת בדיקה** and allow notifications.
-2. Select **המהלך הבא**, then immediately go Home or lock the phone. The server
+   sign in. Select **Start test** and allow notifications.
+2. Select **Send notification 1**, then immediately go Home or lock the phone. The server
    makes Riot Bot's real response about eight seconds later; no second device
    or second account is required.
 3. Tap the Android notification. It must open this exact game. Confirm that
@@ -201,7 +201,7 @@ add `includeSubDomains` only when every intended subdomain is HTTPS-only.
 5. If a round stalls, inspect its separate provider, device, notification,
    click and game-open stages. A displayed browser notification API result is
    not physical banner proof. Foreground, failed-display and missing evidence
-   remain incomplete; use **בדיקה חדשה** to retry cleanly.
+   remain incomplete; use **Restart test** to retry cleanly.
 
 Ending or restarting closes the diagnostic game, preventing its pending bot
 reply. The test is capped at four rounds and expires after two hours. Exact-device
@@ -230,3 +230,12 @@ test rather than attempting an extra move beyond the four-round limit.
 
 Default UI is now English and LTR. Existing Hebrew usernames/user-authored content
 remain unchanged. The UI change uses the existing 0029 schema with no new migration.
+
+### v0.30.1 release verification
+
+The local release gate includes `npm audit --omit=dev --audit-level=high`.
+Do not promote until the immutable release commit also has green GitHub CI.
+See [the PR #63–#67 follow-up](REVIEW-v0.30.1.md) for the verified audit failures
+and review dispositions. Incoming challenge screens show whether White has
+already moved before acceptance. Missing prior test evidence immediately offers
+a restart, while all four complete round receipts remain required.

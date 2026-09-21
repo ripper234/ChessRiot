@@ -292,7 +292,7 @@ export function JoinGame({
                 </small> : null}
               </div>
             ) : null}
-            <p>{invite.openingPlayed ? "White has played the opening. Your turn starts when you accept." : "White moves first. Your friend may play the opening before you accept."}</p>
+            <p>{invite.openingPlayed ? "White has played the opening. Your turn starts when you accept." : invite.turnPaceDays ? "White moves first. Your friend may play the opening before you accept." : "White moves first after you accept."}</p>
             <p className="join-identity">Joining as <strong><PlayerHandle username={account.username} /></strong></p>
             {error ? <p className="form-error" role="alert">{error}</p> : null}
             <button className="primary-button" type="submit" disabled={busy}>

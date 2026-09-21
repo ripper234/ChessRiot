@@ -26,6 +26,10 @@ export function notificationTestFlow(input: {
     ? "ChessRiot was still on screen when the notification arrived. Restart, then leave the app when prompted."
     : "We could not verify that ChessRiot was off screen. Restart to check again.");
   if (input.deviceEnabled === undefined) return result("checking");
+  if ([2, 4, 6].some((v) => v < round * 2 && !turnTestRoundPassed(input.receipts[v]))) {
+    return result("blocked", "An earlier round’s saved result is missing. Restart to verify all four rounds together.");
+  }
+  if (input.deliveryFailed && !turnTestReceiptOpened(receipt)) return result("blocked", "The notification could not be delivered to this phone. Restart to reconnect it.");
   // A committed move is already in flight even while the game snapshot refreshes.
   if (input.pendingReply) return result("waiting");
   if (input.version === 0 || turnTestRoundPassed(input.receipts[input.version])) {
@@ -36,6 +40,5 @@ export function notificationTestFlow(input: {
   }
   if (turnTestReceiptOpened(receipt)) return result("confirm");
   if (receipt?.clickedAt && receipt.openedAt) return result("blocked", "The notification evidence is incomplete or out of order. Restart to verify a fresh notification.");
-  if (input.deliveryFailed) return result("blocked", "The notification could not be delivered to this phone. Restart to reconnect it.");
   return result("waiting");
 }

@@ -28,7 +28,7 @@ describe("pending invitation", () => {
     expect(html).not.toContain("Copy invite link");
   });
   it("does not send someone away while the opening is still saving", () => {
-    expect(render({}, true)).toContain("Saving move");
+    expect(render({}, true)).toContain("Saving…");
     expect(render({}, true)).not.toContain('href="/"');
     expect(render({ status: "active" })).toBe("");
     expect(render({ you: { color: "b", name: "Friend" } })).toBe("");

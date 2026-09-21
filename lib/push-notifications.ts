@@ -1831,8 +1831,9 @@ export async function drainPendingAccountNotifications(
     else if (result.provider === "endpoint_rejected") providerCounts.endpointRejected += 1;
   }
   const attempted = Object.values(counts).reduce((sum, count) => sum + count, 0);
-  const nextAttemptAt = await nextDeliveryAttempt("account", Date.now());
-  const hasMore = nextAttemptAt !== null && nextAttemptAt <= Date.now();
+  const checkedAt = Date.now();
+  const nextAttemptAt = await nextDeliveryAttempt("account", checkedAt);
+  const hasMore = nextAttemptAt !== null && nextAttemptAt <= checkedAt;
   if (attempted === 0) return { attempted: 0, failed: 0, hasMore, nextAttemptAt };
   await recordEvent({
     event: "push.account_delivery",
@@ -1882,8 +1883,9 @@ export async function drainPendingTurnNotifications(
     counts[outcome] += 1;
   }
   const attempted = Object.values(counts).reduce((sum, count) => sum + count, 0);
-  const nextAttemptAt = await nextDeliveryAttempt("turn", Date.now());
-  const hasMore = nextAttemptAt !== null && nextAttemptAt <= Date.now();
+  const checkedAt = Date.now();
+  const nextAttemptAt = await nextDeliveryAttempt("turn", checkedAt);
+  const hasMore = nextAttemptAt !== null && nextAttemptAt <= checkedAt;
   if (attempted === 0) return { attempted: 0, failed: 0, hasMore, nextAttemptAt };
   await recordEvent({
     event: "push.turn_delivery",

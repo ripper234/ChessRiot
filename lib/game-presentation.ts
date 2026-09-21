@@ -1,5 +1,6 @@
 import { Chess, type PieceSymbol, type Square } from "chess.js";
 import { canPlayPendingOpening } from "./pending-opening";
+import { isolateText } from "./bidi";
 import type {
   AiDifficulty,
   Color,
@@ -88,12 +89,12 @@ export function outcomeText(
         : game.outcome.reason === "resignation"
           ? "לאחר כניעה"
           : "במט";
-      return `${winner ?? "המנצח"} ניצח ${ending}`;
+      return `${winner ? isolateText(winner) : "המנצח"} ניצח ${ending}`;
     }
     const ending = game.outcome.reason === "timeout"
       ? "on time"
       : `by ${game.outcome.reason}`;
-    return `${winner ?? "Winner"} wins ${ending}`;
+    return `${winner ? isolateText(winner) : "Winner"} wins ${ending}`;
   }
   if (game.outcome.reason === "cancelled") {
     return locale === "he" ? "המשחק בוטל" : "Game cancelled";
@@ -157,9 +158,9 @@ export function gameStatusText(input: GameStatusTextInput): string {
     }
     return `Magic turn: move that ${CHESS_PIECE_NAMES[magicPiece]} again or finish`;
   }
-  const turnName = game.turn === "w"
+  const turnName = isolateText(game.turn === "w"
     ? game.players.white.name
-    : game.players.black?.name ?? (locale === "he" ? "שחור" : "Black");
+    : game.players.black?.name ?? (locale === "he" ? "שחור" : "Black"));
   if (displayCheck) {
     if (locale === "he") {
       return game.turn === game.you.color

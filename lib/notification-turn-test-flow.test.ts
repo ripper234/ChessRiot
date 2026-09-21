@@ -45,6 +45,21 @@ describe("guided notification test", () => {
     expect(notificationTestFlow({ ...base, version: 8, receipts: { 2: confirmed, 4: confirmed, 6: confirmed, 8: opened } }).phase).toBe("confirm");
   });
 
+  it("offers recovery immediately when earlier evidence disappears, even during delivery or confirmation", () => {
+    const cases: Record<number, TurnTestReceipt>[] = [{}, { 4: opened }];
+    for (const receipts of cases) {
+      expect(notificationTestFlow({ ...base, version: 4, receipts })).toMatchObject({ phase: "blocked", reason: expect.stringContaining("earlier round") });
+    }
+    expect(notificationTestFlow({ ...base, version: 3, pendingReply: true }).phase).toBe("blocked");
+    expect(notificationTestFlow({ ...base, version: 1, pendingReply: true, deliveryFailed: true }))
+      .toMatchObject({ phase: "blocked", reason: expect.stringContaining("could not be delivered") });
+  });
+
+  it("preserves actual phone evidence when provider bookkeeping reports failure", () => {
+    expect(notificationTestFlow({ ...base, version: 2, deliveryFailed: true, receipts: { 2: opened } }).phase).toBe("confirm");
+    expect(notificationTestFlow({ ...base, version: 2, deliveryFailed: true, receipts: { 2: confirmed } }).phase).toBe("ready");
+  });
+
   it("waits after a committed move even when the game snapshot is catching up", () => {
     expect(notificationTestFlow({ ...base, version: 1, pendingReply: true }).phase).toBe("waiting");
   });

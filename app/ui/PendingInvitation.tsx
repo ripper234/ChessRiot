@@ -19,7 +19,7 @@ export function PendingInvitation({ game, busy, inviteUrl, inviteShared, onCopy,
     <p>{direct ? <>Your challenge to <bdi dir="auto">@{game.players.black!.name}</bdi> is saved.</> : "Your game is saved in your account."} You do not need to be online together.</p>
     {game.turnPaceDays ? <p className={styles.note}>The {game.turnPaceDays}-day move limit starts when your friend accepts.</p> : null}
     <div className={styles.actions}>
-      {!busy ? <Link className="primary-button" href="/">Back to games</Link> : <button className="primary-button" disabled>Saving move…</button>}
+      {!busy ? <Link className="primary-button" href="/">Back to games</Link> : <button className="primary-button" disabled>Saving…</button>}
       {!direct && inviteUrl ? <button className="secondary-button" type="button" onClick={onCopy}>{inviteShared ? "Copied ✓" : "Copy invite link"}</button> : null}
       {canPlayPendingOpening(game, game.you.color) ? <button className="quiet-button" type="button" disabled={busy} onClick={onPlay}>Play opening move</button> : null}
     </div>

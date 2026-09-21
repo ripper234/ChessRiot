@@ -50,7 +50,8 @@ interface GameItem {
 }
 
 function gameDetail(game: GameItem): string {
-  if (game.status === "waiting") return game.color === "b" ? "Your invitation to accept"
+  if (game.status === "waiting") return game.color === "b" ? game.turn === "b"
+    ? "White has played the opening · Your turn starts when you accept" : "Your invitation to accept · White moves first"
     : game.turn === "b" ? "Opening saved · Awaiting acceptance" : "Invite saved · Awaiting acceptance";
   if (game.status === "active") return game.turn === game.color ? "Your turn" : "Their turn";
   if (game.outcome?.reason === "cancelled") return "Cancelled";
@@ -384,7 +385,7 @@ export function PlayerHome() {
               && game.status === "waiting"
               && game.color === "b"
               && Boolean(game.opponent);
-            const detail = incomingChallenge ? "Challenge received" : gameDetail(game);
+            const detail = gameDetail(game);
             const identity = game.mode === "solo"
               ? "Riot Bot"
               : game.opponent ? `@${game.opponent}` : "Invitation awaiting player";
@@ -393,7 +394,7 @@ export function PlayerHome() {
               : null;
             const summary = <>
               <span className={`mini-piece ${game.color === "w" ? "light" : "dark"}`}><ChessPiece type="p" color={game.color} /></span>
-              <span><strong>{identity}</strong><small>
+              <span><strong><bdi dir="auto">{identity}</bdi></strong><small>
                 {gameVariant(game.variantId).name}{game.isMagic ? " · Magic" : ""}{pace ? ` · ${pace}` : ""} · {detail}
               </small></span>
             </>;
@@ -403,7 +404,7 @@ export function PlayerHome() {
                 <div className="dashboard-challenge-actions" aria-label={`Challenge from ${identity}${pace ? `, ${pace}` : ""}`}>
                   <button type="button" disabled={challengeBusy !== null}
                     aria-label={`Accept challenge from ${identity}`}
-                    onClick={() => void answerChallenge(game, "accept")}>ACCEPT &amp; PLAY</button>
+                    onClick={() => void answerChallenge(game, "accept")}>ACCEPT AS BLACK</button>
                   <button type="button" disabled={challengeBusy !== null}
                     aria-label={`Decline challenge from ${identity}`}
                     onClick={() => void answerChallenge(game, "decline")}>DECLINE</button>

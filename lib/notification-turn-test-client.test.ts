@@ -25,6 +25,21 @@ describe("one-phone end-to-end notification evidence", () => {
 });
 
 describe("leaving an ended notification test", () => {
+  it("targets the current active worker when this page still has an older controller", async () => {
+    const active = { postMessage: vi.fn() };
+    const controller = { postMessage: vi.fn() };
+    vi.stubGlobal("navigator", { serviceWorker: { controller, getRegistration: async () => ({ active }) } });
+    await clearEndedTurnTestNotification({ id: "test-game", status: "completed", version: 5 });
+    expect(active.postMessage).toHaveBeenCalledExactlyOnceWith({ type: "clear-turn-notification", gameId: "test-game", gameVersion: 5 });
+    expect(controller.postMessage).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the controller when registration lookup fails", async () => {
+    const controller = { postMessage: vi.fn() };
+    vi.stubGlobal("navigator", { serviceWorker: { controller, getRegistration: async () => { throw new Error("unavailable"); } } });
+    await clearEndedTurnTestNotification({ id: "test-game", status: "completed", version: 5 });
+    expect(controller.postMessage).toHaveBeenCalledOnce();
+  });
   it.each([true, false])("sends its completed version before navigation, with a controller: %s", async (controlled) => {
     const postMessage = vi.fn();
     const worker = { postMessage };

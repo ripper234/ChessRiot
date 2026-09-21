@@ -4,7 +4,7 @@ Play at [chessriot.gg](https://chessriot.gg), read the
 [release history](https://chessriot.gg/changelog), or
 [join the WhatsApp community](https://chat.whatsapp.com/FaBgiUgl73vLdeqzcqx0vX).
 
-ChessRiot v0.30.0 is a mobile-first chess game for solo play against Riot Bot
+ChessRiot v0.30.1 is a mobile-first chess game for solo play against Riot Bot
 or asynchronous play with someone you know. Playing requires a Google account;
 every game, friend, and result follows the player across devices.
 
@@ -148,7 +148,7 @@ npm test
 npm run build
 ```
 
-`npm run build` is the release gate: lint, typecheck, unit tests, the production
+`npm run build` is the release gate: production dependency security audit, lint, typecheck, unit tests, the production
 artifact build and validation, rendered-output tests, and the Miniflare
 end-to-end suite. CI runs the same gate, audits production dependencies, and
 retains a CycloneDX SBOM. Contributor setup is in [CONTRIBUTING.md](CONTRIBUTING.md).

@@ -12,6 +12,19 @@ const commitSource = (sha: string) => `${REPOSITORY_URL}/commit/${sha}`;
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.30.1",
+    date: "2026-09-21",
+    title: "Security updates and clearer invitation checks",
+    summary: "Update vulnerable dependencies, show saved openings before accepting, and improve notification-test recovery.",
+    changes: [
+      "Patch Next.js, image processing and ID-generator dependencies; require the security audit before release.",
+      "Show whether White has already moved in incoming dashboard and activity invitations.",
+      "Offer an immediate restart when a notification test loses earlier evidence, and clean up through the current service worker.",
+      "Preserve mixed-language player names in status and recap text.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.30.1`,
+  },
+  {
     version: "0.30.0",
     date: "2026-09-21",
     title: "Invite now, play whenever",
