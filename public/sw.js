@@ -1,7 +1,7 @@
 const STATIC_CACHE = "chessriot-static-v2";
 const PUSH_CONSENT_CACHE = "chessriot-push-consent-v1";
 const PUSH_CONSENT_PATH = "/__chessriot_push_consent__";
-const PUSH_DIAGNOSTIC_WORKER_VERSION = "0.29.0";
+const PUSH_DIAGNOSTIC_WORKER_VERSION = "0.29.1";
 const PUSH_DIAGNOSTIC_RECEIPT_TYPE = "chessriot:push-diagnostic-receipt";
 const LOCAL_PUSH_DIAGNOSTIC_EVENT_TYPE = "chessriot:local-push-diagnostic-event";
 const PUSH_DIAGNOSTIC_WORKER_VERSION_REQUEST_TYPE = "chessriot:push-worker-version-request";
@@ -359,7 +359,10 @@ self.addEventListener("message", (event) => {
     serializeTurnNotification(tag, () => self.registration.getNotifications({ tag })
       .then((notifications) => notifications.forEach((notification) => {
         const retainedVersion = notification.data?.gameVersion;
-        if (!Number.isSafeInteger(retainedVersion) || retainedVersion <= event.data.gameVersion) {
+        // Viewing the current turn is not an acknowledgement. Only a newer
+        // authoritative position proves that this reminder is obsolete.
+        if (Number.isSafeInteger(retainedVersion) && retainedVersion >= 0
+          && retainedVersion < event.data.gameVersion) {
           notification.close();
         }
       }))),

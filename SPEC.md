@@ -1,4 +1,4 @@
-# ChessRiot v0.29.0 specification
+# ChessRiot v0.29.1 specification
 
 ## v0.27.8 notification recovery
 
@@ -75,8 +75,13 @@
   detached during a VAPID key rotation is automatically resubscribed and saved
   on the next signed-in page lifecycle while browser permission remains granted.
   A deliberate disable or dismissal is never widened.
-- A game clears its retained turn notice only while the authoritative page is
-  both visible and focused. Turn payloads carry the game version; the service
+- A game clears an obsolete retained turn notice only while the authoritative
+  page is both visible and focused and shows a strictly newer game version
+  (updated in v0.29.1). Viewing the notified turn leaves its reminder available
+  until tapped or explicitly dismissed. Unknown legacy versions are preserved.
+  Exiting or restarting a notification test reconciles the completed version
+  returned by the server before navigating, without fabricating tap evidence.
+  Turn payloads carry the game version; the service
   worker re-alerts a retained same-game tag only for a newer version, ignores an
   exact delivery retry, serializes overlapping same-game display decisions, and
   refuses to let a stale page clear a newer notice.
@@ -287,8 +292,9 @@
   traffic; later due rows remain durable for the scheduled worker. Sent rows are
   never reclaimed.
 - Android notifications use a privacy-safe opaque Web Push topic. A matching
-  game clears an existing notice only after its authoritative snapshot is
-  visible, and a notification tap prefers the exact game client with a safe
+  game clears an obsolete notice only after a strictly newer authoritative
+  snapshot is visible and focused (updated in v0.29.1). Opening the current turn
+  never acknowledges its notification. A tap prefers the exact game client with a safe
   new-window fallback. Merely focusing a stale tab never suppresses or clears
   an opponent-turn notice.
 - Expired or completed-game subscriptions are removed and delivery records are

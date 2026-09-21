@@ -12,6 +12,17 @@ const commitSource = (sha: string) => `${REPOSITORY_URL}/commit/${sha}`;
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.29.1",
+    date: "2026-09-21",
+    title: "Keep turn notifications until you act",
+    summary: "Opening the browser or viewing your game no longer dismisses its current turn notification.",
+    changes: [
+      "Keep the reminder until you tap or dismiss it, or a newer game position makes it obsolete.",
+      "Let you return manually during the four-round test and still tap the notification from Android’s notification drawer.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.29.1`,
+  },
+  {
     version: "0.29.0",
     date: "2026-09-20",
     title: "Simpler notification test, English by default",
