@@ -51,8 +51,10 @@ self.addEventListener("activate", (event) => {
 async function fetchAndCache(request) {
   const response = await fetch(request);
   if (response.ok) {
-    const cache = await caches.open(STATIC_CACHE);
-    await cache.put(request, response.clone());
+    try {
+      const cache = await caches.open(STATIC_CACHE);
+      await cache.put(request, response.clone());
+    } catch { /* Cache storage is optional; a valid network asset must still load. */ }
   }
   return response;
 }
@@ -64,6 +66,7 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
   const cacheable = (
     url.pathname.startsWith("/_next/static/")
+    || /^\/assets\/[^/]+-[A-Za-z0-9_-]{8,}\.(?:js|css|woff2?)$/.test(url.pathname)
     || url.pathname.startsWith("/icons/")
     || url.pathname === "/manifest.webmanifest"
   );
@@ -71,7 +74,7 @@ self.addEventListener("fetch", (event) => {
   const network = fetchAndCache(request);
   event.waitUntil(network.then(() => undefined).catch(() => undefined));
   event.respondWith(
-    caches.match(request).then((cached) => cached ?? network),
+    caches.match(request).then((cached) => cached ?? network).catch(() => network),
   );
 });
 
@@ -163,7 +166,10 @@ self.addEventListener("push", (event) => {
     && GAME_ID_PATTERN.test(payload.diagnosticId)
     ? payload.diagnosticId
     : null;
-  const path = gameId ? `/g/${gameId}` : friendRequest ? "/?activity=1" : "/app";
+  const challengeId = serviceBody && payload.category === "challenge"
+    && typeof payload.gameId === "string" && GAME_ID_PATTERN.test(payload.gameId)
+    ? payload.gameId : null;
+  const path = gameId || challengeId ? `/g/${gameId || challengeId}` : friendRequest ? "/?activity=1" : "/app";
   const body = gameId
     ? "It’s your turn."
     : friendRequest
@@ -173,7 +179,7 @@ self.addEventListener("push", (event) => {
     ? `turn-${gameId}`
     : friendRequest
       ? `friend-request-${friendRequest.requestId}`
-      : `service-${notificationId}`;
+      : challengeId ? `challenge-${challengeId}` : `service-${notificationId}`;
   const testTurn = gameId && gameVersion !== null && payload.notificationTest === true;
   const display = async () => {
     if (testTurn) {
@@ -369,6 +375,18 @@ self.addEventListener("message", (event) => {
   );
 });
 
+async function openGameInClient(client, path) {
+  if (!path.startsWith("/g/") || typeof MessageChannel === "undefined") return false;
+  const channel = new MessageChannel();
+  return new Promise((resolve) => {
+    const finish = (opened) => { clearTimeout(timeout); channel.port1.close(); channel.port2.close(); resolve(opened); };
+    const timeout = setTimeout(() => finish(false), 300);
+    channel.port1.onmessage = (event) => finish(event.data?.opened === true);
+    try { client.postMessage({ type: "chessriot:notification-open", path }, [channel.port2]); }
+    catch { finish(false); }
+  });
+}
+
 self.addEventListener("notificationclick", (event) => {
   const diagnosticId = event.notification.data?.diagnosticId;
   const localDiagnosticId = event.notification.data?.localDiagnosticId;
@@ -419,6 +437,7 @@ self.addEventListener("notificationclick", (event) => {
     });
     if (matching) {
       try {
+        matching.postMessage({ type: "chessriot:notification-open", path });
         return await matching.focus();
       } catch {
         // A suspended client may no longer be focusable. Open the exact game.
@@ -427,6 +446,8 @@ self.addEventListener("notificationclick", (event) => {
     const existing = clients.find((client) => client.visibilityState === "visible") ?? clients[0];
     if (existing) {
       try {
+        await existing.focus();
+        if (await openGameInClient(existing, path)) return existing;
         const navigated = await existing.navigate(path);
         if (navigated) return await navigated.focus();
       } catch {

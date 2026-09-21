@@ -19,21 +19,21 @@ describe("GameRoom protected first paint", () => {
     expect(html).not.toContain("שחמט אמיתי. משחק מלא.");
   });
 
-  it("keeps chess ordering and English content LTR", () => {
+  it("keeps chess geometry LTR while allowing account text direction", () => {
     expect(gameRoomSource).toContain('<section className="game-layout" dir="ltr">');
-    expect(gameRoomSource).toMatch(/className="board-column"\s*dir="ltr"/);
-    expect(gameRoomSource).toContain('<div className="match-banner" dir="ltr">');
+    expect(gameRoomSource).toMatch(/className="board-column"\s*dir=\{dir\}/);
+    expect(gameRoomSource).toContain('<div className="match-banner" dir={dir}>');
     expect(gameRoomSource).toMatch(/className=\{`player-card white-player[^\n]+dir="ltr"/);
-    expect(gameRoomSource).toMatch(/className="player-card-copy" dir="ltr"/);
-    expect(gameRoomSource).toContain('<div className="promotion-card"><p>Promote your pawn</p><div dir="ltr">');
+    expect(gameRoomSource).toMatch(/className="player-card-copy" dir=\{dir\}/);
+    expect(gameRoomSource).toContain('<div className="promotion-card"><p>{t("Promote your pawn")}</p><div dir="ltr">');
   });
 
-  it("passes English locale to every protected visual and isolates directional notation", () => {
-    expect(gameRoomSource).toContain('<Brand locale="en" />');
-    expect(gameRoomSource).toContain('<ResignationFinisher color={game.you.color} locale="en" />');
-    expect(gameRoomSource).toContain('<CheckmateFinisher finisher={finisher} locale="en" />');
-    expect(gameRoomSource).toMatch(/<BoardActionAnimation[\s\S]*?locale="en"/);
-    expect(gameRoomSource).toContain('magicRuleLabel(rule, "en")');
+  it("passes account locale to every protected visual and isolates directional notation", () => {
+    expect(gameRoomSource).toContain('<Brand locale={locale} />');
+    expect(gameRoomSource).toContain('<ResignationFinisher color={game.you.color} locale={locale} />');
+    expect(gameRoomSource).toContain('<CheckmateFinisher finisher={finisher} locale={locale} />');
+    expect(gameRoomSource).toMatch(/<BoardActionAnimation[\s\S]*?locale={locale}/);
+    expect(gameRoomSource).toContain('magicRuleLabel(rule, locale)');
     expect(gameRoomSource).toMatch(/part\.dir === "ltr"[\s\S]*?<bdi dir="ltr"/);
   });
 });

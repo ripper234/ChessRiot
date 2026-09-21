@@ -5,6 +5,7 @@ import "./board.css";
 import "./combat.css";
 import { THEME_BOOTSTRAP_SCRIPT } from "@/lib/themes";
 import { ClientTelemetry } from "./ui/ClientTelemetry";
+import { LanguageProvider } from "./ui/LanguageProvider";
 import { RouteChrome } from "./ui/RouteChrome";
 
 export const metadata: Metadata = {
@@ -29,10 +30,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         <a className="skip-link" href="#route-content">Skip to main content</a>
         <ClientTelemetry />
-        <div id="main-content">
+        <LanguageProvider><div id="main-content">
           <RouteChrome />
           <div id="route-content" tabIndex={-1}>{children}</div>
-        </div>
+        </div></LanguageProvider>
       </body>
     </html>
   );

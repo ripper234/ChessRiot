@@ -12,6 +12,19 @@ const commitSource = (sha: string) => `${REPOSITORY_URL}/commit/${sha}`;
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.31.0",
+    date: "2026-09-21",
+    title: "Challenge alerts, planned moves and your language",
+    summary: "Receive new challenge notifications, plan your reply while a friend thinks, and choose English or Hebrew for your account.",
+    changes: [
+      "Send direct challenge alerts to the invited player's registered devices, including older installed app versions.",
+      "Save one planned move that plays automatically if legal after the opponent replies, even with the app closed.",
+      "Save English or Hebrew separately for each player's game and settings.",
+      "Load notification games alongside account checks and reuse an open app for faster navigation.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.31.0`,
+  },
+  {
     version: "0.30.1",
     date: "2026-09-21",
     title: "Security updates and clearer invitation checks",

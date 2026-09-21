@@ -65,7 +65,7 @@ describe("installable app assets", () => {
     expect(source).toContain('"notification_active"');
     expect(source).toContain("PUSH_DIAGNOSTIC_WORKER_VERSION");
     expect(source).toContain("requireInteraction: true");
-    expect(source).toContain('const path = gameId ? `/g/${gameId}` : friendRequest ? "/?activity=1" : "/app"');
+    expect(source).toContain('const path = gameId || challengeId ? `/g/${gameId || challengeId}` : friendRequest ? "/?activity=1" : "/app"');
     expect(source).toContain("sent you a friend request");
     expect(source).toContain("friend-request-${friendRequest.requestId}");
     expect(source).not.toContain("payload.title");

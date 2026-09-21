@@ -1,5 +1,8 @@
 "use client";
 
+import { useLanguage } from "./LanguageProvider";
+
+
 import { useEffect, useState } from "react";
 import { formatTurnTimeLeft } from "@/lib/game-deadlines";
 import type { TurnPaceDays } from "@/lib/game-types";
@@ -13,6 +16,7 @@ export function TurnDeadline({
   turnPaceDays: TurnPaceDays;
   yourTurn: boolean;
 }) {
+  const { locale, dir, t } = useLanguage();
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -28,13 +32,13 @@ export function TurnDeadline({
   }, []);
 
   return (
-    <div className={`turn-deadline${yourTurn ? " mine" : ""}`} dir="ltr" role="timer" aria-live="off">
+    <div className={`turn-deadline${yourTurn ? " mine" : ""}`} lang={locale} dir={dir} role="timer" aria-live="off">
       <span aria-hidden="true">⌛</span>
       <div>
-        <small>{yourTurn ? "Your move deadline" : "Opponent's move deadline"}</small>
-        <strong>{formatTurnTimeLeft(deadlineAt, now, "en")}</strong>
+        <small>{yourTurn ? t("Your move deadline") : t("Opponent's move deadline")}</small>
+        <strong>{formatTurnTimeLeft(deadlineAt, now, locale)}</strong>
       </div>
-      <b>{turnPaceDays} {turnPaceDays === 1 ? "day" : "days"} / move</b>
+      <b>{turnPaceDays} {t(turnPaceDays === 1 ? "day" : "days")}{" "}{t("/ move")}</b>
     </div>
   );
 }

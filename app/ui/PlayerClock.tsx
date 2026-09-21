@@ -1,5 +1,8 @@
 "use client";
 
+import { useLanguage } from "./LanguageProvider";
+
+
 import { useEffect, useState } from "react";
 import type { Color, GameSnapshot } from "@/lib/game-types";
 
@@ -24,6 +27,7 @@ export function liveElapsedTime(
 }
 
 export function PlayerClock({ game, color }: { game: GameSnapshot; color: Color }) {
+  const { t } = useLanguage();
   const [elapsedSinceSnapshotMs, setElapsedSinceSnapshotMs] = useState(0);
   const visible = game.turnPaceDays == null;
   const active = visible && game.status === "active" && game.turn === color;
@@ -67,9 +71,9 @@ export function PlayerClock({ game, color }: { game: GameSnapshot; color: Color 
       className="player-clock"
       dir="ltr"
       data-active={active ? "true" : "false"}
-      aria-label={`${color === "w" ? "White" : "Black"} elapsed time: ${formatted}${active ? ", clock running" : ""}`}
+      aria-label={t("${p0} elapsed time: ${p1}${p2}", {p0: t(color === "w" ? "White" : "Black"), p1: formatted, p2: active ? ", clock running" : ""})}
     >
-      <small dir="ltr">{active ? "Thinking" : "Elapsed"}</small>
+      <small dir="ltr">{active ? t("Thinking") : t("Elapsed")}</small>
       <strong>{formatted}</strong>
     </span>
   );

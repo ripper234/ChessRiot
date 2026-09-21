@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { prefetchGame } from "@/lib/game-prefetch";
 import {
   createContext,
   FormEvent,
@@ -14,10 +15,11 @@ import {
 import {
   AUTH_SESSION_INVALIDATED_EVENT,
   publishAuthSessionChanged,
+  readAuthSession,
 } from "@/lib/auth-session-client";
 import {
-  fetchJsonWithReadTimeout,
   recoveryDelayMs,
+  fetchJsonWithReadTimeout,
 } from "@/lib/client-recovery";
 import { reportProductEvent } from "@/lib/client-telemetry";
 import { playerKey, readSeatTokenFromHash } from "@/lib/client-storage";
@@ -125,6 +127,8 @@ async function claimNotificationOnboardingFailOpen(): Promise<boolean> {
   }
 }
 
+export function useOptionalAccountSession() { return useContext(AccountSessionContext); }
+
 export function useAccountSession(): AccountSession {
   const value = useContext(AccountSessionContext);
   if (!value) throw new Error("useAccountSession must be used inside AccountGate");
@@ -165,6 +169,10 @@ function sessionState(payload: SessionPayload): GateState {
 export function AccountGate({ children }: { children: ReactNode }) {
   const [state, setState] = useState<GateState>({ kind: "loading" });
   const [tutorialOpen, setTutorialOpen] = useState(false);
+  useEffect(() => {
+    const match = /^\/g\/([0-9a-f-]{36})$/i.exec(window.location.pathname);
+    if (match) prefetchGame(match[1]);
+  }, []);
   const sessionRead = useRef<Promise<"ready" | "error"> | null>(null);
 
   const refresh = useCallback((showLoading = true) => {
@@ -172,10 +180,7 @@ export function AccountGate({ children }: { children: ReactNode }) {
     if (showLoading) setState({ kind: "loading" });
     const operation = (async (): Promise<"ready" | "error"> => {
       try {
-        const { response, data } = await fetchJsonWithReadTimeout<SessionPayload>("/api/auth/session", {
-          cache: "no-store",
-          credentials: "same-origin",
-        });
+        const { response, data } = await readAuthSession<SessionPayload>();
         if (!response.ok || !data) throw new Error();
         const resolved = sessionState(data);
         let next = resolved;
@@ -190,7 +195,7 @@ export function AccountGate({ children }: { children: ReactNode }) {
           }
         }
         setState(next);
-        publishAuthSessionChanged(next.kind === "ready" || next.kind === "username");
+        publishAuthSessionChanged(next.kind === "ready" || next.kind === "username", true);
         return "ready";
       } catch {
         setState({
@@ -308,7 +313,7 @@ export function AccountGate({ children }: { children: ReactNode }) {
     />;
   }
   return (
-    <AccountSessionContext.Provider value={state.session}>
+    <AccountSessionContext.Provider key={state.session.username} value={state.session}>
       <ActivityInbox />
       {children}
       {tutorialOpen ? (

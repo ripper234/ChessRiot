@@ -185,6 +185,8 @@ function routeEvent(method: string, pathname: string): string | null {
   if (method === "GET" && pathname === "/api/me/games") return null;
   if (method === "POST" && pathname === "/api/telemetry/client") return "client.telemetry";
   if (method === "POST" && pathname === "/api/me/username") return "username.chosen";
+  if (method === "PUT" && /^\/api\/games\/[^/]+\/premove$/.test(pathname)) return "game.premove_updated";
+  if (method === "PATCH" && pathname === "/api/me/preferences") return "preferences.updated";
   if (method === "POST" && pathname === "/api/me/tutorial") return "tutorial.updated";
   if (method === "POST" && pathname === "/api/me/feature-access") {
     return "feature_access.requested";

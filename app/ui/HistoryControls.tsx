@@ -1,5 +1,8 @@
 "use client";
 
+import { useLanguage } from "./LanguageProvider";
+
+
 interface HistoryControlsProps {
   currentPly: number;
   viewingHistory: boolean;
@@ -17,12 +20,13 @@ export function HistoryControls({
   onBack,
   onForward,
 }: HistoryControlsProps) {
+  const { t } = useLanguage();
   return (
-    <div className="history-controls" dir="ltr" role="group" aria-label="Move history">
+    <div className="history-controls" dir="ltr" role="group" aria-label={t("Move history")}>
       <button
         type="button"
-        aria-label="Previous position"
-        title="Previous position"
+        aria-label={t("Previous position")}
+        title={t("Previous position")}
         disabled={unavailable || (currentPly === 0 && !canStepBackFromDraft)}
         onClick={onBack}
       >
@@ -30,8 +34,8 @@ export function HistoryControls({
       </button>
       <button
         type="button"
-        aria-label="Next position"
-        title="Next position"
+        aria-label={t("Next position")}
+        title={t("Next position")}
         disabled={unavailable || !viewingHistory}
         onClick={onForward}
       >

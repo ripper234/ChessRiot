@@ -1,5 +1,8 @@
 "use client";
 
+import { useLanguage } from "./LanguageProvider";
+
+
 import { FormEvent, useRef, useState } from "react";
 import { generateUuid, guestIdentityToken } from "@/lib/client-storage";
 import {
@@ -9,6 +12,7 @@ import {
 import { RequiredTextInput } from "./RequiredTextInput";
 
 export function FeedbackForm() {
+  const { locale, dir, t } = useLanguage();
   const [title, setTitle] = useState("");
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
@@ -58,8 +62,8 @@ export function FeedbackForm() {
   return (
         <form
           className="feedback-inline-form"
-          lang="en"
-          dir="ltr"
+          lang={locale}
+          dir={dir}
           translate="no"
           onSubmit={submit}
           noValidate
@@ -70,9 +74,9 @@ export function FeedbackForm() {
             label="Title"
             requiredLabel="Required"
             value={title}
-            error={titleError}
+            error={t(titleError)}
             maxLength={120}
-            placeholder="What should change?"
+            placeholder={t("What should change?")}
             disabled={busy}
             onChange={(event) => {
               const nextTitle = event.target.value;
@@ -80,20 +84,20 @@ export function FeedbackForm() {
               setTitleError((current) => clearRequiredTextError(nextTitle, current));
             }}
           />
-          <label htmlFor="feedback-comment">Comment <span>Optional</span></label>
+          <label htmlFor="feedback-comment">{t("Comment")}{" "}<span>{t("Optional")}</span></label>
           <textarea
             id="feedback-comment"
             value={comment}
             maxLength={2_000}
             rows={4}
-            placeholder="Add a little more context"
+            placeholder={t("Add a little more context")}
             disabled={busy}
             onChange={(event) => setComment(event.target.value)}
           />
-          {message ? <p className="feedback-message" role="status">{message}</p> : null}
+          {message ? <p className="feedback-message" role="status">{t(message)}</p> : null}
           <div className="feedback-actions">
             <button className="primary-button" type="submit" disabled={busy}>
-              {busy ? "Sending…" : "Send feedback"}
+              {busy ? t("Sending…") : t("Send feedback")}
             </button>
           </div>
           <a
@@ -101,8 +105,7 @@ export function FeedbackForm() {
             href="https://github.com/ripper234/ChessRiot/issues"
             target="_blank"
             rel="noopener noreferrer"
-          >
-            View issues or request a change on <bdi dir="ltr">GitHub</bdi> ↗
+          >{t("View issues or request a change on")}{" "}<bdi dir={dir}>GitHub</bdi> ↗
           </a>
         </form>
   );

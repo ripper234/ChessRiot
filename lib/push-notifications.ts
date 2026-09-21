@@ -85,7 +85,9 @@ interface ClaimedPushDelivery extends StoredPushTarget {
 
 interface ClaimedAccountDelivery extends StoredPushTarget {
   delivery_id: string;
-  friend_request_id: string;
+  kind: "friend_request" | "challenge";
+  friend_request_id: string | null;
+  game_id: string | null;
   attempt_count: number;
   created_at: string;
   lease_token: string;
@@ -950,6 +952,28 @@ export function queueFriendRequestNotifications(
     );
 }
 
+export function queueChallengeNotifications(
+  database: D1Database,
+  input: { gameId: string; recipientAccountId: string; createdAt: string },
+): D1PreparedStatement {
+  const nowMs = Date.now();
+  return database.prepare(`INSERT OR IGNORE INTO push_account_deliveries (
+      id, device_id, game_id, kind, status, attempt_count,
+      next_attempt_at, created_at, updated_at
+    ) SELECT devices.id || ':' || ? || ':challenge', devices.id, ?,
+      'challenge', 'pending', 0, ?, ?, ?
+    FROM push_devices AS devices
+    JOIN game_memberships AS recipient ON recipient.account_id = devices.account_id
+      AND recipient.game_id = ? AND recipient.color = 'b'
+    JOIN games ON games.id = recipient.game_id
+    WHERE devices.account_id = ? AND devices.disabled_at IS NULL
+      AND (devices.expiration_time IS NULL OR devices.expiration_time > ?)
+      AND games.status = 'waiting' AND games.joined_at IS NULL
+    ORDER BY devices.updated_at DESC, devices.id DESC LIMIT ?`)
+    .bind(input.gameId, input.gameId, nowMs, input.createdAt, input.createdAt,
+      input.gameId, input.recipientAccountId, nowMs, MAX_DEVICES_PER_ACCOUNT);
+}
+
 async function opaquePushTopic(gameId: string): Promise<string> {
   const digest = await crypto.subtle.digest(
     "SHA-256",
@@ -1662,6 +1686,8 @@ async function claimAccountDelivery(nowMs: number): Promise<ClaimedAccountDelive
     const delivery = await database.prepare(`SELECT
         deliveries.id AS delivery_id,
         deliveries.friend_request_id,
+        deliveries.game_id,
+        deliveries.kind,
         deliveries.attempt_count,
         deliveries.created_at,
         deliveries.lease_token,
@@ -1672,20 +1698,28 @@ async function claimAccountDelivery(nowMs: number): Promise<ClaimedAccountDelive
         devices.expiration_time,
         devices.disabled_at AS target_disabled_at,
         devices.account_id AS device_account_id,
-        requests.recipient_account_id,
-        requests.status AS request_status,
+        CASE WHEN deliveries.kind = 'challenge' THEN recipient.account_id
+          ELSE requests.recipient_account_id END AS recipient_account_id,
+        CASE WHEN deliveries.kind = 'challenge' THEN
+          CASE WHEN games.status = 'waiting' AND games.joined_at IS NULL
+            AND settings.game_mode = 'multiplayer' THEN 'pending' ELSE 'declined' END
+          ELSE requests.status END AS request_status,
         sender.username AS sender_username,
         EXISTS (
           SELECT 1 FROM account_blocks AS blocks
-          WHERE (blocks.blocker_account_id = requests.sender_account_id
-              AND blocks.blocked_account_id = requests.recipient_account_id)
-             OR (blocks.blocker_account_id = requests.recipient_account_id
-              AND blocks.blocked_account_id = requests.sender_account_id)
+          WHERE (blocks.blocker_account_id = COALESCE(requests.sender_account_id, creator.account_id)
+              AND blocks.blocked_account_id = COALESCE(requests.recipient_account_id, recipient.account_id))
+             OR (blocks.blocker_account_id = COALESCE(requests.recipient_account_id, recipient.account_id)
+              AND blocks.blocked_account_id = COALESCE(requests.sender_account_id, creator.account_id))
         ) AS blocked
       FROM push_account_deliveries AS deliveries
       JOIN push_devices AS devices ON devices.id = deliveries.device_id
-      JOIN friend_requests AS requests ON requests.id = deliveries.friend_request_id
-      JOIN accounts AS sender ON sender.id = requests.sender_account_id
+      LEFT JOIN friend_requests AS requests ON requests.id = deliveries.friend_request_id
+      LEFT JOIN games ON games.id = deliveries.game_id
+      LEFT JOIN game_settings AS settings ON settings.game_id = games.id
+      LEFT JOIN game_memberships AS recipient ON recipient.game_id = games.id AND recipient.color = 'b'
+      LEFT JOIN game_memberships AS creator ON creator.game_id = games.id AND creator.color = 'w'
+      LEFT JOIN accounts AS sender ON sender.id = COALESCE(requests.sender_account_id, creator.account_id)
       WHERE deliveries.id = ? AND deliveries.lease_token = ?`)
       .bind(candidate.id, leaseToken)
       .first<ClaimedAccountDelivery>();
@@ -1756,22 +1790,40 @@ async function sendClaimedAccountPush(
     delivery.device_account_id !== delivery.recipient_account_id
     || delivery.request_status !== "pending"
     || delivery.blocked === 1
+    || !delivery.sender_username
   ) {
     await finalizeAccountDelivery(delivery, "superseded");
     return { status: "superseded", provider: null };
   }
+  const subjectId = delivery.kind === "challenge" ? delivery.game_id : delivery.friend_request_id;
+  if (!subjectId) {
+    await finalizeAccountDelivery(delivery, "superseded");
+    return { status: "superseded", provider: null };
+  }
+  const namedBody = `@${delivery.sender_username} challenged you to a game.`;
+  const challengeBody = Array.from(namedBody).length <= 120
+    && !/[\r\n\u0000-\u001f\u007f-\u009f\u200b\u2028\u2029\u202a-\u202e\u2060\u2066-\u2069\ufeff]/u.test(namedBody)
+    ? namedBody : "You received a new game challenge.";
   const provider = await sendPushPayloadToDevice(
     delivery,
-    {
+    delivery.kind === "challenge" ? {
+      // Older workers already understand service notifications. They open the
+      // games list; updated workers use the validated exact-game destination.
+      type: "service",
+      category: "challenge",
+      gameId: subjectId,
+      notificationId: subjectId,
+      body: challengeBody,
+    } : {
       type: "friend_request",
       senderUsername: delivery.sender_username,
-      requestId: delivery.friend_request_id,
+      requestId: subjectId,
     },
     config,
     {
       ttl: 24 * 60 * 60,
       urgency: "high",
-      topic: await servicePushTopic(`friend-request:${delivery.friend_request_id}`),
+      topic: await servicePushTopic(`${delivery.kind}:${delivery.game_id ?? delivery.friend_request_id}`),
     },
   );
   if (provider === "accepted") {
