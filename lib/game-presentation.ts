@@ -1,4 +1,5 @@
 import { Chess, type PieceSymbol, type Square } from "chess.js";
+import { canPlayPendingOpening } from "./pending-opening";
 import type {
   AiDifficulty,
   Color,
@@ -143,7 +144,10 @@ export function gameStatusText(input: GameStatusTextInput): string {
   } = input;
   if (viewingHistory) return historyLabel;
   if (game.status === "waiting") {
-    return locale === "he" ? "ממתינים לשחקן שני" : "Waiting for Player 2";
+    if (locale === "he") return "ממתינים לשחקן שני";
+    if (canPlayPendingOpening(game, game.you.color)) return "You can play your opening move";
+    return game.you.color === "w" && game.plyCount > 0
+      ? "Opening saved · Awaiting acceptance" : "Awaiting acceptance";
   }
   if (openingIntro) return locale === "he" ? "לבן פותח" : "White opens";
   if (game.status === "completed") return outcomeText(game, locale);

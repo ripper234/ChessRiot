@@ -756,8 +756,8 @@ export function CreateGame() {
                 ))}
               </select>
               <small>{friends.length
-                ? "Choose a friend to send a challenge, or create a private link. The game starts when they accept."
-                : <>Add friends from <Link href="/">Home</Link>, or create a private link. The game starts when someone accepts.</>}</small>
+                ? "Choose a friend or share a private link. You can leave afterward, or play your opening move before they accept."
+                : <>Add friends from <Link href="/">Home</Link>, or share a private link. You can leave afterward, or play your opening move before they accept.</>}</small>
             </label>
           ) : null}
 

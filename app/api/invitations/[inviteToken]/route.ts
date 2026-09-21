@@ -54,6 +54,7 @@ export async function GET(
       creatorName: game.white_name,
       variantId: normalizeGameVariantId(game.variant_id),
       turnPaceDays: game.turn_pace_days,
+      openingPlayed: game.ply_count > 0,
       magicRules: publicMagicRules(game.magic_prompt, gameMagicRules(game)),
       world: game.world_code ? {
         code: game.world_code,

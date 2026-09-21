@@ -47,6 +47,14 @@ describe("shouldAcceptGameSnapshot", () => {
 });
 
 describe("optimisticMoveSnapshot", () => {
+  it("previews a saved opening without starting the game, clock or deadline", () => {
+    const waiting = startingSnapshot({ mode: "multiplayer", status: "waiting", turnPaceDays: 3,
+      aiDifficulty: null, turnStartedAt: null, deadlineAt: null });
+    const opening = optimisticMoveSnapshot(waiting, "e2", "e4");
+    expect(opening).toMatchObject({ status: "waiting", turn: "b", plyCount: 1,
+      deadlineAt: null, turnStartedAt: null, elapsedMs: { w: 0, b: 0 } });
+    expect(optimisticMoveSnapshot(opening!, "d2", "d4")).toBeNull();
+  });
   it("shows a legal human move immediately without mutating the authoritative snapshot", () => {
     const authoritative = startingSnapshot();
     const optimistic = optimisticMoveSnapshot(

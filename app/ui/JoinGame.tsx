@@ -26,6 +26,7 @@ type InviteState =
     creatorName: string;
     variantId: GameVariantId;
     turnPaceDays: TurnPaceDays | null;
+    openingPlayed: boolean;
     magicRules: PublicMagicRules | null;
     world: { code: string; displayCode: string; creatorUsername: string | null } | null;
   }
@@ -40,6 +41,7 @@ interface InvitePayload {
   creatorName?: string;
   variantId?: GameVariantId;
   turnPaceDays?: unknown;
+  openingPlayed?: unknown;
   magicRules?: PublicMagicRules | null;
   world?: { code: string; displayCode: string; creatorUsername: string | null } | null;
 }
@@ -148,6 +150,7 @@ export function JoinGame({
           creatorName: data.creatorName,
           variantId: data.variantId ?? "standard",
           turnPaceDays: isTurnPaceDays(data.turnPaceDays) ? data.turnPaceDays : null,
+          openingPlayed: data.openingPlayed === true,
           magicRules: data.magicRules ?? null,
           world: data.world ?? null,
         });
@@ -289,10 +292,11 @@ export function JoinGame({
                 </small> : null}
               </div>
             ) : null}
+            <p>{invite.openingPlayed ? "White has played the opening. Your turn starts when you accept." : "White moves first. Your friend may play the opening before you accept."}</p>
             <p className="join-identity">Joining as <strong><PlayerHandle username={account.username} /></strong></p>
             {error ? <p className="form-error" role="alert">{error}</p> : null}
             <button className="primary-button" type="submit" disabled={busy}>
-              {busy ? "Joining…" : "Accept and play as Black →"}
+              {busy ? "Joining…" : "Accept as Black"}
             </button>
             <Link className="secondary-button" href="/">Back to home</Link>
             <p className="fine-print">Accepting starts the game and adds it to your account.</p>

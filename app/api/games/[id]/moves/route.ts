@@ -33,6 +33,7 @@ import { markMagicWorldPlayed } from "@/lib/magic-worlds";
 import { hasMagicRule } from "@/lib/magic-rules";
 import { serializeMoveContinuation } from "@/lib/move-continuation";
 import { queueTurnNotifications } from "@/lib/push-notifications";
+import { canPlayPendingOpening } from "@/lib/pending-opening";
 
 export const dynamic = "force-dynamic";
 
@@ -220,7 +221,11 @@ export async function POST(
     if (game.world_code) await reconcileMagicWorldPlay(id);
     return json({ game: snapshot(game, storedMoves, color) }, { headers: notificationTestResponseHeaders(game) });
   }
-  if (game.status !== "active") return apiError(409, "game_not_active", "The game is not active");
+  const pendingOpening = game.joined_at === null && canPlayPendingOpening({
+    mode: game.game_mode, status: game.status, turnPaceDays: game.turn_pace_days,
+    turn: game.turn_color, plyCount: game.ply_count,
+  }, color);
+  if (game.status !== "active" && !pendingOpening) return apiError(409, "game_not_active", "The game is not active");
   if (game.version !== expectedVersion) {
     return json(
       { error: { code: "stale_position", message: "The board changed" }, game: snapshot(game, storedMoves, color) },
@@ -279,6 +284,9 @@ export async function POST(
     throw error;
   }
 
+  if (pendingOpening && humanOutcome.completed) {
+    return apiError(409, "opening_requires_acceptance", "Wait for your friend to accept before playing a move that ends the game.");
+  }
   if (game.notification_test_device_id && (
     (game.notification_test_expires_at ?? 0) <= Date.now() || game.ply_count >= 8
   )) return apiError(409, "notification_test_finished", "This four-turn test has finished. Start a new test to repeat it.");
@@ -336,13 +344,14 @@ export async function POST(
   const advancedPlies = botMove ? 2 : 1;
   const nextVersion = game.version + advancedPlies;
   const nextPly = game.ply_count + advancedPlies;
-  const status = finalOutcome.completed ? "completed" : "active";
+  const status = pendingOpening ? "waiting" : finalOutcome.completed ? "completed" : "active";
   const db = getDatabase();
   const update = db
     .prepare(`UPDATE games SET
       status = ?, current_fen = ?, turn_color = ?, version = ?, ply_count = ?,
       winner_color = ?, termination = ?, last_mutation_nonce = ?, updated_at = ?, finished_at = ?
-      WHERE id = ? AND version = ? AND status = 'active' AND turn_color = ?
+      WHERE id = ? AND version = ? AND status = ? AND turn_color = ?
+        AND (? = 0 OR (joined_at IS NULL AND ply_count = 0))
         AND (? IS NULL OR julianday('now') < julianday(?))
         AND EXISTS (
           SELECT 1 FROM game_memberships
@@ -363,7 +372,9 @@ export async function POST(
       finalOutcome.completed ? now : null,
       id,
       expectedVersion,
+      game.status,
       color,
+      pendingOpening ? 1 : 0,
       deadlineAt,
       deadlineAt,
       authorization.account.id,

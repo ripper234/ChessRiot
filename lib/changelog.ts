@@ -12,6 +12,18 @@ const commitSource = (sha: string) => `${REPOSITORY_URL}/commit/${sha}`;
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.30.0",
+    date: "2026-09-21",
+    title: "Invite now, play whenever",
+    summary: "Leave after inviting a friend, or save your opening move before they accept.",
+    changes: [
+      "Make it clear that invitations are saved and you do not need to be online together.",
+      "Let White play one opening turn in a pending day-paced game; your friend gets the full move limit when they accept.",
+      "Preserve the opening through acceptance, retries and concurrent actions, with notifications for the correct player's turn.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.30.0`,
+  },
+  {
     version: "0.29.1",
     date: "2026-09-21",
     title: "Keep turn notifications until you act",

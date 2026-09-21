@@ -134,3 +134,11 @@ second device is needed. The test is available from Settings and New game.
   rounds and full receipt evidence intact. Full results and the test board are
   expandable. Retry, restart, exit, exact-device targeting and closed-app checks
   remain available; no extra device or account is required.
+
+## Asynchronous invitations (v0.30.0)
+
+- Show a clear way back to games immediately after creating an invitation.
+- Optionally save White's opening turn before acceptance in a day-paced game.
+- Keep the invitation pending with zero clocks and no deadline until accepted.
+- Preserve the opening on either acceptance path and notify the correct player.
+- Acceptance starts the full move deadline; waiting never uses the friend's time.
