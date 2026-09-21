@@ -53,6 +53,8 @@ import {
   type AudioPreferences,
 } from "@/lib/game-sounds";
 import { copyInvitationLink } from "@/lib/invitation-copy";
+import { canPlayPendingOpening } from "@/lib/pending-opening";
+import { PendingInvitation } from "./PendingInvitation";
 import {
   actionEndpointSquares,
   capturedPiecesByVictimColor,
@@ -531,13 +533,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
     }
     entryNotice.current = consumed.notice;
     if (consumed.notice === "challenge-sent") {
-      setMessage("Challenge sent. Waiting for your friend to accept.");
+      setMessage("Challenge sent. Your game is saved; you can come back later.");
     } else if (consumed.notice === "invitation-created") {
-      setMessage("Invite ready. Share the private link. The game starts when another player accepts.");
-      if (resolvedInvite) {
-        sidePanelTrigger.current = null;
-        setSidePanel("invite");
-      }
+      setMessage("Invite ready. Share the private link, then play your opening move or come back later.");
     }
     setSoundOn(readSoundPreference());
     setConfirmEveryMove(readMoveConfirmationPreference());
@@ -899,7 +897,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     && !game.notificationTest
     && !openingIntro
     && !viewingHistory
-    && game.status === "active"
+    && (game.status === "active" || canPlayPendingOpening(game, game.you.color))
     && game.turn === game.you.color
     && !busy,
   );
@@ -1089,7 +1087,9 @@ export function GameRoom({ gameId }: { gameId: string }) {
         setMessage(
           data.error?.code === "must_answer_check"
             ? illegalDestinationMessage(true, "en")
-            : "The move failed.",
+            : data.error?.code === "opening_requires_acceptance"
+              ? "Your friend must accept before you can play a game-ending move."
+              : "The move failed.",
         );
         if (data.error?.code !== "stale_position") playInvalidSound();
       } else if (!data.game) {
@@ -1595,7 +1595,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     : null;
   const draggedPiece = drag ? chess.get(drag.from) : null;
   return (
-    <main className="game-shell" lang="en" dir="ltr" translate="no" data-notification-test={Boolean(game?.notificationTest)}>
+    <main className="game-shell" lang="en" dir="ltr" translate="no" data-notification-test={Boolean(game?.notificationTest)} data-pending-invitation={game.status === "waiting" && game.you.color === "w"}>
       <header className="topbar game-topbar">
         <Brand locale="en" />
       </header>
@@ -1642,6 +1642,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
           aria-hidden={mobileToolsActive && sidePanel ? true : undefined}
           inert={mobileToolsActive && sidePanel ? true : undefined}
         >
+          <PendingInvitation game={serverGame ?? game} busy={busy} inviteUrl={inviteUrl} inviteShared={inviteShared}
+            onCopy={() => void copyInvite()} onPlay={() => {
+              closeSidePanel(); setMessage(""); focusBoardSquare("e2");
+              document.querySelector(".board-wrap")?.scrollIntoView({ block: "center", behavior: "smooth" });
+            }} />
           <div className="match-banner" dir="ltr">
             <div className={`player-card white-player${game.you.color === "w" ? " you-player" : ""}`} dir="ltr">
               <span className="player-piece" aria-hidden="true">
@@ -1938,11 +1943,11 @@ export function GameRoom({ gameId }: { gameId: string }) {
               <p>{game.players.black
                 ? game.you.color === "w"
                   ? <>Waiting for <bdi dir="auto">@{game.players.black.name}</bdi> to accept.</>
-                  : <><bdi dir="auto">@{game.players.white.name}</bdi> challenged you. Accept to start the game.</>
-                : "Share the private link. The game starts when another player accepts and takes Black."}</p>
+                  : <><bdi dir="auto">@{game.players.white.name}</bdi> challenged you. {game.plyCount > 0 ? "White has played the opening. Your turn starts when you accept." : "Accept as Black. White moves first."}</>
+                : "Share the private link. Your friend can accept as Black whenever they are ready."}</p>
               {game.players.black && game.you.color === "b"
                 ? <div className="waiting-challenge-actions">
-                  <button className="primary-button" type="button" disabled={busy} onClick={() => void answerWaitingChallenge("accept")}>{busy ? "Accepting…" : "Accept and play"}</button>
+                  <button className="primary-button" type="button" disabled={busy} onClick={() => void answerWaitingChallenge("accept")}>{busy ? "Accepting…" : "Accept as Black"}</button>
                   <button className="secondary-button" type="button" disabled={busy} onClick={() => void answerWaitingChallenge("decline")}>Decline</button>
                 </div>
                 : inviteUrl ? <><button className="primary-button" onClick={() => void copyInvite()}>{inviteShared ? "Copied ✓" : "Copy invite link"}</button>

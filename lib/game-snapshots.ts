@@ -3,6 +3,7 @@ import { chooseComputerMove, seededComputerRandom } from "./computer-player";
 import { turnDeadlineAt } from "./game-deadlines";
 import { applyCandidate, type CandidateMove } from "./game-rules";
 import type { GameSnapshot, Promotion } from "./game-types";
+import { canPlayPendingOpening } from "./pending-opening";
 
 export function shouldAcceptGameSnapshot(currentVersion: number, incomingVersion: number): boolean {
   return incomingVersion > currentVersion;
@@ -20,6 +21,7 @@ function appendOptimisticMove(
       candidate,
       current.magicRules ?? null,
     );
+    if (current.status === "waiting" && outcome.completed) return null;
     return {
       ...current,
       // This is display-only. The server remains the sole owner of version state.
@@ -33,7 +35,7 @@ function appendOptimisticMove(
       outcome: outcome.termination
         ? { winner: outcome.winner, reason: outcome.termination }
         : null,
-      deadlineAt: outcome.completed
+      deadlineAt: outcome.completed || current.status === "waiting"
         ? null
         : current.mode === "multiplayer" && current.turnPaceDays
           ? turnDeadlineAt(createdAt, current.turnPaceDays)
@@ -87,7 +89,8 @@ export function optimisticMoveSnapshot(
     createdAt?: string;
   } = {},
 ): GameSnapshot | null {
-  if (current.status !== "active" || current.turn !== current.you.color) return null;
+  if ((current.status !== "active" && !canPlayPendingOpening(current, current.you.color))
+    || current.turn !== current.you.color) return null;
   return appendOptimisticMove(
     current,
     {

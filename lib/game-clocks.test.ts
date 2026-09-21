@@ -18,6 +18,15 @@ function source(overrides: Partial<GameClockSource> = {}): GameClockSource {
 }
 
 describe("gameClockSnapshot", () => {
+  it("does not charge either player for an opening saved days before acceptance", () => {
+    const moves = [{ color: "w" as const, createdAt: "2026-08-01T10:00:00.000Z" }];
+    expect(gameClockSnapshot(source({ status: "waiting", joinedAt: null, turn: "b", moves }), Date.parse(START)))
+      .toMatchObject({ elapsedMs: { w: 0, b: 0 }, turnStartedAt: null });
+    expect(gameClockSnapshot(source({ turn: "b", moves }), Date.parse(START) + 20 * SECOND))
+      .toMatchObject({ elapsedMs: { w: 0, b: 20 * SECOND }, turnStartedAt: START });
+    expect(gameClockSnapshot(source({ turn: "w", moves: [...moves, { color: "b", createdAt: "2026-08-03T10:00:12.000Z" }] }), Date.parse(START) + 20 * SECOND))
+      .toMatchObject({ elapsedMs: { w: 8 * SECOND, b: 12 * SECOND } });
+  });
   it("keeps waiting multiplayer clocks stopped at zero", () => {
     expect(gameClockSnapshot(source({
       status: "waiting",

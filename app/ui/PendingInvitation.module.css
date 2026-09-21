@@ -1,0 +1,6 @@
+.card { width: 100%; flex: 0 0 auto; padding: 16px; margin-bottom: 12px; border: 2px solid var(--theme-card-border, var(--stone-dark)); background: var(--theme-card, var(--surface)); text-align: left; }
+.card h2 { margin: 0 0 8px; font: 800 20px/1.25 var(--ui); color: var(--text); }
+.card p { margin: 0 0 10px; font: 500 16px/1.45 var(--ui); color: var(--text); }
+.card .note { color: var(--muted); font-size: 14px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.actions > * { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 14px; font-size: 14px; text-decoration: none; }

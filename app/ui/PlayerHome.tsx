@@ -50,7 +50,8 @@ interface GameItem {
 }
 
 function gameDetail(game: GameItem): string {
-  if (game.status === "waiting") return "Waiting for acceptance";
+  if (game.status === "waiting") return game.color === "b" ? "Your invitation to accept"
+    : game.turn === "b" ? "Opening saved · Awaiting acceptance" : "Invite saved · Awaiting acceptance";
   if (game.status === "active") return game.turn === game.color ? "Your turn" : "Their turn";
   if (game.outcome?.reason === "cancelled") return "Cancelled";
   if (!game.outcome || game.outcome.winner === null) return "Draw";

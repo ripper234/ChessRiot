@@ -1,4 +1,24 @@
-# ChessRiot v0.29.1 specification
+# ChessRiot v0.30.0 specification
+
+## Asynchronous invitations and early openings (v0.30.0)
+
+- After creating a multiplayer invitation, the creator sees that it is saved,
+  can return to their games immediately, and need not stay online with a friend.
+  Private invitation links remain copyable; direct challenges stay in the
+  invited friend's account. Pending rows distinguish an already-saved opening.
+- In a 1-, 3- or 5-day game, authenticated White may optionally play exactly
+  one legal opening turn before acceptance. Status remains waiting, clocks
+  remain at zero, no deadline starts and no turn notification is sent yet.
+  Further moves, Black moves and terminal openings require acceptance. The
+  same eligibility governs board input, move confirmation and optimistic UI.
+- Both private-link and direct-challenge acceptance preserve the opening,
+  advance the version atomically and start the full turn limit at acceptance.
+  The turn notification targets Black when an opening was saved, White otherwise.
+  Acceptance retries safely if the opening wins a simultaneous write; neither
+  a reused version nor an overwritten move may hide activation from polling.
+- Cancellation and decline remain available after an opening and do not start a
+  clock. Invitees are told whether White
+  has already moved before accepting as Black.
 
 ## v0.27.8 notification recovery
 

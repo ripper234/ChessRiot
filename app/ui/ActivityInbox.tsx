@@ -298,7 +298,7 @@ export function ActivityInbox() {
                   <button type="button" disabled={busyId !== null} onClick={() => void answerFriend(item, "accept")}>Accept</button>
                   <button type="button" disabled={busyId !== null} onClick={() => void answerFriend(item, "decline")}>Decline</button>
                 </div> : item.kind === "challenge" && item.gameId ? <div className="activity-actions">
-                  <button type="button" disabled={busyId !== null} onClick={() => void answerChallenge(item, "accept")}>Accept and play</button>
+                  <button type="button" disabled={busyId !== null} onClick={() => void answerChallenge(item, "accept")}>Accept as Black</button>
                   <button type="button" disabled={busyId !== null} onClick={() => void answerChallenge(item, "decline")}>Decline</button>
                 </div> : item.href ? <Link href={item.href} onClick={close}>Open</Link> : null}
               </article>

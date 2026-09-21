@@ -1,5 +1,6 @@
 import type { PieceSymbol, Square } from "chess.js";
 import type { GameSnapshot, Promotion } from "./game-types";
+import { canPlayPendingOpening } from "./pending-opening";
 
 export const MOVE_CONFIRMATION_PREFERENCE_KEY = "chessriot:confirm-every-move";
 
@@ -142,12 +143,13 @@ export function describeMoveIntentParts(
 
 export function moveIntentStillValid(
   intent: MoveIntent,
-  game: Pick<GameSnapshot, "version" | "status" | "turn" | "you"> | null,
+  game: (Pick<GameSnapshot, "version" | "status" | "turn" | "you">
+    & Partial<Pick<GameSnapshot, "mode" | "turnPaceDays" | "plyCount">>) | null,
 ): boolean {
   return Boolean(
     game
     && game.version === intent.expectedVersion
-    && game.status === "active"
+    && (game.status === "active" || canPlayPendingOpening(game, game.you.color))
     && game.turn === game.you.color,
   );
 }

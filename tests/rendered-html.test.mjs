@@ -138,7 +138,7 @@ test("renders the public home and mandatory account-gated play routes", async ()
   assert.match(playerHomeSource, /Your next move/);
   assert.match(playerHomeSource, /href="\/app\?mode=multiplayer">CHALLENGE A FRIEND/);
   assert.match(playerHomeSource, /href="\/app\?mode=solo">PLAY RIOT BOT/);
-  assert.match(playerHomeSource, /Waiting for acceptance/);
+  assert.match(playerHomeSource, /Awaiting acceptance/);
   assert.match(playerHomeSource, /game\.outcome\.winner === game\.color \? "Won" : "Lost"/);
   assert.match(playerHomeSource, /window\.setInterval\(refreshVisible, 60_000\)/);
   assert.match(playerHomeSource, /window\.addEventListener\("focus", refreshVisible\)/);
@@ -204,7 +204,7 @@ test("renders the public home and mandatory account-gated play routes", async ()
   assert.match(createGameSource, /WHO DO YOU WANT TO CHALLENGE\?/);
   assert.match(createGameSource, /Choose a friend or share a private invitation/);
   assert.match(createGameSource, /gamePathWithInvitation/);
-  assert.match(createGameSource, /The game starts when (?:they|someone) accepts/);
+  assert.match(createGameSource, /play your opening move before they accept/);
   assert.match(createGameSource, /href="\/worlds"/);
   assert.match(tutorialSource, /setPractice\(selectTutorialKnight\)/);
   assert.match(tutorialSource, /moveTutorialKnight\(current, square\)/);
@@ -212,7 +212,7 @@ test("renders the public home and mandatory account-gated play routes", async ()
   assert.match(gameRoomSource, /className="side-card world-game-card"/);
   assert.match(gameRoomSource, /game\.magicRules \? "World" : "Info"/);
   assert.match(gameRoomSource, /answerWaitingChallenge\("accept"\)/);
-  assert.match(gameRoomSource, /Accept and play/);
+  assert.match(gameRoomSource, /Accept as Black/);
   assert.match(gameRoomSource, /setPostGameDismissed\(true\);\s*focusBoardSquare\(focusedSquare\)/s);
   assert.match(gameRoomSource, /if \(!sidePanel\) return;[\s\S]*?sidePanelClose\.current\?\.focus/);
   assert.match(gameRoomSource, /readInvitationUrlFromHash/);

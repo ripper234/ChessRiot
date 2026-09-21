@@ -13,6 +13,7 @@ import { join, resolve } from "node:path";
 import { Miniflare } from "miniflare";
 import { Chess } from "chess.js";
 import { caseFold } from "unicode-case-folding";
+import { verifyPendingOpenings } from "./e2e-pending-opening.mjs";
 
 const origin = "http://chessriot.test";
 const controlOrigin = "https://control.chessriot.test";
@@ -1800,6 +1801,7 @@ async function verifyOnePhoneNotificationTurns() {
   } finally { await isolated.dispose(); }
 }
 
+await verifyPendingOpenings({ createRuntime, request, body, accountForLabel, usernameForAccount, secret, pushClientPublicKey });
 await verifyOnePhoneNotificationTurns();
 await verifyPushRecoveryAndBidirectionalTurns();
 

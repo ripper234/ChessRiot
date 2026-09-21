@@ -83,75 +83,83 @@ export async function POST(
     }
   }
 
-  const now = new Date().toISOString();
-  const database = getDatabase();
-  const mutationNonce = crypto.randomUUID();
-  const nextVersion = game.version + 1;
-  try {
-    // D1 executes a batch transactionally. The membership insert can only see
-    // the seat activated by the update, and the notification inserts require
-    // that same version and nonce. No active seat or turn push can be partial.
-    await database.batch([
-      database.prepare(`UPDATE games
-        SET black_name = ?, black_token_hash = ?, status = 'active', version = ?,
-            joined_at = ?, updated_at = ?, last_mutation_nonce = ?
-        WHERE id = ?
-          AND invite_token_hash = ?
-          AND status = 'waiting'
-          AND black_token_hash IS NULL
-          AND NOT EXISTS (
-            SELECT 1 FROM game_memberships
-            WHERE game_memberships.game_id = games.id
-              AND (game_memberships.color = 'b' OR game_memberships.account_id = ?)
-          )`)
-        .bind(
-          displayName,
-          playerHash,
-          nextVersion,
-          now,
-          now,
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const expectedVersion = game.version;
+    const now = new Date().toISOString();
+    const database = getDatabase();
+    const mutationNonce = crypto.randomUUID();
+    const nextVersion = game.version + 1;
+    try {
+      // D1 executes a batch transactionally. The membership insert can only see
+      // the seat activated by the update, and the notification inserts require
+      // that same version and nonce. No active seat or turn push can be partial.
+      await database.batch([
+        database.prepare(`UPDATE games
+          SET black_name = ?, black_token_hash = ?, status = 'active', version = ?,
+              joined_at = ?, updated_at = ?, last_mutation_nonce = ?
+          WHERE id = ?
+            AND invite_token_hash = ?
+            AND version = ?
+            AND status = 'waiting'
+            AND black_token_hash IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM game_memberships
+              WHERE game_memberships.game_id = games.id
+                AND (game_memberships.color = 'b' OR game_memberships.account_id = ?)
+            )`)
+          .bind(
+            displayName,
+            playerHash,
+            nextVersion,
+            now,
+            now,
+            mutationNonce,
+            game.id,
+            inviteHash,
+            expectedVersion,
+            account.id,
+          ),
+        database.prepare(`INSERT INTO game_memberships (
+            game_id, color, account_id, claimed_at
+          )
+          SELECT games.id, 'b', ?, ?
+          FROM games
+          WHERE games.id = ?
+            AND games.invite_token_hash = ?
+            AND games.black_token_hash = ?
+            AND NOT EXISTS (
+              SELECT 1 FROM game_memberships
+              WHERE game_memberships.game_id = games.id
+                AND (game_memberships.color = 'b' OR game_memberships.account_id = ?)
+            )`)
+          .bind(account.id, now, game.id, inviteHash, playerHash, account.id),
+        ...queueTurnNotifications(database, {
+          gameId: game.id,
+          gameVersion: nextVersion,
+          targetColor: game.turn_color,
           mutationNonce,
-          game.id,
-          inviteHash,
-          account.id,
-        ),
-      database.prepare(`INSERT INTO game_memberships (
-          game_id, color, account_id, claimed_at
-        )
-        SELECT games.id, 'b', ?, ?
-        FROM games
-        WHERE games.id = ?
-          AND games.invite_token_hash = ?
-          AND games.black_token_hash = ?
-          AND NOT EXISTS (
-            SELECT 1 FROM game_memberships
-            WHERE game_memberships.game_id = games.id
-              AND (game_memberships.color = 'b' OR game_memberships.account_id = ?)
-          )`)
-        .bind(account.id, now, game.id, inviteHash, playerHash, account.id),
-      ...queueTurnNotifications(database, {
-        gameId: game.id,
-        gameVersion: nextVersion,
-        targetColor: "w",
-        mutationNonce,
-        createdAt: now,
-      }),
-    ]);
-  } catch {
-    // A concurrent join may have settled the seat. Resolve from current state
-    // below instead of converting a harmless race into a server error.
-  }
+          createdAt: now,
+        }),
+      ]);
+    } catch {
+      // A concurrent join may have settled the seat. Resolve from current state
+      // below instead of converting a harmless race into a server error.
+    }
 
-  game = await findGameByInviteHash(inviteHash);
-  if (!game) return apiError(404, "not_found", "Invitation not found");
-  if (game.black_token_hash !== playerHash) {
-    return apiError(409, "invite_claimed", "This invitation has already been claimed");
+    game = await findGameByInviteHash(inviteHash);
+    if (!game) return apiError(404, "not_found", "Invitation not found");
+    if (attempt === 0 && game.status === "waiting" && !game.black_token_hash
+      && game.version !== expectedVersion) continue;
+    if (game.black_token_hash !== playerHash) {
+      return apiError(409, "invite_claimed", "This invitation has already been claimed");
+    }
+    if (await accountPlayerColor(game, account.id) !== "b") {
+      return apiError(409, "invite_claimed", "This invitation has already been claimed");
+    }
+    if (playerColor(game, playerHash) !== "b") {
+      return apiError(500, "join_failed", "The game could not be loaded after joining");
+    }
+    return json({ game: snapshot(game, await readMoves(game.id), "b") });
   }
-  if (await accountPlayerColor(game, account.id) !== "b") {
-    return apiError(409, "invite_claimed", "This invitation has already been claimed");
-  }
-  if (playerColor(game, playerHash) !== "b") {
-    return apiError(500, "join_failed", "The game could not be loaded after joining");
-  }
-  return json({ game: snapshot(game, await readMoves(game.id), "b") });
+  return apiError(409, "invite_changed", "The invitation changed. Try accepting again.");
 }
