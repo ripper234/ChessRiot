@@ -7,6 +7,8 @@
 - Every behavioral change must include tests and updated documentation.
 - Every changed deployment must use a new, higher SemVer version. Run `npm run release:patch` by default, or `release:minor` for a coherent new user capability, before the deployment checkpoint. Never reuse or decrease a deployed version.
 - Run lint, typecheck, unit tests, and relevant end-to-end tests.
+- The release gate includes the production dependency security audit. Confirm
+  GitHub CI has passed on the immutable release commit before promoting to Production.
 - Never commit secrets.
 - A valid Google session and completed username onboarding are prerequisites
   for creating, joining, opening, or playing a game. Public marketing, demo,

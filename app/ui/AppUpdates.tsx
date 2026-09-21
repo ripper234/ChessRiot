@@ -1455,7 +1455,7 @@ export function AppUpdates() {
           lang="en"
           dir="ltr"
           translate="no"
-          role="alert"
+          role={showBlockedNotificationRecovery ? "alert" : "status"}
           aria-labelledby="notification-recovery-title"
         >
           <span aria-hidden="true">🔔</span>

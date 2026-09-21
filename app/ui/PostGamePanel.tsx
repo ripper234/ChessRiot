@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { GameSnapshot, Termination } from "@/lib/game-types";
+import { isolateText } from "@/lib/bidi";
+
+export function recapShareTitle(game: Pick<GameSnapshot, "players">): string {
+  return `${isolateText(game.players.white.name)} vs ${isolateText(game.players.black?.name ?? "Riot Bot")} on ChessRiot`;
+}
 
 const REASON_LABELS: Record<Termination, string> = {
   checkmate: "Checkmate",
@@ -72,7 +77,7 @@ export function PostGamePanel({
       }
       setRecapUrl(payload.url);
       const data = {
-        title: `${game.players.white.name} vs ${game.players.black?.name ?? "Riot Bot"} on ChessRiot`,
+        title: recapShareTitle(game),
         text: "Replay this completed ChessRiot game.",
         url: payload.url,
       };

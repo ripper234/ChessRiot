@@ -41,6 +41,10 @@ export async function verifyPendingOpenings({ createRuntime, request, body, acco
     for (const direct of [false, true]) {
       const test = await create(direct, direct ? 5 : 3);
       const id = test.game.id;
+      if (direct) {
+        const item = (await ok(await call("/api/me/activity", black))).items.find((item) => item.gameId === id && item.kind === "challenge");
+        assert.equal(item.openingPlayed, false); assert.equal(item.turnPaceDays, 5);
+      }
       const old = new Date(Date.now() - 7 * 86_400_000).toISOString();
       await db.prepare("UPDATE games SET created_at = ?, updated_at = ? WHERE id = ?").bind(old, old, id).run();
       const waiting = (await ok(await call(`/api/games/${id}`, white))).game;
@@ -61,6 +65,12 @@ export async function verifyPendingOpenings({ createRuntime, request, body, acco
       assert.deepEqual(await rows(id), [], "no turn push before acceptance");
       assert.equal((await ok(await call(`/api/games/${id}`, white))).game.fen, opening.fen);
       if (!direct) assert.equal((await ok(await call(`/api/invitations/${test.inviteToken}`, black))).openingPlayed, true);
+      if (direct) {
+        const item = (await ok(await call("/api/me/activity", black))).items.find((item) => item.gameId === id && item.kind === "challenge");
+        assert.equal(item.openingPlayed, true); assert.match(item.detail, /White has played the opening/);
+        const dashboardGame = (await ok(await call("/api/me/games?view=watch&limit=8", black))).games.find((game) => game.id === id);
+        assert.equal(dashboardGame.status, "waiting"); assert.equal(dashboardGame.turn, "b");
+      }
       const joined = (await ok(await test.accept())).game;
       assert.equal(joined.status, "active"); assert.equal(joined.version, 2);
       assert.equal(joined.turn, "b"); assert.equal(joined.fen, opening.fen);

@@ -1,4 +1,4 @@
-# ChessRiot v0.30.0 specification
+# ChessRiot v0.30.1 specification
 
 ## Asynchronous invitations and early openings (v0.30.0)
 
@@ -1224,3 +1224,11 @@ This file and `MVP.md` are the source of truth for the current milestone.
   exact-game-open/user-confirmation records. Confirmation cannot certify partial,
   out-of-order, rejected-display or foreground evidence, and exhausted tests never
   offer a fifth move.
+
+## v0.30.1 review corrections
+
+Incoming invitations on the dashboard and in Activity must show whether White
+has already played before the accept action. Notification tests with missing
+prior-round evidence offer restart before waiting for or confirming later rounds.
+Plain-text game statuses and recap shares isolate user names for bidirectional
+text. Every release passes the production dependency audit locally and in CI.

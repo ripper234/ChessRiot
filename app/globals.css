@@ -3119,6 +3119,7 @@ html[data-performance="low"] :is(
 .dashboard-game small { margin-top: 4px; color: var(--muted); font: 650 10px/1.2 var(--ui); }
 .dashboard-game > b { color: var(--chess-gold); }
 .dashboard-challenge { cursor: default; }
+.dashboard-challenge small { overflow: visible; white-space: normal; overflow-wrap: anywhere; font-size: 14px; line-height: 1.4; }
 .dashboard-challenge:hover { border-color: var(--theme-card-border, var(--stone-dark)); }
 .dashboard-challenge-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
 .dashboard-challenge-actions button { min-height: 34px; padding: 0 9px; border: 2px solid var(--theme-frame-border, var(--stone-dark)); color: #172515; background: var(--chess-gold); cursor: pointer; font: 900 8px/1 var(--mono); }

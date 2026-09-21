@@ -15,6 +15,8 @@ export interface ActivityItem {
   requestId: string | null;
   gameId: string | null;
   username: string | null;
+  openingPlayed: boolean;
+  turnPaceDays: TurnPaceDays | null;
 }
 
 export interface ActivitySummary {
@@ -189,7 +191,7 @@ export async function listActivity(accountId: string): Promise<ActivitySummary> 
     database.prepare(`SELECT notifications.id, notifications.kind,
         notifications.source_key, notifications.created_at, notifications.read_at,
         notifications.game_id, actor.username AS actor_username,
-        games.status AS game_status, games.winner_color, games.termination,
+        games.status AS game_status, games.winner_color, games.termination, games.ply_count,
         settings.turn_pace_days,
         mine.color AS own_color, friend_requests.status AS request_status
       FROM account_notifications AS notifications
@@ -226,6 +228,7 @@ export async function listActivity(accountId: string): Promise<ActivitySummary> 
         turn_pace_days: TurnPaceDays | null;
         own_color: string | null;
         game_status: string | null;
+        ply_count: number | null;
         request_status: string | null;
       }>(),
     database.prepare(`SELECT COUNT(*) AS count FROM account_notifications
@@ -250,10 +253,11 @@ export async function listActivity(accountId: string): Promise<ActivitySummary> 
     const pace = row.turn_pace_days
       ? `${row.turn_pace_days} ${row.turn_pace_days === 1 ? "day" : "days"} per move`
       : null;
+    const openingPlayed = row.kind === "challenge" && row.game_status === "waiting" && Number(row.ply_count) > 0;
     const copy = row.kind === "friend_request"
       ? { title: "Friend request", detail: `${actor} wants to connect.` }
       : row.kind === "challenge"
-        ? { title: "New challenge", detail: `${actor} challenged you${pace ? ` · ${pace}` : ""}.` }
+        ? { title: "New challenge", detail: `${actor} challenged you${pace ? ` · ${pace}` : ""}. ${openingPlayed ? "White has played the opening. Your turn starts when you accept." : "White moves first."}` }
         : row.kind === "turn"
           ? { title: "Your turn", detail: username ? `Play your move against ${actor}.` : "Play your next move." }
           : { title: "Game finished", detail: resultDetail(row.own_color, row.winner_color, row.termination) };
@@ -268,6 +272,8 @@ export async function listActivity(accountId: string): Promise<ActivitySummary> 
       requestId,
       gameId: row.kind === "challenge" && row.game_status !== "waiting" ? null : row.game_id,
       username,
+      openingPlayed,
+      turnPaceDays: row.turn_pace_days,
     };
   });
   return { items, unreadCount: Number(unread?.count ?? 0), snapshotAt };

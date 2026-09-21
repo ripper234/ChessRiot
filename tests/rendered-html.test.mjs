@@ -165,7 +165,7 @@ test("renders the public home and mandatory account-gated play routes", async ()
     readFileSync(new URL("../app/globals.css", import.meta.url), "utf8"),
     /@media \(max-width: 980px\)[\s\S]*?\.player-home-actions \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/,
   );
-  assert.match(playerHomeSource, /Challenge received/);
+  assert.match(playerHomeSource, /White has played the opening/);
   assert.match(playerHomeSource, /\/app\?mode=multiplayer&opponent=/);
   assert.match(playerHomeSource, /\/api\/games\/\$\{encodeURIComponent\(game\.id\)\}\/challenge/);
   assert.match(

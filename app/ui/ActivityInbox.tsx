@@ -20,6 +20,8 @@ interface ActivityItem {
   requestId: string | null;
   gameId: string | null;
   username: string | null;
+  openingPlayed: boolean;
+  turnPaceDays: 1 | 3 | 5 | null;
 }
 
 interface ActivityPayload {
@@ -28,7 +30,7 @@ interface ActivityPayload {
   snapshotAt?: unknown;
 }
 
-function activityItems(value: unknown): ActivityItem[] {
+export function activityItems(value: unknown): ActivityItem[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((entry) => {
     if (!entry || typeof entry !== "object") return [];
@@ -51,6 +53,8 @@ function activityItems(value: unknown): ActivityItem[] {
       requestId: typeof row.requestId === "string" ? row.requestId : null,
       gameId: typeof row.gameId === "string" ? row.gameId : null,
       username: typeof row.username === "string" ? row.username : null,
+      openingPlayed: row.openingPlayed === true,
+      turnPaceDays: row.turnPaceDays === 1 || row.turnPaceDays === 3 || row.turnPaceDays === 5 ? row.turnPaceDays : null,
     }];
   });
 }
@@ -86,9 +90,11 @@ function actor(item: ActivityItem): ReactNode {
     : "Another player";
 }
 
-function activityDetail(item: ActivityItem): ReactNode {
+export function activityDetail(item: ActivityItem): ReactNode {
   if (item.kind === "friend_request") return <>{actor(item)} wants to be friends.</>;
-  if (item.kind === "challenge") return <>{actor(item)} invited you to a game.</>;
+  if (item.kind === "challenge") return <>{actor(item)} invited you to a game.
+    {item.turnPaceDays ? ` ${item.turnPaceDays} ${item.turnPaceDays === 1 ? "day" : "days"} per move.` : ""}
+    {item.openingPlayed ? " White has played the opening. Your turn starts when you accept." : " White moves first."}</>;
   if (item.kind === "turn") return item.username
     ? <>It is your turn against {actor(item)}.</>
     : "It is your turn to move.";

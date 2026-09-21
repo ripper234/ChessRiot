@@ -54,7 +54,8 @@ export async function confirmTurnTestReceipt(gameId: string, version: number): P
 export async function clearEndedTurnTestNotification(game: Pick<GameSnapshot, "id" | "status" | "version">): Promise<void> {
   if (game.status !== "completed" || typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
   try {
-    const worker = navigator.serviceWorker.controller ?? (await navigator.serviceWorker.getRegistration())?.active;
+    const registration = await navigator.serviceWorker.getRegistration().catch(() => undefined);
+    const worker = registration?.active ?? navigator.serviceWorker.controller;
     worker?.postMessage({ type: "clear-turn-notification", gameId: game.id, gameVersion: game.version });
   } catch {
     // Notification cleanup must not strand a player in an already-ended test.

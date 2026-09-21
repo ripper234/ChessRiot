@@ -199,11 +199,11 @@ describe("outcome presentation", () => {
     expect(outcomeText(gameWithOutcome({
       winner: "w",
       reason: "checkmate",
-    }))).toBe("White player wins by checkmate");
+    }))).toBe("\u2068White player\u2069 wins by checkmate");
     expect(outcomeText(gameWithOutcome({
       winner: "b",
       reason: "timeout",
-    }))).toBe("Black player wins on time");
+    }))).toBe("\u2068Black player\u2069 wins on time");
     expect(outcomeText(gameWithOutcome({
       winner: null,
       reason: "threefold_repetition",
@@ -211,7 +211,7 @@ describe("outcome presentation", () => {
     expect(outcomeText(gameWithOutcome({
       winner: "w",
       reason: "checkmate",
-    }), "he")).toBe("White player ניצח במט");
+    }), "he")).toBe("\u2068White player\u2069 ניצח במט");
     expect(outcomeText(gameWithOutcome({
       winner: null,
       reason: "threefold_repetition",
@@ -232,6 +232,17 @@ describe("outcome presentation", () => {
     })).toBe("תורך");
     expect(illegalDestinationMessage(false, "he")).toBe("יש לבחור אחת מהמשבצות המסומנות.");
     expect(pieceCannotAnswerCheckMessage("he")).toMatch(/לא יכול לעצור את השח/);
+  });
+
+  it("isolates mixed-direction names in turn, check and result sentences", () => {
+    const game = gameWithOutcome({ winner: "b", reason: "checkmate" });
+    game.players.black = { name: "שלום-123" };
+    expect(outcomeText(game)).toBe("\u2068שלום-123\u2069 wins by checkmate");
+    game.status = "active";
+    const input = { game, viewingHistory: false, historyLabel: "", openingIntro: false, displayCheck: false };
+    expect(gameStatusText(input)).toBe("\u2068שלום-123\u2069’s turn");
+    expect(gameStatusText({ ...input, displayCheck: true })).toBe("\u2068שלום-123\u2069 is in check");
+    expect(game.players.black.name).toBe("שלום-123");
   });
 
   it("keeps live, check, history, and Magic status precedence explicit", () => {
