@@ -10,7 +10,7 @@ import { ensureCurrentPushDiagnosticWorker } from "@/lib/push-diagnostics";
 import { pushEndpointHash, setPushConsentEnabled } from "@/lib/push-client";
 import { notificationOfferDecisionKey, PUSH_DEVICE_OWNER_KEY } from "@/lib/pwa";
 import { fetchJsonWithReadTimeout } from "@/lib/client-recovery";
-import { confirmTurnTestReceipt, readTurnTestReceipts, turnTestRoundPassed, type TurnTestReceipt } from "@/lib/notification-turn-test-client";
+import { clearEndedTurnTestNotification, confirmTurnTestReceipt, readTurnTestReceipts, turnTestRoundPassed, type TurnTestReceipt } from "@/lib/notification-turn-test-client";
 import { notificationTestFlow } from "@/lib/notification-turn-test-flow";
 import styles from "./NotificationTurnTest.module.css";
 
@@ -157,13 +157,16 @@ export function NotificationTurnTest({ game, onRefresh }: { game?: GameSnapshot;
     if (!game || busy) return;
     setBusy(true); setError("");
     try {
+      let finishedGame = game;
       if (game.status !== "completed") {
-        const { response } = await fetchJsonWithReadTimeout(`/api/games/${game.id}/end`, {
+        const { response, data } = await fetchJsonWithReadTimeout<{ game?: GameSnapshot }>(`/api/games/${game.id}/end`, {
           method: "POST", headers: { "content-type": "application/json" },
           body: JSON.stringify({ expectedVersion: game.version, requestId: generateUuid() }),
         });
-        if (!response.ok) { onRefresh?.(); throw new Error("The game just changed. Tap again to finish the test."); }
+        if (!response.ok || !data?.game) { onRefresh?.(); throw new Error("The game just changed. Tap again to finish the test."); }
+        finishedGame = data.game;
       }
+      await clearEndedTurnTestNotification(finishedGame);
       window.location.assign(destination);
     } catch (e) { setError(e instanceof Error ? e.message : "Could not finish the test. Try again."); }
     finally { setBusy(false); }
@@ -248,7 +251,7 @@ export function NotificationTurnTest({ game, onRefresh }: { game?: GameSnapshot;
       {late ? <p className={styles.note} role="status">The reply is taking longer than expected. This round has not passed yet.</p> : null}
       <details className={styles.details}><summary>Need help?</summary>
         <p>If nothing arrives, check Android and browser notification permissions for ChessRiot. Do not use Force stop.</p>
-        <p>If you returned manually, open Android’s notification drawer and tap the ChessRiot notification. A server send alone does not pass the test.</p>
+        <p>Opening the app manually leaves your notification available. Swipe down to open Android notifications and tap it to continue this round.</p>
         <div className={styles.actions}>
           <button type="button" className={styles.secondary} disabled={busy} onClick={retryRead}>Check again</button>
           <button type="button" className={styles.secondary} disabled={busy} onClick={() => void finishTest("/notification-test")}>Start a new test</button>

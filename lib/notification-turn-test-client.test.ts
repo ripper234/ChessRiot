@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
-import { turnTestRoundPassed, type TurnTestReceipt } from "./notification-turn-test-client";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { clearEndedTurnTestNotification, turnTestRoundPassed, type TurnTestReceipt } from "./notification-turn-test-client";
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe("one-phone end-to-end notification evidence", () => {
   const complete: TurnTestReceipt = {
@@ -19,5 +21,30 @@ describe("one-phone end-to-end notification evidence", () => {
     for (const visibleClients of [1, 2, null, undefined]) {
       expect(turnTestRoundPassed({ ...complete, visibleClients })).toBe(false);
     }
+  });
+});
+
+describe("leaving an ended notification test", () => {
+  it.each([true, false])("sends its completed version before navigation, with a controller: %s", async (controlled) => {
+    const postMessage = vi.fn();
+    const worker = { postMessage };
+    vi.stubGlobal("navigator", { serviceWorker: {
+      controller: controlled ? worker : null,
+      getRegistration: async () => ({ active: worker }),
+    } });
+    await clearEndedTurnTestNotification({ id: "test-game", status: "active", version: 4 });
+    expect(postMessage).not.toHaveBeenCalled();
+    await clearEndedTurnTestNotification({ id: "test-game", status: "completed", version: 5 });
+    expect(postMessage).toHaveBeenCalledExactlyOnceWith({
+      type: "clear-turn-notification", gameId: "test-game", gameVersion: 5,
+    });
+  });
+
+  it("does not block leaving an ended test when notification cleanup is unavailable", async () => {
+    const game = { id: "test-game", status: "completed" as const, version: 5 };
+    vi.stubGlobal("navigator", {});
+    await expect(clearEndedTurnTestNotification(game)).resolves.toBeUndefined();
+    vi.stubGlobal("navigator", { serviceWorker: { controller: null, getRegistration: async () => { throw new Error("unavailable"); } } });
+    await expect(clearEndedTurnTestNotification(game)).resolves.toBeUndefined();
   });
 });

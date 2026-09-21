@@ -1,3 +1,5 @@
+import type { GameSnapshot } from "./game-types";
+
 export const TURN_TEST_CACHE = "chessriot-turn-test-v1";
 export const turnTestReceiptPath = (gameId: string, version: number) => `/__chessriot_turn_test__/${gameId}/${version}`;
 
@@ -47,4 +49,14 @@ export async function confirmTurnTestReceipt(gameId: string, version: number): P
   const value: TurnTestReceipt = response ? await response.json() : {};
   if (!turnTestReceiptOpened(value)) throw new Error("This round is not ready to confirm.");
   await cache.put(path, new Response(JSON.stringify({ ...value, confirmedAt: Date.now() })));
+}
+
+export async function clearEndedTurnTestNotification(game: Pick<GameSnapshot, "id" | "status" | "version">): Promise<void> {
+  if (game.status !== "completed" || typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+  try {
+    const worker = navigator.serviceWorker.controller ?? (await navigator.serviceWorker.getRegistration())?.active;
+    worker?.postMessage({ type: "clear-turn-notification", gameId: game.id, gameVersion: game.version });
+  } catch {
+    // Notification cleanup must not strand a player in an already-ended test.
+  }
 }

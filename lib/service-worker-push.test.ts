@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { runInNewContext } from "node:vm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { turnTestReceiptOpened, type TurnTestReceipt } from "./notification-turn-test-client";
 
 interface WorkerEvent {
   data?: unknown;
@@ -116,6 +117,15 @@ function beginPush(payload: unknown): Promise<unknown> {
 
 async function dispatchPush(payload: unknown): Promise<void> {
   await beginPush(payload);
+}
+
+async function viewGame(gameId: string, gameVersion: number): Promise<void> {
+  let completion: Promise<unknown> = Promise.resolve();
+  listeners.get("message")?.({
+    data: { type: "clear-turn-notification", gameId, gameVersion },
+    waitUntil: (promise) => { completion = promise; },
+  });
+  await completion;
 }
 
 describe("service-worker push display", () => {
@@ -256,30 +266,56 @@ describe("service-worker push display", () => {
     expect(showNotification.mock.calls[1]?.[1]).toMatchObject({ renotify: true });
   });
 
-  it("does not let a stale page clear a newer retained turn", async () => {
+  it("preserves current and newer turns on page opening, and clears only an obsolete turn", async () => {
     const gameId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const otherGameId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
     await dispatchPush({ type: "your_turn", gameId, gameVersion: 8 });
-    const listener = listeners.get("message");
-    if (!listener) throw new Error("Service-worker message listener was not installed");
-
-    let completion: Promise<unknown> | null = null;
-    listener({
-      data: { type: "clear-turn-notification", gameId, gameVersion: 7 },
-      waitUntil: (promise) => {
-        completion = Promise.resolve(promise);
-      },
-    });
-    if (completion) await completion;
+    await dispatchPush({ type: "your_turn", gameId: otherGameId, gameVersion: 2 });
+    await viewGame(gameId, 7);
     expect(retainedNotifications.has(`turn-${gameId}`)).toBe(true);
-
-    listener({
-      data: { type: "clear-turn-notification", gameId, gameVersion: 8 },
-      waitUntil: (promise) => {
-        completion = Promise.resolve(promise);
-      },
-    });
-    if (completion) await completion;
+    await viewGame(gameId, 8);
+    await viewGame(gameId, 8);
+    expect(retainedNotifications.has(`turn-${gameId}`)).toBe(true);
+    await viewGame(gameId, 9);
     expect(retainedNotifications.has(`turn-${gameId}`)).toBe(false);
+    expect(retainedNotifications.has(`turn-${otherGameId}`)).toBe(true);
+  });
+
+  it("keeps a legacy notification until explicitly acknowledged when its age is unknown", async () => {
+    const gameId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    await dispatchPush({ type: "your_turn", gameId });
+    await viewGame(gameId, 10);
+    expect(retainedNotifications.has(`turn-${gameId}`)).toBe(true);
+  });
+
+  it("lets all four test notifications be tapped after manually reopening the game", async () => {
+    const gameId = "123e4567-e89b-42d3-a456-426614174000";
+    const tag = `turn-${gameId}`;
+    for (const version of [2, 4, 6, 8]) {
+      matchAll.mockResolvedValueOnce([]);
+      await dispatchPush({ type: "your_turn", gameId, gameVersion: version, notificationTest: true });
+      await viewGame(gameId, version - 1);
+      await viewGame(gameId, version);
+      const notification = retainedNotifications.get(tag);
+      expect(notification).toBeDefined();
+      const receiptPath = `/__chessriot_turn_test__/${gameId}/${version}`;
+      const beforeTap = await diagnosticCache.get(receiptPath)?.clone().json() as TurnTestReceipt;
+      expect(beforeTap.clickedAt).toBeUndefined();
+      expect(turnTestReceiptOpened(beforeTap)).toBe(false);
+      matchAll.mockResolvedValueOnce([{ ...client, url: `https://dev.chessriot.gg/g/${gameId}` }]);
+      let completion: Promise<unknown> = Promise.resolve();
+      listeners.get("notificationclick")?.({
+        notification,
+        waitUntil: (promise) => { completion = promise; },
+      });
+      await completion;
+      expect(retainedNotifications.has(tag)).toBe(false);
+      const afterTap = await diagnosticCache.get(receiptPath)?.clone().json() as TurnTestReceipt;
+      expect(afterTap).toMatchObject({ clickedAt: expect.any(Number), visibleClients: 0 });
+      expect(turnTestReceiptOpened({ ...afterTap, openedAt: Date.now() })).toBe(true);
+    }
+    expect(focus).toHaveBeenCalledTimes(4);
+    expect(showNotification).toHaveBeenCalledTimes(4);
   });
 
   it("shows a friend request and deep-links to the Activity inbox", async () => {
@@ -420,7 +456,7 @@ describe("service-worker push display", () => {
     });
     expect(reply).toHaveBeenCalledWith({
       type: "chessriot:push-worker-version-response",
-      version: "0.29.0",
+      version: "0.29.1",
     });
   });
 
