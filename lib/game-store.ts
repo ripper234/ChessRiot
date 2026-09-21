@@ -1,3 +1,4 @@
+import { visiblePremove } from "./premoves";
 import { Chess } from "chess.js";
 import { ensureSchema, getDatabase } from "@/db";
 import { turnDeadlineAt } from "./game-deadlines";
@@ -27,6 +28,8 @@ import type {
 } from "./game-types";
 
 export interface GameRow {
+  white_premove_json?: string | null;
+  black_premove_json?: string | null;
   id: string;
   create_request_id: string;
   status: "waiting" | "active" | "completed";
@@ -577,6 +580,7 @@ export function snapshot(
     moves,
   }, nowMs);
   return {
+    premove: visiblePremove(game, you),
     id: game.id,
     mode: game.game_mode,
     variantId: normalizeGameVariantId(game.variant_id),

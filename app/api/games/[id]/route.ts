@@ -1,3 +1,4 @@
+import { readPremove } from "@/lib/premoves";
 import {
   computerColor,
   expireMultiplayerTurn,
@@ -67,7 +68,8 @@ export async function GET(
   if (game.world_code) await markMagicWorldPlayed(id);
 
   const since = new URL(request.url).searchParams.get("sinceVersion");
-  if (since !== null && Number(since) === game.version) {
+  if (since !== null && Number(since) === game.version
+    && Number(new URL(request.url).searchParams.get("premoveRevision") ?? 0) === readPremove(game, color).revision) {
     return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
   }
   return json({ game: snapshot(game, await readMoves(id), color) });

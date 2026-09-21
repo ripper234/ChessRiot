@@ -1,10 +1,13 @@
 "use client";
+import { translate } from "@/lib/locale";
 
 import Link from "next/link";
+import { useLanguage } from "./LanguageProvider";
 import { usePathname } from "next/navigation";
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
 import {
   AUTH_SESSION_CHANGED_EVENT,
+  readAuthSession,
   AUTH_SESSION_INVALIDATED_EVENT,
   publishAuthSessionChanged,
 } from "@/lib/auth-session-client";
@@ -183,6 +186,8 @@ function applyDocumentTheme(theme: ThemeId): void {
 }
 
 export function AppUpdates() {
+  const { locale, dir, t, saving: languageSaving, saveLocale } = useLanguage();
+  const [languageError, setLanguageError] = useState(false);
   const pathname = usePathname();
   const activeGameId = gameIdFromPathname(pathname);
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -298,12 +303,8 @@ export function AppUpdates() {
 
   const refreshGoogleSession = useCallback(async () => {
     try {
-      const response = await fetch("/api/auth/session", {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      if (!response.ok) throw new Error("We could not load your account status.");
-      const data = await response.json() as AuthSessionPayload;
+      const { response, data } = await readAuthSession<AuthSessionPayload>();
+      if (!response.ok || !data) throw new Error("We could not load your account status.");
       const name = data.signedIn === true
         && data.account
         && typeof data.account.displayName === "string"
@@ -914,7 +915,7 @@ export function AppUpdates() {
       } catch (error) {
         if (!isCurrent()) return;
         const pendingFailed = markPendingSetupFailed(
-          pushSetupRecoveryMessage(error, braveBrowser, "en"),
+          pushSetupRecoveryMessage(error, braveBrowser, locale),
           pushSetupTelemetryCode("reconcile", error),
         );
         if (!pendingFailed) {
@@ -931,7 +932,7 @@ export function AppUpdates() {
       cancelled = true;
       controller.abort();
     };
-  }, [braveBrowser, getServiceWorkerRegistration, googleUsername, pushOwnerReady, turnAlertsBusy, turnAlertsRefresh]);
+  }, [braveBrowser, getServiceWorkerRegistration, googleUsername, locale, pushOwnerReady, turnAlertsBusy, turnAlertsRefresh]);
 
   useEffect(() => {
     if (!googleUsername) return;
@@ -1186,7 +1187,7 @@ export function AppUpdates() {
       storeValue(notificationOfferDecisionKey(username), "setup-failed");
       reportClientEvent("client.error", pushSetupTelemetryCode("manual", error));
       setTurnAlertsMessageIsError(true);
-      setTurnAlertsMessage(pushSetupRecoveryMessage(error, braveBrowser, "en"));
+      setTurnAlertsMessage(pushSetupRecoveryMessage(error, braveBrowser, locale));
     } finally {
       setTurnAlertsBusy(false);
     }
@@ -1277,7 +1278,7 @@ export function AppUpdates() {
         registration,
         requestId,
         navigator.serviceWorker,
-        "en",
+        locale,
       );
       if (!isCurrent()) return;
       if (localResult === "missing") {
@@ -1331,15 +1332,15 @@ export function AppUpdates() {
           : "Restart the browser and try again.";
         let detail = "The push service accepted the request, but ChessRiot received no confirmation from the active background worker within 15 seconds.";
         if (stages.has("show_rejected")) {
-          detail = `The active background worker received the request, but ${browserName} rejected creation of a persistent notification.`;
+          detail = translate("en", "The active background worker received the request, but ${p0} rejected creation of a persistent notification.", {p0: browserName});
         } else if (stages.has("notification_closed")) {
           detail = "The active background worker created the server notification, but it closed before we could check whether it was retained. We cannot confirm that a banner appeared.";
         } else if (stages.has("notification_missing")) {
-          detail = `The active background worker created the server notification, but ${browserName} did not retain it.`;
+          detail = translate("en", "The active background worker created the server notification, but ${p0} did not retain it.", {p0: browserName});
         } else if (stages.has("show_resolved")) {
-          detail = `The active background worker received the request and ${browserName} accepted the notification call, but ChessRiot could not verify that the notification was retained.`;
+          detail = translate("en", "The active background worker received the request and ${p0} accepted the notification call, but ChessRiot could not verify that the notification was retained.", {p0: browserName});
         } else if (stages.has("push_received")) {
-          detail = `The active background worker received the request, but ${browserName} did not finish the notification call within 15 seconds.`;
+          detail = translate("en", "The active background worker received the request, but ${p0} did not finish the notification call within 15 seconds.", {p0: browserName});
         }
         const recovery = stages.has("show_rejected")
           || stages.has("show_resolved")
@@ -1348,7 +1349,7 @@ export function AppUpdates() {
             brave: braveBrowser,
             mobile: mobileNotificationSurface,
             windows: windowsPlatform,
-            locale: "en",
+            locale,
           })
           : restart;
         setTurnAlertsMessageIsError(true);
@@ -1367,7 +1368,7 @@ export function AppUpdates() {
             brave: braveBrowser,
             mobile: mobileNotificationSurface,
             windows: windowsPlatform,
-            locale: "en",
+            locale,
           }),
       ].filter(Boolean).join(" "));
     } catch (error) {
@@ -1428,17 +1429,17 @@ export function AppUpdates() {
         className={styles.launcher}
         type="button"
         ref={triggerRef}
-        lang="en"
-        dir="ltr"
+        lang={locale}
+        dir={dir}
         translate="no"
         aria-label={showNotificationSettingsBadge
-          ? "Open ChessRiot settings to fix notifications"
+          ? t("Open ChessRiot settings to fix notifications")
           : releaseDot
-            ? "Open ChessRiot menu, new version available"
-            : "Open ChessRiot menu"}
+            ? t("Open ChessRiot menu, new version available")
+            : t("Open ChessRiot menu")}
         aria-expanded={dialogOpen}
         aria-haspopup="dialog"
-        title="Settings"
+        title={t("Settings")}
         data-turn-alert-offer={showNotificationSettingsBadge ? "true" : undefined}
         data-notification-blocked={showBlockedNotificationRecovery ? "true" : undefined}
         onClick={openDialog}
@@ -1452,8 +1453,8 @@ export function AppUpdates() {
       {showNotificationSettingsBadge ? (
         <aside
           className={styles.notificationRecoveryBanner}
-          lang="en"
-          dir="ltr"
+          lang={locale}
+          dir={dir}
           translate="no"
           role={showBlockedNotificationRecovery ? "alert" : "status"}
           aria-labelledby="notification-recovery-title"
@@ -1461,13 +1462,13 @@ export function AppUpdates() {
           <span aria-hidden="true">🔔</span>
           <div>
             <strong id="notification-recovery-title">{showBlockedNotificationRecovery
-              ? "Notifications are blocked on this device"
-              : "Turn alerts are off for this device"}</strong>
+              ? t("Notifications are blocked on this device")
+              : t("Turn alerts are off for this device")}</strong>
             <small>{showBlockedNotificationRecovery
-              ? "Turn alerts and friend requests cannot arrive until you fix the permissions."
-              : "Enable notifications here to hear when your opponent moves, even with the app closed."}</small>
+              ? t("Turn alerts and friend requests cannot arrive until you fix the permissions.")
+              : t("Enable notifications here to hear when your opponent moves, even with the app closed.")}</small>
             {turnAlertsMessageIsError && turnAlertsMessage
-              ? <small role="status">{turnAlertsMessage}</small>
+              ? <small role="status">{t(turnAlertsMessage)}</small>
               : null}
           </div>
           <button type="button" disabled={turnAlertsBusy} onClick={
@@ -1475,23 +1476,23 @@ export function AppUpdates() {
               ? openDialog
               : () => void enableTurnAlerts()
           }>{showBlockedNotificationRecovery || !pushPublicKey
-              ? "Show setup instructions"
-              : turnAlertsBusy ? "Enabling…" : "Enable notifications"}</button>
+              ? t("Show setup instructions")
+              : turnAlertsBusy ? t("Enabling…") : t("Enable notifications")}</button>
           {!showBlockedNotificationRecovery ? (
             <button type="button" disabled={turnAlertsBusy} onClick={() => {
               if (!googleUsername) return;
               storeValue(notificationOfferDecisionKey(googleUsername), "dismissed");
               setNotificationOfferDecision("dismissed");
               setTurnAlertsRefresh((value) => value + 1);
-            }}>Not now</button>
+            }}>{t("Not now")}</button>
           ) : null}
         </aside>
       ) : null}
       <dialog
         className={styles.dialog}
         ref={dialogRef}
-        lang="en"
-        dir="ltr"
+        lang={locale}
+        dir={dir}
         translate="no"
         aria-labelledby="app-menu-title"
         onClose={() => {
@@ -1506,44 +1507,50 @@ export function AppUpdates() {
           <div className={styles.heading}>
             <div>
               <p>CHESSRIOT</p>
-              <h2 id="app-menu-title">Settings</h2>
+              <h2 id="app-menu-title">{t("Settings")}</h2>
             </div>
-            <button className={styles.close} type="button" onClick={closeDialog} aria-label="Close">×</button>
+            <button className={styles.close} type="button" onClick={closeDialog} aria-label={t("Close")}>×</button>
           </div>
 
-          <nav className={styles.quickLinks} aria-label="ChessRiot menu">
-            <Link href="/app" onClick={closeDialog}><span aria-hidden="true">♟</span>New game</Link>
-            <Link href="/history" onClick={closeDialog}><span aria-hidden="true">↶</span>History</Link>
-            <Link href="/changelog" onClick={closeDialog}><span aria-hidden="true">✦</span>What’s new</Link>
+          {googleUsername ? <label className={styles.section}>
+            {t("Language")}
+            <select aria-label={t("Language")} value={locale} disabled={languageSaving}
+              onChange={async (event) => { setLanguageError(!(await saveLocale(event.target.value === "he" ? "he" : "en"))); }}>
+              <option value="en" lang="en">English</option>
+              <option value="he" lang="he">עברית</option>
+            </select>
+            {languageError ? <span role="alert">{t("Could not save language. Try again.")}</span> : null}
+          </label> : null}
+
+          <nav className={styles.quickLinks} aria-label={t("ChessRiot menu")}>
+            <Link href="/app" onClick={closeDialog}><span aria-hidden="true">♟</span>{t("New game")}</Link>
+            <Link href="/history" onClick={closeDialog}><span aria-hidden="true">↶</span>{t("History")}</Link>
+            <Link href="/changelog" onClick={closeDialog}><span aria-hidden="true">✦</span>{t("What’s new")}</Link>
           </nav>
 
           {googleAuthReady && (googleAuthAvailable || googleAccountName || googleAuthMessage) ? (
             <details className={styles.group} open>
-              <summary><span aria-hidden="true">●</span><b>Account</b></summary>
+              <summary><span aria-hidden="true">●</span><b>{t("Account")}</b></summary>
               <div className={styles.groupBody}>
                 {googleAccountName ? (
                   <>
-                    <p>Signed in as <strong><bdi dir="auto">{googleAccountName}</bdi></strong>. Every game you create or join is saved automatically.</p>
-                    <Link className={styles.communityAction} href="/history" onClick={closeDialog}>View game history</Link>
-                    <Link className={styles.communityAction} href="/privacy-center" onClick={closeDialog}>Privacy and data</Link>
-                    <button className={styles.action} type="button" onClick={startTutorial}>
-                      Start a quick tutorial
-                    </button>
+                    <p>{t("Signed in as")}{" "}<strong><bdi dir="auto">{googleAccountName}</bdi></strong>{t(". Every game you create or join is saved automatically.")}</p>
+                    <Link className={styles.communityAction} href="/history" onClick={closeDialog}>{t("View game history")}</Link>
+                    <Link className={styles.communityAction} href="/privacy-center" onClick={closeDialog}>{t("Privacy and data")}</Link>
+                    <button className={styles.action} type="button" onClick={startTutorial}>{t("Start a quick tutorial")}{" "}</button>
                     <button
                       className={styles.action}
                       type="button"
                       disabled={googleAuthBusy}
                       onClick={() => void signOutGoogle()}
                     >
-                      {googleAuthBusy ? "Signing out…" : "Sign out"}
+                      {googleAuthBusy ? t("Signing out…") : t("Sign out")}
                     </button>
                   </>
                 ) : (
                   <>
-                    <p>Sign in with your registered Google account to play and keep every game in your history.</p>
-                    <button className={styles.action} type="button" onClick={startGoogleLogin}>
-                      Continue with Google
-                    </button>
+                    <p>{t("Sign in with your registered Google account to play and keep every game in your history.")}</p>
+                    <button className={styles.action} type="button" onClick={startGoogleLogin}>{t("Continue with Google")}{" "}</button>
                   </>
                 )}
                 {googleAuthMessage ? (
@@ -1551,7 +1558,7 @@ export function AppUpdates() {
                     className={styles.note}
                     role={googleAuthMessageIsError ? "alert" : "status"}
                   >
-                    {googleAuthMessage}
+                    {t(googleAuthMessage)}
                   </p>
                 ) : null}
               </div>
@@ -1563,11 +1570,11 @@ export function AppUpdates() {
             open={appearanceOpen}
             onToggle={(event) => setAppearanceOpen(event.currentTarget.open)}
           >
-            <summary><span aria-hidden="true">◈</span><b>Appearance and theme</b></summary>
+            <summary><span aria-hidden="true">◈</span><b>{t("Appearance and theme")}</b></summary>
             <div className={styles.groupBody}>
-              <p>Change the look of the app, including screens, menus, board, pieces, music, and effects.</p>
+              <p>{t("Change the look of the app, including screens, menus, board, pieces, music, and effects.")}</p>
               {dialogOpen && appearanceOpen ? <fieldset className={styles.skinGrid}>
-              <legend className="visually-hidden">ChessRiot theme</legend>
+              <legend className="visually-hidden">{t("ChessRiot theme")}</legend>
               {THEMES.map((theme) => (
                 <label data-selected={selectedTheme === theme.id} key={theme.id}>
                   <input
@@ -1596,26 +1603,26 @@ export function AppUpdates() {
           </details>
 
           <details className={styles.group}>
-            <summary><span aria-hidden="true">♫</span><b>Sound, music, and volume</b></summary>
+            <summary><span aria-hidden="true">♫</span><b>{t("Sound, music, and volume")}</b></summary>
             <div className={styles.groupBody}>
               <label className={styles.toggleRow}>
                 <input type="checkbox" checked={soundOn} onChange={toggleSoundEffects} />
-                <span><strong>Sound effects</strong><small>Moves, captures, checks, and results</small></span>
-                <b>{soundOn ? "On" : "Off"}</b>
+                <span><strong>{t("Sound effects")}</strong><small>{t("Moves, captures, checks, and results")}</small></span>
+                <b>{soundOn ? t("On") : t("Off")}</b>
               </label>
               <label className={styles.volumeControl}>
-                <span>Effects volume</span>
+                <span>{t("Effects volume")}</span>
                 <output>{Math.round(effectsVolume * 100)}%</output>
                 <input type="range" min="0" max="1" step="0.05" value={effectsVolume}
                   onChange={(event) => changeEffectsVolume(Number(event.currentTarget.value))} />
               </label>
               <label className={styles.toggleRow}>
                 <input type="checkbox" checked={musicOn} onChange={toggleMusic} />
-                <span><strong>Music</strong><small>Background music matched to your theme</small></span>
-                <b>{musicOn ? "On" : "Off"}</b>
+                <span><strong>{t("Music")}</strong><small>{t("Background music matched to your theme")}</small></span>
+                <b>{musicOn ? t("On") : t("Off")}</b>
               </label>
               <label className={styles.volumeControl}>
-                <span>Music volume</span>
+                <span>{t("Music volume")}</span>
                 <output>{Math.round(musicVolume * 100)}%</output>
                 <input type="range" min="0" max="1" step="0.05" value={musicVolume}
                   onChange={(event) => changeMusicVolume(Number(event.currentTarget.value))} />
@@ -1624,11 +1631,11 @@ export function AppUpdates() {
           </details>
 
           <details className={styles.group}>
-            <summary><span aria-hidden="true">✓</span><b>Game assistance</b></summary>
+            <summary><span aria-hidden="true">✓</span><b>{t("Game assistance")}</b></summary>
             <div className={styles.groupBody}>
-              <label className={styles.toggleRow}><input type="checkbox" checked={chessCoachOn} onChange={toggleCoach} /><span><strong>Chess coach</strong><small>Warnings before risky moves</small></span><b>{chessCoachOn ? "On" : "Off"}</b></label>
-              <label className={styles.toggleRow}><input type="checkbox" checked={tacticalCelebrationsOn} onChange={toggleCelebrations} /><span><strong>Celebrate great moves</strong><small>Celebrate forks and material gains</small></span><b>{tacticalCelebrationsOn ? "On" : "Off"}</b></label>
-              <label className={styles.toggleRow}><input type="checkbox" checked={confirmEveryMove} onChange={toggleMoveConfirmation} /><span><strong>Confirm every move</strong><small>Ask before sending each move</small></span><b>{confirmEveryMove ? "On" : "Off"}</b></label>
+              <label className={styles.toggleRow}><input type="checkbox" checked={chessCoachOn} onChange={toggleCoach} /><span><strong>{t("Chess coach")}</strong><small>{t("Warnings before risky moves")}</small></span><b>{chessCoachOn ? t("On") : t("Off")}</b></label>
+              <label className={styles.toggleRow}><input type="checkbox" checked={tacticalCelebrationsOn} onChange={toggleCelebrations} /><span><strong>{t("Celebrate great moves")}</strong><small>{t("Celebrate forks and material gains")}</small></span><b>{tacticalCelebrationsOn ? t("On") : t("Off")}</b></label>
+              <label className={styles.toggleRow}><input type="checkbox" checked={confirmEveryMove} onChange={toggleMoveConfirmation} /><span><strong>{t("Confirm every move")}</strong><small>{t("Ask before sending each move")}</small></span><b>{confirmEveryMove ? t("On") : t("Off")}</b></label>
             </div>
           </details>
 
@@ -1638,43 +1645,41 @@ export function AppUpdates() {
               className={styles.section}
               aria-labelledby="notification-settings-title"
             >
-              <h3 id="notification-settings-title"><span aria-hidden="true">♟</span> Notifications</h3>
-              <p>
-                Get friend requests, turn alerts, and service or test messages on this device, even with ChessRiot closed.
-              </p>
+              <h3 id="notification-settings-title"><span aria-hidden="true">♟</span>{" "}{t("Notifications")}</h3>
+              <p>{t("Get friend requests, turn alerts, and service or test messages on this device, even with ChessRiot closed.")}{" "}</p>
               {!pushReady ? (
-                <p className={styles.note} role="status">Checking notification status…</p>
+                <p className={styles.note} role="status">{t("Checking notification status…")}</p>
               ) : !turnAlertsStatusKnown && turnAlertsSupported && turnAlertsAvailable && pushPublicKey ? (
                 <div>
-                  <p className={styles.note} role="alert">We could not verify your notification status. Try again before changing this setting.</p>
+                  <p className={styles.note} role="alert">{t("We could not verify your notification status. Try again before changing this setting.")}</p>
                   <button
                     className={styles.action}
                     type="button"
                     onClick={() => setTurnAlertsRefresh((value) => value + 1)}
-                  >Recheck notifications</button>
+                  >{t("Recheck notifications")}</button>
                 </div>
               ) : !turnAlertsSupported ? (
-                <p className={styles.note}>{unsupportedPushMessage(braveBrowser)}</p>
+                <p className={styles.note}>{t(unsupportedPushMessage(braveBrowser))}</p>
               ) : !turnAlertsAvailable || !pushPublicKey ? (
-                <p className={styles.note}>Notifications are not configured for this ChessRiot environment.</p>
+                <p className={styles.note}>{t("Notifications are not configured for this ChessRiot environment.")}</p>
               ) : notificationPermission === "denied" ? (
                 <div className={styles.permissionRecovery} role="alert">
-                  <strong>Notifications are blocked in your device settings.</strong>
+                  <strong>{t("Notifications are blocked in your device settings.")}</strong>
                   {androidPlatform ? (
                     <ol>
-                      <li>Open Android Settings, then Apps → Chrome. If ChessRiot is installed as an app, select ChessRiot instead of Chrome.</li>
-                      <li>Choose Notifications and turn on Allow notifications.</li>
-                      <li>In Chrome, open ⋮ → Settings → Site settings → Notifications → <bdi dir="ltr">{notificationHostname}</bdi> and choose Allow.</li>
-                      <li>Return to ChessRiot and use the button below.</li>
+                      <li>{t("Open Android Settings, then Apps → Chrome. If ChessRiot is installed as an app, select ChessRiot instead of Chrome.")}</li>
+                      <li>{t("Choose Notifications and turn on Allow notifications.")}</li>
+                      <li>{t("In Chrome, open ⋮ → Settings → Site settings → Notifications →")}{" "}<bdi dir="ltr">{notificationHostname}</bdi>{" "}{t("and choose Allow.")}</li>
+                      <li>{t("Return to ChessRiot and use the button below.")}</li>
                     </ol>
                   ) : (
-                    <p>Allow ChessRiot notifications in both your browser’s site settings and your device’s notification settings, then return here.</p>
+                    <p>{t("Allow ChessRiot notifications in both your browser’s site settings and your device’s notification settings, then return here.")}</p>
                   )}
                   <button
                     className={styles.action}
                     type="button"
                     onClick={recheckNotificationPermission}
-                  >I checked, try again</button>
+                  >{t("I checked, try again")}</button>
                 </div>
               ) : (
                 <label className={styles.toggleRow}>
@@ -1684,13 +1689,13 @@ export function AppUpdates() {
                     disabled={!pushReady || turnAlertsBusy}
                     onChange={() => void (notificationToggle.checked ? disableTurnAlerts() : enableTurnAlerts())}
                   />
-                  <span><strong>CHESSRIOT notifications</strong><small>{turnAlertsBusy ? "Saving…" : notificationToggleDetail}</small></span>
+                  <span><strong>{t("CHESSRIOT notifications")}</strong><small>{turnAlertsBusy ? t("Saving…") : notificationToggleDetail}</small></span>
                   <b>{notificationToggleStatus}</b>
                 </label>
               )}
-              <Link className={styles.communityAction} href="/notification-test" onClick={closeDialog}>Full one-device test · 4 turns</Link>
+              <Link className={styles.communityAction} href="/notification-test" onClick={closeDialog}>{t("Full one-device test · 4 turns")}</Link>
               {legacyTurnAlertsEnabled && !turnAlertsEnabled ? (
-                <p className={styles.note}>Turn alerts are still on for older games only. Turn this setting off to disable them.</p>
+                <p className={styles.note}>{t("Turn alerts are still on for older games only. Turn this setting off to disable them.")}</p>
               ) : null}
               {turnAlertsEnabled && turnAlertsStatusKnown ? (
                 <button
@@ -1698,7 +1703,7 @@ export function AppUpdates() {
                   type="button"
                   disabled={turnAlertsBusy}
                   onClick={() => void testTurnAlerts()}
-                >{turnAlertsBusy ? "Checking…" : "Test this device"}</button>
+                >{turnAlertsBusy ? t("Checking…") : t("Test this device")}</button>
               ) : null}
               {turnAlertsMessage ? (
                 <>
@@ -1706,14 +1711,14 @@ export function AppUpdates() {
                     className={styles.note}
                     role={turnAlertsMessageIsError ? "alert" : "status"}
                   >
-                    {turnAlertsMessage}
+                    {t(turnAlertsMessage)}
                   </p>
                   {braveBrowser && !mobileNotificationSurface ? (
                     <a
                       href="https://support.brave.app/hc/en-us/articles/360058972091-Push-Notification-Test"
                       target="_blank"
                       rel="noopener noreferrer"
-                    >Run the official Brave test</a>
+                    >{t("Run the official Brave test")}</a>
                   ) : null}
                 </>
               ) : null}
@@ -1722,50 +1727,44 @@ export function AppUpdates() {
 
           {activeGameId ? (
             <section className={styles.section} aria-labelledby="game-settings-title">
-              <h3 id="game-settings-title"><span aria-hidden="true">♜</span> Current game</h3>
+              <h3 id="game-settings-title"><span aria-hidden="true">♜</span>{" "}{t("Current game")}</h3>
               {gameMenuState && gameMenuState.status !== "completed" ? (
                 <button
                   className={`${styles.action} ${styles.danger}`}
                   type="button"
                   onClick={requestSurrender}
                 >
-                  {gameMenuState?.status === "waiting" ? "Cancel game" : "Resign"}
+                  {gameMenuState?.status === "waiting" ? t("Cancel game") : t("Resign")}
                 </button>
               ) : null}
             </section>
           ) : null}
 
           <details className={styles.group}>
-            <summary><span aria-hidden="true">✎</span><b>Send feedback</b></summary>
+            <summary><span aria-hidden="true">✎</span><b>{t("Send feedback")}</b></summary>
             <div className={styles.groupBody}><FeedbackForm /></div>
           </details>
 
           <details className={styles.group}>
-            <summary><span aria-hidden="true">↗</span><b>App, updates, and community</b></summary>
+            <summary><span aria-hidden="true">↗</span><b>{t("App, updates, and community")}</b></summary>
             <div className={styles.groupBody}>
               <p>
                 {availableVersion
-                  ? <>Version <bdi dir="ltr">v{availableVersion}</bdi> is ready. Reload to use it.</>
-                  : <>Version <bdi dir="ltr">v{APP_VERSION}</bdi> is installed.</>}
+                  ? <>{t("Version")}{" "}<bdi dir="ltr">v{availableVersion}</bdi>{" "}{t("is ready. Reload to use it.")}</>
+                  : <>{t("Version")}{" "}<bdi dir="ltr">v{APP_VERSION}</bdi>{" "}{t("is installed.")}</>}
               </p>
               {availableVersion ? (
-                <button className={styles.action} type="button" onClick={() => window.location.reload()}>
-                  Reload to update
-                </button>
+                <button className={styles.action} type="button" onClick={() => window.location.reload()}>{t("Reload to update")}{" "}</button>
               ) : null}
               {!installed && installPrompt ? (
-                <button className={styles.action} type="button" onClick={() => void installApp()}>
-                  Install CHESSRIOT
-                </button>
+                <button className={styles.action} type="button" onClick={() => void installApp()}>{t("Install CHESSRIOT")}{" "}</button>
               ) : null}
               <a
                 className={styles.communityAction}
                 href={WHATSAPP_COMMUNITY_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-              >
-                Join the WhatsApp community
-              </a>
+              >{t("Join the WhatsApp community")}{" "}</a>
             </div>
           </details>
         </div>

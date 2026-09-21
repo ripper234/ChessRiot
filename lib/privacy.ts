@@ -331,6 +331,7 @@ export async function exportAccountData(accountId: string): Promise<Record<strin
       createdAt: accountRow.created_at,
       lastSeenAt: accountRow.last_seen_at,
       tutorialStatus: profile.tutorialStatus,
+      locale: profile.locale,
     },
     social: {
       friends: social.friends.map((person) => person.username),

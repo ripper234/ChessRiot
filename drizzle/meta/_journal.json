@@ -211,6 +211,20 @@
       "when": 1789931950826,
       "tag": "0029_yielding_tinkerer",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1790012854323,
+      "tag": "0030_chilly_miracleman",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1790012928388,
+      "tag": "0031_old_wendell_rand",
+      "breakpoints": true
     }
   ]
 }

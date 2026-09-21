@@ -1,4 +1,4 @@
-# ChessRiot v0.30.1 specification
+# ChessRiot v0.31.0 specification
 
 ## Asynchronous invitations and early openings (v0.30.0)
 
@@ -1232,3 +1232,11 @@ has already played before the accept action. Notification tests with missing
 prior-round evidence offer restart before waiting for or confirming later rounds.
 Plain-text game statuses and recap shares isolate user names for bidirectional
 text. Every release passes the production dependency audit locally and in CI.
+
+## Planned replies and account language (v0.31)
+
+Active multiplayer games allow each participant to save one private planned move during the opponent's turn. A destination may currently contain their own piece. The server validates the move after the opponent's complete action, executes it once if legal in the same transaction, otherwise discards it. Cancellation/replacement is revision guarded; only the final position sends a turn alert. No app or second device needs to stay open. Planning does not alter the current board or clocks.
+
+Language is an authenticated account preference (English by default, Hebrew optional). Game and Settings copy use that player's preference independently of the opponent; chess notation and board geometry remain LTR.
+
+Direct friend challenges queue a durable recipient-device push inside creation. Dispatch rechecks that the invitation is pending and still belongs to that account. Pending White openings remain eligible. Notification opening may prefetch only authenticated data in memory, scoped to the current account, and reuse an existing app window with a bounded navigation fallback.

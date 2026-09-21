@@ -145,7 +145,10 @@ export function gameStatusText(input: GameStatusTextInput): string {
   } = input;
   if (viewingHistory) return historyLabel;
   if (game.status === "waiting") {
-    if (locale === "he") return "ממתינים לשחקן שני";
+    if (locale === "he") {
+      if (canPlayPendingOpening(game, game.you.color)) return "אפשר לשחק את מהלך הפתיחה";
+      return game.you.color === "w" && game.plyCount > 0 ? "מהלך הפתיחה נשמר · ממתינים לאישור" : "ממתינים לאישור";
+    }
     if (canPlayPendingOpening(game, game.you.color)) return "You can play your opening move";
     return game.you.color === "w" && game.plyCount > 0
       ? "Opening saved · Awaiting acceptance" : "Awaiting acceptance";

@@ -20,6 +20,8 @@ export const games = sqliteTable(
     winnerColor: text("winner_color"),
     termination: text("termination"),
     lastMutationNonce: text("last_mutation_nonce"),
+    whitePremoveJson: text("white_premove_json"),
+    blackPremoveJson: text("black_premove_json"),
     createdAt: text("created_at").notNull(),
     joinedAt: text("joined_at"),
     updatedAt: text("updated_at").notNull(),
@@ -176,6 +178,7 @@ export const accounts = sqliteTable("accounts", {
   usernameCanonical: text("username_canonical"),
   usernameSetAt: text("username_set_at"),
   tutorialStatus: text("tutorial_status").notNull().default("skipped"),
+  locale: text("locale").notNull().default("en"),
   createdAt: text("created_at").notNull(),
   lastSeenAt: text("last_seen_at").notNull(),
   lastCaptchaAt: text("last_captcha_at").notNull(),
@@ -687,8 +690,8 @@ export const pushAccountDeliveries = sqliteTable(
       .notNull()
       .references(() => pushDevices.id, { onDelete: "cascade" }),
     friendRequestId: text("friend_request_id")
-      .notNull()
       .references(() => friendRequests.id, { onDelete: "cascade" }),
+    gameId: text("game_id").references(() => games.id, { onDelete: "cascade" }),
     kind: text("kind").notNull(),
     status: text("status").notNull(),
     statusCode: integer("status_code"),
@@ -702,12 +705,14 @@ export const pushAccountDeliveries = sqliteTable(
   (table) => [
     uniqueIndex("push_account_deliveries_once_unique")
       .on(table.deviceId, table.friendRequestId, table.kind),
+    uniqueIndex("push_account_deliveries_challenge_unique")
+      .on(table.deviceId, table.gameId, table.kind),
     index("push_account_deliveries_created_idx").on(table.createdAt),
     index("push_account_deliveries_due_idx")
       .on(table.status, table.nextAttemptAt, table.leaseUntil),
     check(
       "push_account_deliveries_kind_check",
-      sql`${table.kind} IN ('friend_request')`,
+      sql`(${table.kind} = 'friend_request' AND ${table.friendRequestId} IS NOT NULL AND ${table.gameId} IS NULL) OR (${table.kind} = 'challenge' AND ${table.gameId} IS NOT NULL AND ${table.friendRequestId} IS NULL)`,
     ),
     check(
       "push_account_deliveries_status_check",

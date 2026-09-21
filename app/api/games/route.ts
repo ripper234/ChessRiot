@@ -42,6 +42,7 @@ import {
   MAGIC_RULES_FEATURE,
 } from "@/lib/social";
 import { validateUsername } from "@/lib/usernames";
+import { queueChallengeNotifications } from "@/lib/push-notifications";
 import { notificationTestDevice } from "@/lib/notification-turn-test";
 
 export const dynamic = "force-dynamic";
@@ -336,6 +337,7 @@ export async function POST(request: Request) {
           game_id, color, account_id, claimed_at
         ) VALUES (?, 'b', ?, ?)`)
           .bind(id, directOpponent.id, now),
+        queueChallengeNotifications(db, { gameId: id, recipientAccountId: directOpponent.id, createdAt: now }),
       );
     }
     if (opening && openingCandidate && computerColor) {

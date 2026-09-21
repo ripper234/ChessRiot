@@ -1,3 +1,4 @@
+import { premoveColumn, readPremove, validPremove, type PremoveState } from "@/lib/premoves";
 import type { Square } from "chess.js";
 import { getDatabase } from "@/db";
 import {
@@ -149,10 +150,16 @@ function storedMove(
   };
 }
 
-export async function POST(
+export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
+  return commitMove(request, context, 2);
+}
+
+async function commitMove(
   request: Request,
   context: { params: Promise<{ id: string }> },
-) {
+  remainingRetries: number,
+): Promise<Response> {
+  const retryRequest = request.clone() as Request;
   if (!requestIsSameOrigin(request)) return apiError(403, "wrong_origin", "Request origin is not allowed");
   const { id } = await context.params;
   const authorization = await authorizeGameRequest(request, id);
@@ -340,6 +347,31 @@ export async function POST(
     botLatencyMs = performance.now() - botStartedAt;
   }
 
+  const queuedColor = color === "w" ? "b" : "w";
+  const queuedColumn = premoveColumn(queuedColor);
+  const queued = readPremove(game, queuedColor);
+  let consumedPremove: PremoveState | null = null;
+  let premoveOwner: string | null = null;
+  if (!pendingOpening && game.game_mode === "multiplayer" && queued.status === "queued") {
+    consumedPremove = { ...queued, revision: queued.revision + 1, status: "invalid", move: null };
+    if (!humanOutcome.completed && queued.version === game.version && validPremove(queued.move)
+      && queued.accountId) {
+      const membership = await getDatabase().prepare(`SELECT membership.account_id
+        FROM game_memberships AS membership JOIN accounts ON accounts.id = membership.account_id
+        WHERE membership.game_id = ? AND membership.color = ? AND membership.account_id = ?`)
+        .bind(id, queuedColor, queued.accountId).first<{ account_id: string }>();
+      if (membership) {
+        try {
+          botOutcome = applyCandidate(game.initial_fen, [...storedMoves, humanMove], queued.move, magicRules);
+          botMove = storedMove(humanPly + 1, crypto.randomUUID(), queued.move, botOutcome, now);
+          consumedPremove.status = "played";
+          premoveOwner = membership.account_id;
+        } catch (error) {
+          if (!(error instanceof IllegalMoveError)) throw error;
+        }
+      }
+    }
+  }
   const finalOutcome = botOutcome ?? humanOutcome;
   const advancedPlies = botMove ? 2 : 1;
   const nextVersion = game.version + advancedPlies;
@@ -349,8 +381,13 @@ export async function POST(
   const update = db
     .prepare(`UPDATE games SET
       status = ?, current_fen = ?, turn_color = ?, version = ?, ply_count = ?,
-      winner_color = ?, termination = ?, last_mutation_nonce = ?, updated_at = ?, finished_at = ?
+      winner_color = ?, termination = ?, last_mutation_nonce = ?, updated_at = ?, finished_at = ?,
+      ${queuedColumn} = ?
       WHERE id = ? AND version = ? AND status = ? AND turn_color = ?
+        AND ${queuedColumn} IS ?
+        AND (? IS NULL OR EXISTS (SELECT 1 FROM game_memberships AS queued_member
+          JOIN accounts ON accounts.id = queued_member.account_id
+          WHERE queued_member.game_id = games.id AND queued_member.color = ? AND queued_member.account_id = ?))
         AND (? = 0 OR (joined_at IS NULL AND ply_count = 0))
         AND (? IS NULL OR julianday('now') < julianday(?))
         AND EXISTS (
@@ -370,10 +407,13 @@ export async function POST(
       attemptNonce,
       now,
       finalOutcome.completed ? now : null,
+      consumedPremove ? JSON.stringify(consumedPremove) : game[queuedColumn] ?? null,
       id,
       expectedVersion,
       game.status,
       color,
+      game[queuedColumn] ?? null,
+      premoveOwner, queuedColor, premoveOwner,
       pendingOpening ? 1 : 0,
       deadlineAt,
       deadlineAt,
@@ -441,8 +481,7 @@ export async function POST(
   }
   const requiredWriteCount = writes.length;
   const shouldNotifyOpponent = game.game_mode === "multiplayer"
-    && status === "active"
-    && finalOutcome.turn !== color;
+    && status === "active";
   if (shouldNotifyOpponent) {
     writes.push(...queueTurnNotifications(db, {
       gameId: id,
@@ -485,7 +524,12 @@ export async function POST(
   }
 
   if (!results.slice(0, requiredWriteCount).every((result) => changes(result) === 1)) {
+    const previousQueue = game[queuedColumn] ?? null;
     game = await findGameById(id);
+    if (game && game.version === expectedVersion && remainingRetries > 0
+      && (game[queuedColumn] ?? null) !== previousQueue) {
+      return commitMove(retryRequest, context, remainingRetries - 1);
+    }
     if (game) game = await expireMultiplayerTurn(game);
     storedMoves = await readMoves(id);
     const wonRace = storedMoves.find((move) => move.requestId === requestId);
@@ -514,6 +558,7 @@ export async function POST(
 
   const committedGame: GameRow = {
     ...game,
+    [queuedColumn]: consumedPremove ? JSON.stringify(consumedPremove) : game[queuedColumn],
     status,
     current_fen: finalOutcome.fenAfter,
     turn_color: finalOutcome.turn,

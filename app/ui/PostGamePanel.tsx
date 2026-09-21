@@ -1,3 +1,6 @@
+"use client";
+
+import { useLanguage } from "./LanguageProvider";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { GameSnapshot, Termination } from "@/lib/game-types";
@@ -36,6 +39,7 @@ export function PostGamePanel({
   onDismiss: () => void;
   onReview: () => void;
 }) {
+  const { locale, dir, t } = useLanguage();
   const setup = new URLSearchParams({ mode: game.mode, variant: game.variantId });
   if (game.aiDifficulty) setup.set("difficulty", String(game.aiDifficulty));
   if (game.turnPaceDays) setup.set("pace", String(game.turnPaceDays));
@@ -73,12 +77,12 @@ export function PostGamePanel({
         error?: { message?: unknown };
       };
       if (!response.ok || typeof payload.url !== "string") {
-        throw new Error("Could not create a game recap link.");
+        throw new Error(t("Could not create a game recap link."));
       }
       setRecapUrl(payload.url);
       const data = {
         title: recapShareTitle(game),
-        text: "Replay this completed ChessRiot game.",
+        text: t("Replay this completed ChessRiot game."),
         url: payload.url,
       };
       if (typeof navigator.share === "function") {
@@ -124,24 +128,24 @@ export function PostGamePanel({
   }
 
   return (
-    <section className="post-game-panel" dir="ltr" aria-labelledby="post-game-title" role="region">
-      <button className="post-game-dismiss" type="button" onClick={onDismiss} aria-label="Close game result">×</button>
-      <small>Final result</small>
-      <h2 id="post-game-title" ref={titleRef} tabIndex={-1}>{outcomeHeading(game)}</h2>
-      <p>{game.outcome ? REASON_LABELS[game.outcome.reason] : "Game over"}</p>
+    <section className="post-game-panel" dir={dir} lang={locale} aria-labelledby="post-game-title" role="region">
+      <button className="post-game-dismiss" type="button" onClick={onDismiss} aria-label={t("Close game result")}>×</button>
+      <small>{t("Final result")}</small>
+      <h2 id="post-game-title" ref={titleRef} tabIndex={-1}>{t(outcomeHeading(game))}</h2>
+      <p>{game.outcome ? REASON_LABELS[game.outcome.reason] : t("Game over")}</p>
       <div className="post-game-actions">
-        <Link className="primary-button" href={`/app?${setup}`}>Play again</Link>
-        <button className="secondary-button" type="button" onClick={onReview}>Review moves</button>
+        <Link className="primary-button" href={`/app?${setup}`}>{t("Play again")}</Link>
+        <button className="secondary-button" type="button" onClick={onReview}>{t("Review moves")}</button>
         <button className="secondary-button" type="button" disabled={shareBusy} onClick={() => void shareRecap()}>
-          {shareBusy ? "Preparing…" : "Share recap"}
+          {shareBusy ? t("Preparing…") : t("Share recap")}
         </button>
-        <Link className="quiet-button" href="/">Back to games</Link>
+        <Link className="quiet-button" href="/">{t("Back to games")}</Link>
       </div>
       {recapUrl ? <div className="post-game-recap-link">
-        <input dir="ltr" aria-label="Public recap link" value={recapUrl} readOnly onFocus={(event) => event.currentTarget.select()} />
-        <button type="button" disabled={shareBusy} onClick={() => void stopSharing()}>Stop sharing</button>
+        <input dir="ltr" aria-label={t("Public recap link")} value={recapUrl} readOnly onFocus={(event) => event.currentTarget.select()} />
+        <button type="button" disabled={shareBusy} onClick={() => void stopSharing()}>{t("Stop sharing")}</button>
       </div> : null}
-      {shareMessage ? <small className={shareError ? "form-error" : "form-success"} role={shareError ? "alert" : "status"}>{shareMessage}</small> : null}
+      {shareMessage ? <small className={shareError ? "form-error" : "form-success"} role={shareError ? "alert" : "status"}>{t(shareMessage)}</small> : null}
     </section>
   );
 }

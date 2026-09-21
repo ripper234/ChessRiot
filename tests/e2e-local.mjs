@@ -13,6 +13,9 @@ import { join, resolve } from "node:path";
 import { Miniflare } from "miniflare";
 import { Chess } from "chess.js";
 import { caseFold } from "unicode-case-folding";
+import { verifyAccountPreferences } from "./e2e-preferences.mjs";
+import { verifyPremoves } from "./e2e-premoves.mjs";
+import { verifyChallengePush } from "./e2e-challenge-push.mjs";
 import { verifyPendingOpenings } from "./e2e-pending-opening.mjs";
 
 const origin = "http://chessriot.test";
@@ -226,9 +229,14 @@ async function ensureTestMigrations(runtime) {
   if (!migrationReadiness.has(runtime)) migrationReadiness.set(runtime, (async () => {
     const database = await runtime.getD1Database("DB");
     const columns = await database.prepare("PRAGMA table_info(game_settings)").all();
-    if (columns.results.some((column) => column.name === "notification_test_device_id")) return;
+    const accountColumns = await database.prepare("PRAGMA table_info(accounts)").all();
+    const gameColumns = await database.prepare("PRAGMA table_info(games)").all();
+    const start = !columns.results.length ? 0
+      : !columns.results.some(column => column.name === "notification_test_device_id") ? 29
+      : !accountColumns.results.some(column => column.name === "locale") ? 30
+      : !gameColumns.results.some(column => column.name === "white_premove_json") ? 31 : 32;
     const files = (await readdir(resolve("drizzle"))).filter((name) => /^\d{4}_.+\.sql$/.test(name)).sort();
-    for (const file of columns.results.length ? files.filter((name) => name.startsWith("0029_")) : files) {
+    for (const file of files.filter(name => Number(name.slice(0, 4)) >= start)) {
       const sql = await readFile(resolve("drizzle", file), "utf8");
       for (const statement of sql.split("--> statement-breakpoint").map((value) => value.trim()).filter(Boolean)) {
         await database.prepare(statement.replace(/;$/, "")).run();
@@ -1219,15 +1227,69 @@ async function verifyFullMigrationChain() {
       .map((entry) => entry.name)
       .sort();
     assert.equal(migrationFiles[0]?.startsWith("0000_"), true);
-    assert.equal(migrationFiles.at(-1)?.startsWith("0029_"), true);
+    assert.equal(migrationFiles.at(-1)?.startsWith("0031_"), true);
 
+    let beforeChallengeMigration;
     for (const file of migrationFiles) {
+      if (file.startsWith("0030_")) {
+        await database.batch([
+          database.prepare(`INSERT INTO accounts (
+            id, display_name, username, username_canonical,
+            created_at, last_seen_at, last_captcha_at
+          ) VALUES
+            ('migration-sender', 'Sender', 'MigrationSender', 'migrationsender',
+              '2026-09-01T00:00:00.000Z', '2026-09-02T00:00:00.000Z', '2026-09-01T00:00:00.000Z'),
+            ('migration-recipient', 'Recipient', 'MigrationRecipient', 'migrationrecipient',
+              '2026-09-01T00:00:00.000Z', '2026-09-02T00:00:00.000Z', '2026-09-01T00:00:00.000Z')`),
+          database.prepare(`INSERT INTO push_devices (
+            id, account_id, endpoint_hash, endpoint, p256dh, auth,
+            expiration_time, created_at, updated_at, last_success_at, failure_count
+          ) VALUES ('migration-device', 'migration-recipient', 'migration-endpoint-hash',
+            'https://fcm.googleapis.com/fcm/send/migration-preservation',
+            'migration-public-key', 'migration-auth-key', 1893456000000,
+            '2026-09-01T00:00:00.000Z', '2026-09-02T00:00:00.000Z',
+            '2026-09-01T12:00:00.000Z', 2)`),
+          database.prepare(`INSERT INTO friend_requests (
+            id, pair_key, sender_account_id, recipient_account_id, status, created_at
+          ) VALUES ('migration-friend-request', 'migration-recipient:migration-sender',
+            'migration-sender', 'migration-recipient', 'pending', '2026-09-02T00:00:00.000Z')`),
+          database.prepare(`INSERT INTO push_account_deliveries (
+            id, device_id, friend_request_id, kind, status, status_code,
+            attempt_count, next_attempt_at, lease_token, lease_until, created_at, updated_at
+          ) VALUES ('migration-friend-delivery', 'migration-device', 'migration-friend-request',
+            'friend_request', 'pending', 503, 2, 1790000000000,
+            'migration-in-flight-lease', 1790000015000,
+            '2026-09-02T00:00:00.000Z', '2026-09-02T00:01:00.000Z')`),
+        ]);
+        beforeChallengeMigration = {
+          accounts: (await database.prepare("SELECT * FROM accounts ORDER BY id").all()).results,
+          device: await database.prepare("SELECT * FROM push_devices WHERE id = 'migration-device'").first(),
+          request: await database.prepare("SELECT * FROM friend_requests WHERE id = 'migration-friend-request'").first(),
+          delivery: await database.prepare("SELECT * FROM push_account_deliveries WHERE id = 'migration-friend-delivery'").first(),
+        };
+      }
       const migration = await readFile(resolve("drizzle", file), "utf8");
       for (const statement of migration
         .split("--> statement-breakpoint")
         .map((value) => value.trim())
         .filter(Boolean)) {
         await database.prepare(statement.replace(/;$/, "")).run();
+      }
+      if (file.startsWith("0030_")) {
+        assert.ok(beforeChallengeMigration);
+        const accountsAfter = (await database.prepare("SELECT * FROM accounts ORDER BY id").all()).results;
+        assert.deepEqual(accountsAfter.map(({ locale, ...account }) => {
+          assert.equal(locale, "en", "Existing accounts must default to English");
+          return account;
+        }), beforeChallengeMigration.accounts);
+        assert.deepEqual(await database.prepare("SELECT * FROM push_devices WHERE id = 'migration-device'").first(), beforeChallengeMigration.device);
+        assert.deepEqual(await database.prepare("SELECT * FROM friend_requests WHERE id = 'migration-friend-request'").first(), beforeChallengeMigration.request);
+        const deliveryAfter = await database.prepare("SELECT * FROM push_account_deliveries WHERE id = 'migration-friend-delivery'").first();
+        assert.ok(deliveryAfter, "Rebuilding the outbox must preserve existing friend notifications");
+        const { game_id, ...preservedDelivery } = deliveryAfter;
+        assert.equal(game_id, null, "Existing friend notifications must not acquire a challenge game ID");
+        assert.deepEqual(preservedDelivery, beforeChallengeMigration.delivery);
+        assert.deepEqual((await database.prepare("PRAGMA foreign_key_check").all()).results, []);
       }
     }
 
@@ -1801,6 +1863,9 @@ async function verifyOnePhoneNotificationTurns() {
   } finally { await isolated.dispose(); }
 }
 
+await verifyAccountPreferences({ createRuntime, request, body, accountForLabel, usernameForAccount });
+await verifyPremoves({ createRuntime, request, body, accountForLabel, usernameForAccount, secret, pushClientPublicKey, waitFor });
+await verifyChallengePush({ createRuntime, request, body, accountForLabel, usernameForAccount, secret, pushClientPublicKey, waitFor });
 await verifyPendingOpenings({ createRuntime, request, body, accountForLabel, usernameForAccount, secret, pushClientPublicKey });
 await verifyOnePhoneNotificationTurns();
 await verifyPushRecoveryAndBidirectionalTurns();

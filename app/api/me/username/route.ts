@@ -36,6 +36,7 @@ export async function POST(request: Request): Promise<Response> {
     account: {
       displayName: result.profile.displayName,
       username: result.profile.username,
+      locale: result.profile.locale,
     },
     features: {
       magicRules: magicAccess.status === "enabled",

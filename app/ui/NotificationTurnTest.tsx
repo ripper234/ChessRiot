@@ -1,5 +1,8 @@
 "use client";
 
+import { useLanguage } from "./LanguageProvider";
+
+
 import Link from "next/link";
 import { Chess } from "chess.js";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -19,6 +22,7 @@ interface Progress { rounds: Round[]; deviceEnabled: boolean; expiresAt: number 
 interface Setup { username: string; publicKey: string; registration: ServiceWorkerRegistration }
 
 export function NotificationTurnTest({ game, onRefresh }: { game?: GameSnapshot; onRefresh?: () => void }) {
+  const { locale, dir, t } = useLanguage();
   const [setup, setSetup] = useState<Setup | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -201,84 +205,84 @@ export function NotificationTurnTest({ game, onRefresh }: { game?: GameSnapshot;
   const time = (timestamp?: number) => timestamp ? new Date(timestamp).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "Not yet";
   const retryRead = () => { setError(""); onRefresh?.(); void refreshProgress(); };
 
-  return <section className={styles.panel} lang="en" dir="ltr" aria-labelledby="turn-test-title">
-    <p className={styles.eyebrow}>THIS PHONE · 4 ROUNDS</p>
-    <h1 id="turn-test-title">{game ? "Notification test" : "Test your notifications"}</h1>
+  return <section className={styles.panel} lang={locale} dir={dir} aria-labelledby="turn-test-title">
+    <p className={styles.eyebrow}>{t("THIS PHONE · 4 ROUNDS")}</p>
+    <h1 id="turn-test-title">{game ? t("Notification test") : t("Test your notifications")}</h1>
     {!game ? <>
-      <p>Check real game notifications on this Android. No second device needed.</p>
-      <p>We will guide you through four rounds: leave the app, then tap the notification to return.</p>
-      {error ? <p className={styles.error} role="alert">{error}</p> : null}
-      {!setup && error ? <button type="button" onClick={() => { setError(""); setSetupAttempt((v) => v + 1); }}>Try setup again</button>
-        : <button type="button" onClick={() => void start()} disabled={!setup || busy}>{busy ? "Connecting this phone…" : setup ? "Start test" : "Preparing…"}</button>}
-      <details className={styles.details}><summary>How the test works</summary>
-        <p>Each round plays a real move against Riot Bot. It replies after about eight seconds and sends a normal turn notification only to this phone.</p>
-        <p>We check delivery, your tap, and return to the correct game. You confirm that Android actually showed the notification. One round also asks you to close the app.</p>
-        <p>Use Home, lock the phone, or close the app from Recents. Do not use Android’s Force stop.</p>
+      <p>{t("Check real game notifications on this Android. No second device needed.")}</p>
+      <p>{t("We will guide you through four rounds: leave the app, then tap the notification to return.")}</p>
+      {error ? <p className={styles.error} role="alert">{t(error)}</p> : null}
+      {!setup && error ? <button type="button" onClick={() => { setError(""); setSetupAttempt((v) => v + 1); }}>{t("Try setup again")}</button>
+        : <button type="button" onClick={() => void start()} disabled={!setup || busy}>{busy ? t("Connecting this phone…") : setup ? t("Start test") : t("Preparing…")}</button>}
+      <details className={styles.details}><summary>{t("How the test works")}</summary>
+        <p>{t("Each round plays a real move against Riot Bot. It replies after about eight seconds and sends a normal turn notification only to this phone.")}</p>
+        <p>{t("We check delivery, your tap, and return to the correct game. You confirm that Android actually showed the notification. One round also asks you to close the app.")}</p>
+        <p>{t("Use Home, lock the phone, or close the app from Recents. Do not use Android’s Force stop.")}</p>
       </details>
-      <Link className={styles.exit} href="/app">Back to games</Link>
+      <Link className={styles.exit} href="/app">{t("Back to games")}</Link>
     </> : <>
-      <ol className={styles.progress} aria-label={`${flow.passed} of 4 rounds verified`}>
+      <ol className={styles.progress} aria-label={t("${p0} of 4 rounds verified", {p0: flow.passed})}>
         {[2, 4, 6, 8].map((v, i) => <li key={v} data-passed={turnTestRoundPassed(receipts[v])} aria-current={flow.phase !== "complete" && flow.round === i + 1 ? "step" : undefined}>
-          <span aria-hidden="true">{turnTestRoundPassed(receipts[v]) ? "✓" : i + 1}</span><small>Round {i + 1}{turnTestRoundPassed(receipts[v]) ? " verified" : ""}</small>
+          <span aria-hidden="true">{turnTestRoundPassed(receipts[v]) ? "✓" : i + 1}</span><small>{t("Round")}{" "}{i + 1}{turnTestRoundPassed(receipts[v]) ? t(" verified") : ""}</small>
         </li>)}
       </ol>
       <div className={styles.step} aria-live="polite" aria-atomic="true">
-        {refreshing ? <><h2>Let’s check the result</h2><p>{readError}</p></> :
-          flow.phase === "complete" ? <><h2>All four rounds verified</h2><p>You received and opened all four notifications while ChessRiot was off screen.</p></> :
-          flow.phase === "blocked" ? <><h2>This test needs a restart</h2><p>{flow.reason}</p></> :
-          flow.phase === "checking" ? <><h2>Checking this phone…</h2><p>Your test results will appear here.</p></> :
-          flow.phase === "confirm" ? <><h2>Did you see the notification?</h2><p>Confirm that you saw the Android notification and tapped it to return to this game.</p></> :
+        {refreshing ? <><h2>{t("Let’s check the result")}</h2><p>{t(readError)}</p></> :
+          flow.phase === "complete" ? <><h2>{t("All four rounds verified")}</h2><p>{t("You received and opened all four notifications while ChessRiot was off screen.")}</p></> :
+          flow.phase === "blocked" ? <><h2>{t("This test needs a restart")}</h2><p>{t(flow.reason ?? "")}</p></> :
+          flow.phase === "checking" ? <><h2>{t("Checking this phone…")}</h2><p>{t("Your test results will appear here.")}</p></> :
+          flow.phase === "confirm" ? <><h2>{t("Did you see the notification?")}</h2><p>{t("Confirm that you saw the Android notification and tapped it to return to this game.")}</p></> :
           flow.phase === "ready" ? <>
-            <h2>{flow.passed ? `Round ${flow.passed} verified` : "Ready for round 1?"}</h2>
-            <p>{flow.round === 3 ? "After tapping below, close ChessRiot from Recents, or close its browser tab. Tap the notification to return."
-              : "Tap below, then go Home or lock your phone. Tap the notification to return."}</p>
-            <p className={styles.note}>Riot Bot replies after about eight seconds.</p>
+            <h2>{flow.passed ? t("Round ${p0} verified", {p0: flow.passed}) : t("Ready for round 1?")}</h2>
+            <p>{flow.round === 3 ? t("After tapping below, close ChessRiot from Recents, or close its browser tab. Tap the notification to return.")
+              : t("Tap below, then go Home or lock your phone. Tap the notification to return.")}</p>
+            <p className={styles.note}>{t("Riot Bot replies after about eight seconds.")}</p>
           </> : <>
-            <h2>{pendingReply ? flow.round === 3 ? "Close ChessRiot now" : "Lock your phone now" : "Tap your notification"}</h2>
+            <h2>{pendingReply ? flow.round === 3 ? t("Close ChessRiot now") : t("Lock your phone now") : t("Tap your notification")}</h2>
             <p>{pendingReply ? flow.round === 3
-              ? "Close it from Recents or close this browser tab. Tap the notification when it arrives."
-              : "Or go to your Home screen. Tap the notification when it arrives."
-              : "Swipe down to open Android notifications, then tap the ChessRiot turn notification."}</p>
-            {pendingReply ? <p className={styles.note}>The reply takes about eight seconds. You do not need to keep this page open.</p> : null}
+              ? t("Close it from Recents or close this browser tab. Tap the notification when it arrives.")
+              : t("Or go to your Home screen. Tap the notification when it arrives.")
+              : t("Swipe down to open Android notifications, then tap the ChessRiot turn notification.")}</p>
+            {pendingReply ? <p className={styles.note}>{t("The reply takes about eight seconds. You do not need to keep this page open.")}</p> : null}
           </>}
       </div>
-      {error ? <p className={styles.error} role="alert">{error}</p> : null}
-      {refreshing ? <button type="button" disabled={busy} onClick={retryRead}>Try again</button> :
-        flow.phase === "complete" ? <button type="button" disabled={busy} onClick={() => void finishTest("/app")}>{busy ? "Finishing…" : "Done"}</button> :
-        flow.phase === "blocked" ? <button type="button" disabled={busy} onClick={() => void finishTest("/notification-test")}>{busy ? "Restarting…" : "Restart test"}</button> :
-        flow.phase === "confirm" ? <button type="button" disabled={busy} onClick={() => void confirmRound()}>{busy ? "Saving…" : "Yes, I saw it and tapped it"}</button> :
-        flow.phase === "ready" ? <button type="button" disabled={busy} onClick={() => void nextMove()}>{busy ? "Starting this round…" : `Send notification ${flow.round}`}</button> : null}
-      {late ? <p className={styles.note} role="status">The reply is taking longer than expected. This round has not passed yet.</p> : null}
-      <details className={styles.details}><summary>Need help?</summary>
-        <p>If nothing arrives, check Android and browser notification permissions for ChessRiot. Do not use Force stop.</p>
-        <p>Opening the app manually leaves your notification available. Swipe down to open Android notifications and tap it to continue this round.</p>
+      {error ? <p className={styles.error} role="alert">{t(error)}</p> : null}
+      {refreshing ? <button type="button" disabled={busy} onClick={retryRead}>{t("Try again")}</button> :
+        flow.phase === "complete" ? <button type="button" disabled={busy} onClick={() => void finishTest("/app")}>{busy ? t("Finishing…") : t("Done")}</button> :
+        flow.phase === "blocked" ? <button type="button" disabled={busy} onClick={() => void finishTest("/notification-test")}>{busy ? t("Restarting…") : t("Restart test")}</button> :
+        flow.phase === "confirm" ? <button type="button" disabled={busy} onClick={() => void confirmRound()}>{busy ? t("Saving…") : t("Yes, I saw it and tapped it")}</button> :
+        flow.phase === "ready" ? <button type="button" disabled={busy} onClick={() => void nextMove()}>{busy ? t("Starting this round…") : t("Send notification ${p0}", {p0: flow.round})}</button> : null}
+      {late ? <p className={styles.note} role="status">{t("The reply is taking longer than expected. This round has not passed yet.")}</p> : null}
+      <details className={styles.details}><summary>{t("Need help?")}</summary>
+        <p>{t("If nothing arrives, check Android and browser notification permissions for ChessRiot. Do not use Force stop.")}</p>
+        <p>{t("Opening the app manually leaves your notification available. Swipe down to open Android notifications and tap it to continue this round.")}</p>
         <div className={styles.actions}>
-          <button type="button" className={styles.secondary} disabled={busy} onClick={retryRead}>Check again</button>
-          <button type="button" className={styles.secondary} disabled={busy} onClick={() => void finishTest("/notification-test")}>Start a new test</button>
+          <button type="button" className={styles.secondary} disabled={busy} onClick={retryRead}>{t("Check again")}</button>
+          <button type="button" className={styles.secondary} disabled={busy} onClick={() => void finishTest("/notification-test")}>{t("Start a new test")}</button>
         </div>
       </details>
-      <details className={styles.details}><summary>Full test results · {flow.passed}/4 verified</summary>
-        <p className={styles.note}>Each round requires receipt while the app is off screen, notification creation, your tap, this game opening, and your confirmation, in that order.</p>
+      <details className={styles.details}><summary>{t("Full test results ·")}{" "}{flow.passed}{t("/4 verified")}</summary>
+        <p className={styles.note}>{t("Each round requires receipt while the app is off screen, notification creation, your tap, this game opening, and your confirmation, in that order.")}</p>
         <ol className={styles.rounds}>{[2, 4, 6, 8].map((v, index) => {
           const receipt = receipts[v]; const delivery = progress?.rounds.find((r) => r.gameVersion === v);
           return <li key={v} data-passed={turnTestRoundPassed(receipt)}>
-            <strong>Round {index + 1} · {turnTestRoundPassed(receipt) ? "Verified" : "Not verified"}</strong>
+            <strong>{t("Round")}{" "}{index + 1} · {turnTestRoundPassed(receipt) ? t("Verified") : t("Not verified")}</strong>
             <dl>
-              <dt>Server delivery</dt><dd>{delivery?.status === "sent" ? "Push provider accepted" : delivery?.status ?? "No move yet"}{delivery ? ` · ${delivery.attempts} attempt(s)` : ""}</dd>
-              <dt>Phone received</dt><dd>{time(receipt?.receivedAt)}</dd>
-              <dt>Notification created</dt><dd>{receipt?.showRejectedAt ? `Failed at ${time(receipt.showRejectedAt)}` : time(receipt?.shownAt)}</dd>
-              <dt>Notification tapped</dt><dd>{time(receipt?.clickedAt)}</dd>
-              <dt>Correct game opened</dt><dd>{time(receipt?.openedAt)}</dd>
-              <dt>You confirmed</dt><dd>{time(receipt?.confirmedAt)}</dd>
-              <dt>Visible app windows</dt><dd>{receipt?.visibleClients ?? "Unknown"}</dd>
-              <dt>Open app windows</dt><dd>{receipt?.windowClients ?? "Unknown"}</dd>
+              <dt>{t("Server delivery")}</dt><dd>{delivery?.status === "sent" ? t("Push provider accepted") : t(delivery?.status ?? "No move yet")}{delivery ? t(" · ${p0} attempt(s)", {p0: delivery.attempts}) : ""}</dd>
+              <dt>{t("Phone received")}</dt><dd>{time(receipt?.receivedAt)}</dd>
+              <dt>{t("Notification created")}</dt><dd>{receipt?.showRejectedAt ? t("Failed at ${p0}", {p0: time(receipt.showRejectedAt)}) : time(receipt?.shownAt)}</dd>
+              <dt>{t("Notification tapped")}</dt><dd>{time(receipt?.clickedAt)}</dd>
+              <dt>{t("Correct game opened")}</dt><dd>{time(receipt?.openedAt)}</dd>
+              <dt>{t("You confirmed")}</dt><dd>{time(receipt?.confirmedAt)}</dd>
+              <dt>{t("Visible app windows")}</dt><dd>{receipt?.visibleClients ?? t("Unknown")}</dd>
+              <dt>{t("Open app windows")}</dt><dd>{receipt?.windowClients ?? t("Unknown")}</dd>
             </dl>
-            {receipt?.receivedAt && receipt.windowClients === 0 ? <small>All ChessRiot windows were closed when this arrived.</small> : null}
+            {receipt?.receivedAt && receipt.windowClients === 0 ? <small>{t("All ChessRiot windows were closed when this arrived.")}</small> : null}
           </li>;
         })}</ol>
-        <p className={styles.note}>This phone: {progress ? progress.deviceEnabled ? "notifications enabled" : "notifications disabled" : "checking"}. Test expires at {time(progress?.expiresAt ?? game.notificationTest?.expiresAt)}.</p>
+        <p className={styles.note}>{t("This phone:")}{" "}{progress ? progress.deviceEnabled ? t("notifications enabled") : t("notifications disabled") : "checking"}{t(". Test expires at")}{" "}{time(progress?.expiresAt ?? game.notificationTest?.expiresAt)}.</p>
       </details>
-      {flow.phase !== "complete" ? <button type="button" className={styles.exit} disabled={busy} onClick={() => void finishTest("/app")}>Exit test</button> : null}
+      {flow.phase !== "complete" ? <button type="button" className={styles.exit} disabled={busy} onClick={() => void finishTest("/app")}>{t("Exit test")}</button> : null}
     </>}
   </section>;
 }

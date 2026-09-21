@@ -184,7 +184,8 @@ test("renders the public home and mandatory account-gated play routes", async ()
   assert.doesNotMatch(accountGateSource, /פותחים את הזירה|נכנסים ומשחקים/);
   assert.doesNotMatch(accountGateSource, /state\.session\.tutorialStatus === "pending" \?/);
   assert.match(accountGateSource, /recoveryDelayMs/);
-  assert.match(accountGateSource, /fetchJsonWithReadTimeout<SessionPayload>/);
+  assert.match(accountGateSource, /readAuthSession<SessionPayload>/);
+  assert.match(readFileSync(new URL("../lib/auth-session-client.ts", import.meta.url), "utf8"), /fetchJsonWithReadTimeout<unknown>/);
   assert.match(accountGateSource, /if \(!response\.ok \|\| !data\) throw new Error\(\)/);
   assert.doesNotMatch(
     privacyExportSource,
@@ -210,7 +211,7 @@ test("renders the public home and mandatory account-gated play routes", async ()
   assert.match(tutorialSource, /moveTutorialKnight\(current, square\)/);
   assert.doesNotMatch(gameRoomSource, /className="magic-game-banner"/);
   assert.match(gameRoomSource, /className="side-card world-game-card"/);
-  assert.match(gameRoomSource, /game\.magicRules \? "World" : "Info"/);
+  assert.match(gameRoomSource, /game\.magicRules \? t\("World"\) : t\("Info"\)/);
   assert.match(gameRoomSource, /answerWaitingChallenge\("accept"\)/);
   assert.match(gameRoomSource, /Accept as Black/);
   assert.match(gameRoomSource, /setPostGameDismissed\(true\);\s*focusBoardSquare\(focusedSquare\)/s);
@@ -218,7 +219,7 @@ test("renders the public home and mandatory account-gated play routes", async ()
   assert.match(gameRoomSource, /readInvitationUrlFromHash/);
   assert.match(
     gameRoomSource,
-    /if \(access === "loading"\)[\s\S]*?<main className="game-shell" lang="en" dir="ltr" translate="no">[\s\S]*?Setting up the board…/,
+    /if \(access === "loading"\)[\s\S]*?<main className="game-shell" lang=\{locale\} dir=\{dir\} translate="no">[\s\S]*?Setting up the board…/,
   );
   assert.doesNotMatch(gameRoomSource, /ASSEMBLING BOARD/i);
   assert.match(
@@ -443,9 +444,9 @@ test("renders the public home and mandatory account-gated play routes", async ()
   assert.doesNotMatch(appUpdatesSource, /intent:\/\//i);
   assert.match(
     appUpdatesSource,
-    /<dialog[\s\S]*?lang="en"\s*dir="ltr"\s*translate="no"/,
+    /<dialog[\s\S]*?lang=\{locale\}\s*dir=\{dir\}\s*translate="no"/,
   );
-  assert.match(feedbackFormSource, /lang="en"[\s\S]*?dir="ltr"[\s\S]*?translate="no"/);
+  assert.match(feedbackFormSource, /lang=\{locale\}[\s\S]*?dir=\{dir\}[\s\S]*?translate="no"/);
   assert.match(feedbackFormSource, /Send feedback/);
   assert.match(feedbackFormSource, /What should change\?/);
   assert.match(feedbackFormSource, /requiredLabel="Required"/);

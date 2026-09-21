@@ -24,6 +24,7 @@ import { expireAccountMultiplayerTurns } from "./game-store";
 export interface AccountProfile extends PlayerAccount {
   username: string | null;
   usernameSetAt: string | null;
+  locale: "en" | "he";
   tutorialStatus: "pending" | "completed" | "skipped";
 }
 
@@ -149,7 +150,7 @@ export async function upsertAccount(account: PlayerAccount): Promise<boolean> {
 export async function getAccountProfile(accountId: string): Promise<AccountProfile | null> {
   await ensureSchema();
   const row = await getDatabase()
-    .prepare(`SELECT id, display_name, username, username_set_at, tutorial_status
+    .prepare(`SELECT id, display_name, username, username_set_at, tutorial_status, locale
       FROM accounts WHERE id = ?`)
     .bind(accountId)
     .first<{
@@ -158,6 +159,7 @@ export async function getAccountProfile(accountId: string): Promise<AccountProfi
       username: string | null;
       username_set_at: string | null;
       tutorial_status: "pending" | "completed" | "skipped";
+      locale: "en" | "he";
     }>();
   return row ? {
     id: row.id,
@@ -165,6 +167,7 @@ export async function getAccountProfile(accountId: string): Promise<AccountProfi
     username: row.username,
     usernameSetAt: row.username_set_at,
     tutorialStatus: row.tutorial_status,
+    locale: row.locale === "he" ? "he" : "en",
   } : null;
 }
 
@@ -347,7 +350,7 @@ export async function findAccountByUsername(
   if (!validated.ok) return null;
   await ensureSchema();
   const row = await getDatabase()
-    .prepare(`SELECT id, display_name, username, username_set_at, tutorial_status
+    .prepare(`SELECT id, display_name, username, username_set_at, tutorial_status, locale
       FROM accounts WHERE username_canonical = ?`)
     .bind(validated.canonical)
     .first<{
@@ -356,6 +359,7 @@ export async function findAccountByUsername(
       username: string | null;
       username_set_at: string | null;
       tutorial_status: "pending" | "completed" | "skipped";
+      locale: "en" | "he";
     }>();
   return row ? {
     id: row.id,
@@ -363,6 +367,7 @@ export async function findAccountByUsername(
     username: row.username,
     usernameSetAt: row.username_set_at,
     tutorialStatus: row.tutorial_status,
+    locale: row.locale === "he" ? "he" : "en",
   } : null;
 }
 

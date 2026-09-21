@@ -27,6 +27,7 @@ export async function GET(request: Request): Promise<Response> {
       displayName: profile.displayName,
       username: profile.username,
       tutorialStatus: profile.tutorialStatus,
+      locale: profile.locale,
     } : null,
     features: { magicRules },
     featureRequests: {

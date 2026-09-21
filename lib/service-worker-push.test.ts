@@ -66,7 +66,8 @@ beforeEach(() => {
   getNotifications.mockClear();
   postMessage.mockClear();
   focus.mockClear();
-  matchAll.mockClear();
+  matchAll.mockReset();
+  matchAll.mockResolvedValue([client]);
   openWindow.mockReset();
   const worker = {
     location: { origin: "https://dev.chessriot.gg" },
@@ -129,6 +130,21 @@ async function viewGame(gameId: string, gameVersion: number): Promise<void> {
 }
 
 describe("service-worker push display", () => {
+  it("displays a compatible challenge with no clients and opens its exact game", async () => {
+    const gameId = "123e4567-e89b-42d3-a456-426614174000";
+    await dispatchPush({ type: "service", category: "challenge", gameId,
+      notificationId: gameId, body: "@friend challenged you to a game." });
+    expect(showNotification).toHaveBeenCalledWith("ChessRiot", expect.objectContaining({
+      body: "@friend challenged you to a game.", tag: `challenge-${gameId}`, data: { path: `/g/${gameId}` },
+    }));
+    let completion = Promise.resolve();
+    matchAll.mockResolvedValueOnce([]);
+    listeners.get("notificationclick")?.({ notification: { data: { path: `/g/${gameId}` }, close: vi.fn() },
+      waitUntil: promise => { completion = promise as Promise<void>; } });
+    await completion;
+    expect(openWindow).toHaveBeenCalledWith(`/g/${gameId}`);
+  });
+
   it("keeps real-turn evidence with every app window closed, then records an exact-game tap", async () => {
     const gameId = "123e4567-e89b-42d3-a456-426614174000";
     matchAll.mockResolvedValueOnce([]);

@@ -74,6 +74,7 @@ export interface GameClockSnapshot {
 }
 
 export interface GameSnapshot extends GameClockSnapshot {
+  premove?: { revision: number; status: "none" | "queued" | "cancelled" | "played" | "invalid"; move: { from: string; to: string; promotion?: Promotion } | null };
   id: string;
   mode: GameMode;
   variantId: GameVariantId;
