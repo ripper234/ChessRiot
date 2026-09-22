@@ -1,6 +1,7 @@
 "use client";
 
 import { hasMagicRule } from "@/lib/magic-rules";
+import { createBoardPinchGuard } from "@/lib/board-gestures";
 
 import { useLanguage } from "./LanguageProvider";
 
@@ -250,6 +251,17 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const sidePanelTrigger = useRef<HTMLButtonElement | null>(null);
   const moveCommitInFlight = useRef(false);
   const gameReadInFlight = useRef<Promise<LoadGameResult> | null>(null);
+
+  const pinchGuard = useMemo(() => createBoardPinchGuard(() => {
+    dragRef.current = null;
+    setDrag(null);
+    setSelected(null);
+  }), []);
+  useEffect(() => {
+    // The second finger can land outside the board. Cancel before native zoom.
+    window.addEventListener("pointerdown", pinchGuard.onPointerDown, true);
+    return () => window.removeEventListener("pointerdown", pinchGuard.onPointerDown, true);
+  }, [pinchGuard]);
 
   const closeSidePanel = useCallback(() => {
     setSidePanel(null);
@@ -1341,6 +1353,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   }
 
   function tapSquare(square: Square) {
+    if (pinchGuard.blocksMoves()) return;
     if (suppressClick.current) {
       suppressClick.current = false;
       return;
@@ -1405,6 +1418,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   }
 
   function startPieceDrag(event: ReactPointerEvent<HTMLSpanElement>, square: Square) {
+    if (!event.isPrimary || pinchGuard.blocksMoves()) return;
     if (event.pointerType === "mouse" && event.button !== 0) return;
     // A second tap can target our own occupied square for a future recapture.
     if (canPremove && selected && selected !== square) return;
@@ -1478,7 +1492,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     if (!current || current.pointerId !== event.pointerId) return;
     dragRef.current = null;
     setDrag(null);
-    setSelected(current.from);
+    setSelected(null);
   }
 
   function showHistory(next: HistoryCursor): void {
@@ -1851,6 +1865,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 if (canMove && activeEffect) dismissBoardEffects();
               }}
               onKeyDownCapture={() => {
+                pinchGuard.resumeWithKeyboard();
                 if (canMove && activeEffect) dismissBoardEffects();
               }}
               aria-label={viewingHistory

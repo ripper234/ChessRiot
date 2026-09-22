@@ -136,6 +136,7 @@ a { color: inherit; }
 .changelog-shell > .topbar,
 .demo-shell > .topbar,
 .capture-lab-shell > .topbar,
+.history-shell > .topbar,
 .privacy-shell > .topbar { padding-right: 76px; }
 .brand { min-width: 0; display: inline-flex; align-items: center; gap: 11px; text-decoration: none; }
 .brand-mark {
@@ -997,7 +998,7 @@ footer {
 }
 .board-wrap[data-interactive="true"] .piece {
   cursor: grab;
-  touch-action: none;
+  touch-action: pinch-zoom;
 }
 .board-wrap[data-interactive="true"] .piece:active { cursor: grabbing; }
 .piece.dragging {
@@ -3173,14 +3174,27 @@ html[data-performance="low"] :is(
 .history-filters fieldset { min-width: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin: 0; padding: 0; border: 0; }
 .history-filters legend,
 .history-filters > label > span { display: block; margin-bottom: 6px; color: var(--chess-gold); font: 900 8px/1 var(--mono); }
-.history-filters fieldset label { min-height: 40px; display: grid; place-items: center; border: 2px solid var(--theme-card-border, var(--stone-dark)); background: var(--surface-raised); cursor: pointer; font: 850 9px/1 var(--ui); }
+.history-filters fieldset label { position: relative; min-width: 0; min-height: 44px; display: grid; place-items: center; border: 2px solid var(--theme-card-border, var(--stone-dark)); background: var(--surface-raised); cursor: pointer; font: 850 14px/1.2 var(--ui); letter-spacing: 0; text-transform: none; }
 .history-filters fieldset label[data-selected="true"] { color: #172515; background: var(--chess-gold); text-shadow: none; }
 .history-filters fieldset label:focus-within,
 .history-filters select:focus-visible,
 .opponent-picker select:focus-visible { outline: 3px solid var(--electric-blue); outline-offset: 2px; }
-.history-filters fieldset input { position: absolute; opacity: 0; }
+.history-filters fieldset input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  opacity: 0;
+  pointer-events: none;
+}
 .history-filters select,
 .opponent-picker select { width: 100%; min-height: 40px; padding: 0 9px; border: 2px solid var(--theme-card-border, var(--stone-dark)); color: var(--text); background: var(--surface-raised); font: 750 10px/1 var(--ui); }
+.history-filters select { min-height: 44px; font-size: 16px; }
 .history-list { display: grid; gap: 8px; }
 .history-game { min-width: 0; display: grid; grid-template-columns: 46px minmax(0,1fr) auto 20px; align-items: center; gap: 12px; padding: 10px; border: 3px solid var(--theme-card-border, var(--stone-dark)); color: var(--text); background: var(--theme-card, var(--surface)); text-decoration: none; }
 .history-game:hover { border-color: var(--electric-blue); }

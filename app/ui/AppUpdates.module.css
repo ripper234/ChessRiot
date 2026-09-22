@@ -232,7 +232,18 @@
   border-color: var(--chess-gold);
   box-shadow: inset 0 0 0 1px var(--chess-gold);
 }
-.skinGrid input { position: absolute; width: 1px; min-height: 1px; opacity: 0; }
+.skinGrid input { position: absolute; width: 1px; height: 1px; min-height: 0; padding: 0; margin: 0; border: 0; clip-path: inset(50%); opacity: 0; pointer-events: none; }
+.languageSelect {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 8px;
+  padding: 8px;
+  border: 2px solid var(--theme-card-border, var(--stone-dark));
+  color: var(--text);
+  background: var(--surface-raised);
+  font: 700 16px/1.3 var(--ui);
+}
+.languageSelect:focus-visible { outline: 3px solid var(--electric-blue); outline-offset: 2px; }
 .skinGrid label > span {
   position: relative;
   height: 38px;
