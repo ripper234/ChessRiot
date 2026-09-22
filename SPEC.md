@@ -1,15 +1,26 @@
-# ChessRiot v0.31.1 specification
+# ChessRiot v0.31.2 specification
 
-## Mobile controls and zoom (v0.31.1)
+## Alpha releases (v0.31.2)
+
+ChessRiot is alpha and prioritizes rapid, small releases. Ron has given standing
+authorization to publish requested changes to the live alpha after Development
+validation and green GitHub CI on the exact release commit, without asking for
+approval again. This supersedes historical manual-only promotion requirements,
+including those recorded in the v0.19.0 and v0.15.0 sections below. Data isolation,
+immutable source, versioning and security checks remain required.
+
+## Mobile controls and fixed scale (v0.31.2)
 
 - Hidden history mode radios stay inside their labels and cannot intercept
   touches on another mode or a game-type/rules selector. Mode chips and selects
   have at least 44px touch targets. The language selector is also at least 44px
   high with readable 16px text. History navigation reserves the Settings space.
-- Native browser pinch zoom is explicitly enabled without a maximum scale.
-  Chess pieces permit pinch zoom while retaining one-finger drag. A second
-  touch anywhere cancels the pending drag and selection, and residual gesture
-  clicks cannot submit a move. A fresh pointer or keyboard action resumes play.
+- Native touch zoom is disabled in menus and games. The viewport uses a maximum
+  scale of one with user scaling disabled, and root touch-action allows panning
+  without pinch zoom. One-finger menu scrolling and piece dragging still work.
+  A second touch anywhere cancels the pending drag and selection; residual
+  gesture clicks cannot submit a move. A fresh pointer or keyboard action resumes
+  play. This corrects the zoom-enabled interpretation in v0.31.1.
 - Browser gesture cancellation clears selection without making a move. Radio
   labels remain keyboard accessible with a visible focus indicator.
 

@@ -4,7 +4,7 @@ Play at [chessriot.gg](https://chessriot.gg), read the
 [release history](https://chessriot.gg/changelog), or
 [join the WhatsApp community](https://chat.whatsapp.com/FaBgiUgl73vLdeqzcqx0vX).
 
-ChessRiot v0.31.1 is a mobile-first chess game for solo play against Riot Bot
+ChessRiot v0.31.2 is a mobile-first chess game for solo play against Riot Bot
 or asynchronous play with someone you know. Playing requires a Google account;
 every game, friend, and result follows the player across devices.
 
@@ -123,9 +123,11 @@ ChessRiot uses SemVer. Every changed deployment must have a new, higher version;
 `npm run build` rejects reused or inconsistent versions. Use
 `npm run release:patch`, `npm run release:minor`, or `npm run release:major`.
 
-- Development receives each reviewed release after the complete gate passes.
-- Production changes only after the owner explicitly promotes the approved
-  Development release in Control.
+- Development receives each reviewed release after focused validation and
+  artifact checks; the complete GitHub CI gate must pass before Production.
+- ChessRiot is alpha: prioritize small, fast releases. Agents publish the tested
+  Development release to Production after green GitHub CI under Ron's standing
+  authorization, without asking for approval again.
 - GitHub is canonical. A release is tied to an immutable commit and release
   branch or tag.
 - Development and Production build the same immutable Git tree with

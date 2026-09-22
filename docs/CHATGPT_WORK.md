@@ -14,13 +14,15 @@ isolated hosted environments.
   reached.
 - Use isolated write ownership. Parallel agents may research, audit rules,
   inspect security, or review tests, but they must not write the same checkout.
-- Require an immutable Git commit, increasing SemVer, lint, typecheck, unit
-  tests, integration tests, and browser verification before promotion.
+- Require an immutable Git commit, increasing SemVer and green GitHub CI.
+  Run focused checks locally and relevant browser verification when available;
+  reuse passed checks rather than duplicating the full release suite.
 - Promote one tested immutable Git tree from Development to Production.
   Keep data and secrets isolated in Sites runtime configuration.
 - Treat a successful Development deployment as part of finishing every changed
-  release, not as a separate optional follow-up. Production advances only by
-  promoting the exact healthy Development release.
+  release, then promote the exact validated release to Production after green
+  CI. ChessRiot is alpha: Ron's standing authorization means agents complete
+  routine releases without another approval prompt.
 - Save and verify a Sites checkpoint before deployment. Treat every Sites URL as a
   production deployment surface, even when its product role is Development.
 - Keep app-level structured telemetry because Sites analytics covers traffic,

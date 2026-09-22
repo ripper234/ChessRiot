@@ -17,7 +17,7 @@ describe("board pinch gestures", () => {
     expect(guard.blocksMoves()).toBe(false);
   });
 
-  it("resumes keyboard play after zoom without an extra discarded keystroke", () => {
+  it("resumes keyboard play after a two-finger gesture without a discarded keystroke", () => {
     const guard = createBoardPinchGuard(vi.fn());
     guard.onPointerDown({ pointerType: "touch", isPrimary: false });
     guard.resumeWithKeyboard();

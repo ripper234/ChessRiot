@@ -12,6 +12,18 @@ const commitSource = (sha: string) => `${REPOSITORY_URL}/commit/${sha}`;
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.31.2",
+    date: "2026-09-22",
+    title: "Fixed-scale mobile play",
+    summary: "Keep menus and games at a fixed scale while preserving scrolling, dragging and the repaired history controls.",
+    changes: [
+      "Disable touch zoom across menus and boards, correcting the v0.31.1 interpretation of the feedback.",
+      "Keep one-finger menu scrolling, piece dragging and protection against accidental multi-touch moves.",
+      "Document the alpha release policy: publish tested changes after green GitHub CI without another release approval prompt.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.31.2`,
+  },
+  {
     version: "0.31.1",
     date: "2026-09-22",
     title: "Reliable mobile filters and pinch zoom",

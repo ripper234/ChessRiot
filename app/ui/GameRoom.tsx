@@ -258,7 +258,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     setSelected(null);
   }), []);
   useEffect(() => {
-    // The second finger can land outside the board. Cancel before native zoom.
+    // A second finger may land outside the board; never turn it into a move.
     window.addEventListener("pointerdown", pinchGuard.onPointerDown, true);
     return () => window.removeEventListener("pointerdown", pinchGuard.onPointerDown, true);
   }, [pinchGuard]);

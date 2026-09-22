@@ -1,12 +1,21 @@
 # ChessRiot agent instructions
 
+- ChessRiot is currently alpha. Prioritize fast, small releases and user
+  feedback over stable-production ceremony. The environment named Production
+  is the live alpha, not a promise of production maturity.
+- Ron has given standing authorization to publish requested changes to the
+  live alpha after Development validation and successful GitHub CI on the
+  exact release commit. Complete that flow without asking for release approval
+  again unless Ron explicitly pauses or restricts deployment.
 - SPEC.md and MVP.md are the product source of truth.
 - Do not implement backlog features unless explicitly requested.
 - Preserve separation between chess rules, persistence, UI, and future extensions.
 - Default app copy, loading/recovery states and presentation callsites to English/LTR. Preserve user-authored language and bidirectional isolation.
 - Every behavioral change must include tests and updated documentation.
 - Every changed deployment must use a new, higher SemVer version. Run `npm run release:patch` by default, or `release:minor` for a coherent new user capability, before the deployment checkpoint. Never reuse or decrease a deployed version.
-- Run lint, typecheck, unit tests, and relevant end-to-end tests.
+- Run focused checks locally; let GitHub CI run the complete lint, typecheck,
+  unit, rendering, integration, and security gate. Reuse successful checks
+  for unchanged inputs instead of repeating the full suite in every environment.
 - The release gate includes the production dependency security audit. Confirm
   GitHub CI has passed on the immutable release commit before promoting to Production.
 - Never commit secrets.
@@ -42,11 +51,10 @@
   runtime configuration.
 - Completing a changed release always includes deploying the exact tested source to Development. Development tracks the newest release automatically.
 - Small, low-risk changes may land on `main` and deploy directly to Development. Complicated or high-risk work belongs on `feature/*` and must use an isolated preview before merge.
-- Promotion between environments requires Ron's explicit approval, either by
-  clicking the Control promotion action or by authorizing production deployment
-  in the current chat. An agent may carry out that approved promotion after
-  Development validation. A push, merge, passing test, successful build,
-  scheduled job, or completed Dev deployment alone never authorizes Production.
+- After Development validation and green GitHub CI, agents promote the same
+  immutable release to Production under the standing alpha authorization.
+  Control remains an optional manual route. This policy supersedes older
+  per-release approval requirements in historical project documents.
 - Keep `lib/changelog.ts` newest first and add one concise entry for every release before deployment.
 - Every new important server action must be covered by the central request observer or emit a typed event through `recordEvent`. Never log names, tokens, token hashes, invitation/private URLs, URL fragments, IP addresses, user agents, FENs, raw bodies, or arbitrary exception messages.
 - Preserve request correlation, environment, app version, bounded retention, and the rule that unchanged polling does not create telemetry. Account-wide move-alert polling through `/api/me/games` is an operational read and must remain excluded.
