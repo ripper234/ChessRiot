@@ -29,7 +29,7 @@
 }
 
 * { box-sizing: border-box; }
-html { min-width: 320px; min-height: 100%; background: var(--riot-navy); }
+html { min-width: 320px; min-height: 100%; background: var(--riot-navy); touch-action: pan-x pan-y; }
 body {
   min-height: 100vh;
   margin: 0;
@@ -998,7 +998,7 @@ footer {
 }
 .board-wrap[data-interactive="true"] .piece {
   cursor: grab;
-  touch-action: pinch-zoom;
+  touch-action: none;
 }
 .board-wrap[data-interactive="true"] .piece:active { cursor: grabbing; }
 .piece.dragging {

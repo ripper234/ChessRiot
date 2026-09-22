@@ -57,8 +57,11 @@ test("renders the public home and mandatory account-gated play routes", async ()
   const signedOutHtml = await signedOutResponse.text();
   const viewport = signedOutHtml.match(/<meta\s+name="viewport"\s+content="([^"]+)"/)?.[1];
   assert.ok(viewport, "Every route must render a mobile viewport");
-  assert.match(viewport, /user-scalable=yes/);
-  assert.doesNotMatch(viewport, /maximum-scale|user-scalable=no/);
+  assert.match(viewport, /user-scalable=no/);
+  assert.match(viewport, /maximum-scale=1(?:,|$)/);
+  const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(css, /html\s*\{[^}]*touch-action:\s*pan-x pan-y/);
+  assert.match(css, /\.board-wrap\[data-interactive="true"\] \.piece\s*\{[^}]*touch-action:\s*none/);
   const publicHomeSource = readFileSync(
     new URL("../app/ui/PublicHome.tsx", import.meta.url),
     "utf8",

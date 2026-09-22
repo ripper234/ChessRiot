@@ -11,7 +11,8 @@ import { RouteChrome } from "./ui/RouteChrome";
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  userScalable: true,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export const metadata: Metadata = {

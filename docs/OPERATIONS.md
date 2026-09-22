@@ -5,7 +5,7 @@
 | Role | Canonical hostname | Data | Source behavior |
 |---|---|---|---|
 | Development | `dev.chessriot.gg` | Isolated D1 and R2 | Receives each reviewed release |
-| Production | `chessriot.gg` | Isolated D1 and R2 | Explicit owner approval in Control or chat |
+| Production | `chessriot.gg` | Isolated D1 and R2 | Live alpha; standing authorization after Dev validation and green CI |
 | Control | `control.chessriot.gg` | Owner-only Control state | Observes and promotes, never serves games |
 
 Staging is retired. The legacy `*.ripper234.chatgpt.site` addresses may remain
@@ -130,10 +130,10 @@ After deployment:
    move while the PWA is backgrounded or closed. Provider acceptance alone is
    not proof of an operating-system banner. Do not expect a recurring Sites
    Worker event until the hosting capability is explicitly added and verified.
-7. Promote Production only with Ron's explicit approval, either through the
-   Control promotion action or in the current chat. An agent may carry out a
-   chat-approved promotion after validating Development. Passing checks or
-   deploying Development alone does not authorize Production.
+7. Promote the validated Development release after GitHub CI passes on its exact
+   commit. Ron has given standing alpha-release authorization; do not ask for
+   approval again unless he pauses or restricts deployment. Control remains an
+   optional manual promotion path.
 8. After promotion, confirm Development and Production report the same version
    and source fingerprint, then repeat legal-page, OAuth, account-gate, and the
    small Production OpenAI smoke test. Do not copy users, friends, games, or
