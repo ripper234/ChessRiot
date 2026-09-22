@@ -1514,7 +1514,7 @@ export function AppUpdates() {
 
           {googleUsername ? <label className={styles.section}>
             {t("Language")}
-            <select aria-label={t("Language")} value={locale} disabled={languageSaving}
+            <select className={styles.languageSelect} aria-label={t("Language")} value={locale} disabled={languageSaving}
               onChange={async (event) => { setLanguageError(!(await saveLocale(event.target.value === "he" ? "he" : "en"))); }}>
               <option value="en" lang="en">English</option>
               <option value="he" lang="he">עברית</option>

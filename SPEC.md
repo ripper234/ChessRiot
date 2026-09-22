@@ -1,4 +1,17 @@
-# ChessRiot v0.31.0 specification
+# ChessRiot v0.31.1 specification
+
+## Mobile controls and zoom (v0.31.1)
+
+- Hidden history mode radios stay inside their labels and cannot intercept
+  touches on another mode or a game-type/rules selector. Mode chips and selects
+  have at least 44px touch targets. The language selector is also at least 44px
+  high with readable 16px text. History navigation reserves the Settings space.
+- Native browser pinch zoom is explicitly enabled without a maximum scale.
+  Chess pieces permit pinch zoom while retaining one-finger drag. A second
+  touch anywhere cancels the pending drag and selection, and residual gesture
+  clicks cannot submit a move. A fresh pointer or keyboard action resumes play.
+- Browser gesture cancellation clears selection without making a move. Radio
+  labels remain keyboard accessible with a visible focus indicator.
 
 ## Asynchronous invitations and early openings (v0.30.0)
 

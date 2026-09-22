@@ -12,6 +12,18 @@ const commitSource = (sha: string) => `${REPOSITORY_URL}/commit/${sha}`;
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.31.1",
+    date: "2026-09-22",
+    title: "Reliable mobile filters and pinch zoom",
+    summary: "Tap history filters reliably and zoom the board without making an accidental move.",
+    changes: [
+      "Stop invisible history radio inputs from covering adjacent filters, and enlarge history and language controls.",
+      "Allow pinch zoom over chess pieces while keeping one-finger dragging; cancel the drag when a second finger touches the screen.",
+      "Reserve space for the Settings button beside History navigation and preserve keyboard access to hidden radio controls.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.31.1`,
+  },
+  {
     version: "0.31.0",
     date: "2026-09-21",
     title: "Challenge alerts, planned moves and your language",

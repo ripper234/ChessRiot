@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "./themes.css";
 import "./board.css";
@@ -7,6 +7,12 @@ import { THEME_BOOTSTRAP_SCRIPT } from "@/lib/themes";
 import { ClientTelemetry } from "./ui/ClientTelemetry";
 import { LanguageProvider } from "./ui/LanguageProvider";
 import { RouteChrome } from "./ui/RouteChrome";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  userScalable: true,
+};
 
 export const metadata: Metadata = {
   title: "ChessRiot | Real chess. Total play.",

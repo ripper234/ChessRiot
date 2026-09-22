@@ -394,3 +394,17 @@
 - Verify close events use `feedback.closed` and the normalized
   `/api/ops/feedback/:id/close` route without recording the feedback id, title,
   comment, or signed grant.
+# Mobile filters and zoom (v0.31.1)
+
+- On a 360px/393px phone, open History and repeatedly select Solo, All,
+  Multiplayer, All. Each selected chip and resulting game list must agree.
+- Open Game Type and Rules after each mode change; choose a non-default option
+  then All. Taps near the centre and edges must reach that control.
+- Open Settings, change Language and a skin, and verify all controls can be
+  reached. History HOME and Settings must not overlap. Tab/arrow-key radio
+  navigation must retain a visible focus ring.
+- Pinch to enlarge and shrink Settings, History and the board. Start the board
+  pinch on a piece, with the other finger on an empty square or outside the
+  board. No move may be sent. Repeat while a piece is being dragged.
+- After pinching, make one legal drag, a two-tap move, and a keyboard move.
+  Check both colors, including a premove while the opponent thinks.
