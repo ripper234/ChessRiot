@@ -122,6 +122,14 @@ export async function ensureSchema(): Promise<void> {
   if (!schemaPromise) {
     const db = getDatabase();
     schemaPromise = (async () => {
+      // Sites applies the checked-in migrations before a hosted Worker serves
+      // requests. Replaying DDL, legacy repairs and backfills on every new
+      // isolate adds seconds to the first account and game read. Local/test
+      // runtimes retain the bootstrap path below for disposable databases.
+      if (appEnvironment() === "development" || appEnvironment() === "production") {
+        await verifyRuntimeInvariants(db);
+        return;
+      }
       await db.batch([
         db.prepare(`CREATE TABLE IF NOT EXISTS games (
           id TEXT PRIMARY KEY NOT NULL,

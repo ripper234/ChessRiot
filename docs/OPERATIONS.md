@@ -186,6 +186,24 @@ add `includeSubDomains` only when every intended subdomain is HTTPS-only.
   review.
 
 
+## Notification-to-board performance
+
+Production Worker logs at 2026-09-26 00:38 Israel time showed a first game
+read of 5,151 ms and a concurrent account read of 4,626 ms. Seven subsequent
+unchanged game reads took 1,540–1,682 ms each. These are server wall times,
+not end-to-end tap-to-board measurements; network, navigation and rendering
+add to them. The first board could not render before its authoritative game
+response. Compare the same routes after v0.31.4, especially after a Worker
+cold start, and run the four-turn Android test for the actual user experience.
+
+Hosted migrations are the schema source of truth. `ensureSchema` checks the D1
+and R2 continuity marker once per Worker isolate but does not replay schema
+creation, legacy repairs or credit backfills on hosted reads. Local disposable
+test databases retain the legacy bootstrap path. Build-hashed static assets
+are cached until their URL changes; unversioned icons and the manifest still
+revalidate. Authenticated game responses and HTML are never stored in the
+service worker cache.
+
 ## One Android, four-turn acceptance test
 
 1. On the Android being tested, open `https://chessriot.gg/notification-test` and

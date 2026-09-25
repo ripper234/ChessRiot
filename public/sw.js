@@ -64,13 +64,21 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
-  const cacheable = (
-    url.pathname.startsWith("/_next/static/")
-    || /^\/assets\/[^/]+-[A-Za-z0-9_-]{8,}\.(?:js|css|woff2?)$/.test(url.pathname)
+  const immutable = url.pathname.startsWith("/_next/static/")
+    || /^\/assets\/[^/]+-[A-Za-z0-9_-]{8,}\.(?:js|css|woff2?)$/.test(url.pathname);
+  const cacheable = immutable
     || url.pathname.startsWith("/icons/")
-    || url.pathname === "/manifest.webmanifest"
-  );
+    || url.pathname === "/manifest.webmanifest";
   if (!cacheable) return;
+  // Build-hashed assets cannot change at the same URL. Revalidating every
+  // cached script and stylesheet competes with the game read on mobile.
+  if (immutable) {
+    event.respondWith(
+      caches.match(request).catch(() => undefined)
+        .then((cached) => cached ?? fetchAndCache(request)),
+    );
+    return;
+  }
   const network = fetchAndCache(request);
   event.waitUntil(network.then(() => undefined).catch(() => undefined));
   event.respondWith(

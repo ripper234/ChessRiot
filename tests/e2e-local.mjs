@@ -1587,6 +1587,31 @@ async function verifyHealthIsReadOnly() {
   }
 }
 
+async function verifyHostedRequestsRequirePublishedMigrations() {
+  const runtime = createRuntime({
+    databaseName: "chessriot-hosted-migration-boundary-e2e",
+    applyMigrations: false,
+    extraBindings: { CHESSRIOT_ENV: "development", APP_ORIGIN: devOrigin },
+  });
+  try {
+    const response = await runtime.dispatchFetch(`${devOrigin}/api/auth/session`, {
+      headers: {
+        origin: devOrigin,
+        cookie: signedGoogleSession(
+          "migration-boundary@players.chessriot.test", "Migration Boundary",
+        ).cookie,
+      },
+    });
+    assert.ok(response.status >= 500, "a hosted request must fail before migrations");
+    const database = await runtime.getD1Database("DB");
+    assert.deepEqual(await database.prepare(`SELECT COUNT(*) AS count FROM sqlite_master
+      WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`).first(), { count: 0 },
+    "a hosted request must never repair an unmigrated database");
+  } finally {
+    await runtime.dispose();
+  }
+}
+
 async function verifyStorageContinuityMirror() {
   const bucketName = "chessriot-continuity-shared-bucket";
   const originalRuntime = createRuntime({
@@ -1877,6 +1902,7 @@ await verifyVariantMigration();
 await verifyGoogleSessionHardening();
 await verifyGoogleAccountFlow();
 await verifyHealthIsReadOnly();
+await verifyHostedRequestsRequirePublishedMigrations();
 await verifyStorageContinuityMirror();
 // Preliminary isolated runtimes can now exercise acceptance-triggered pushes.
 // The main runtime's delivery assertions use their own explicit baseline.

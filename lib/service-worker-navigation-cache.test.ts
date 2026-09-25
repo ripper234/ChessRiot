@@ -168,22 +168,28 @@ describe("notification click navigation", () => {
 });
 
 describe("static asset caching", () => {
-  it.each(["/assets/app-Abc123_x.js", "/assets/styles-Abc123_x.css", "/assets/font-Abc123_x.woff2"])(
-    "serves a cached hashed asset while network revalidation is still pending: %s", async (path) => {
+  it.each(["/assets/app-Abc123_x.js", "/assets/styles-Abc123_x.css", "/assets/font-Abc123_x.woff2", "/_next/static/chunk.js"])(
+    "serves a cached immutable asset without another network request: %s", async (path) => {
       const worker = makeWorker();
       const cached = new Response("cached asset");
       worker.cacheMatch.mockResolvedValue(cached);
-      let rejectNetwork!: (error: Error) => void;
-      worker.fetch.mockImplementation(() => new Promise((_resolve, reject) => { rejectNetwork = reject; }));
       const request = worker.request(path);
       expect(await request.response).toBe(cached);
-      expect(worker.fetch).toHaveBeenCalledWith(request.request);
-      expect(request.background).toHaveLength(1);
-      rejectNetwork(new Error("offline during revalidation"));
-      await expect(Promise.all(request.background)).resolves.toEqual([undefined]);
+      expect(worker.fetch).not.toHaveBeenCalled();
+      expect(request.background).toHaveLength(0);
       expect(worker.cachePut).not.toHaveBeenCalled();
     },
   );
+
+  it("still revalidates an unversioned manifest after serving its cached copy", async () => {
+    const worker = makeWorker();
+    const cached = new Response("cached manifest");
+    worker.cacheMatch.mockResolvedValue(cached);
+    const request = worker.request("/manifest.webmanifest");
+    expect(await request.response).toBe(cached);
+    expect(worker.fetch).toHaveBeenCalledWith(request.request);
+    await Promise.all(request.background);
+  });
 
   it.each(["read", "open", "write"] as const)(
     "still serves a valid network asset when Cache Storage %s fails", async (failure) => {
@@ -196,7 +202,7 @@ describe("static asset caching", () => {
       const response = await request.response;
       expect(response?.status).toBe(200);
       expect(await response?.text()).toBe("network asset");
-      await expect(Promise.all(request.background)).resolves.toEqual([undefined]);
+      expect(request.background).toHaveLength(0);
       expect(worker.fetch).toHaveBeenCalledOnce();
     },
   );
@@ -205,7 +211,7 @@ describe("static asset caching", () => {
     const worker = makeWorker();
     const request = worker.request("/assets/app-Abc123_x.js");
     expect(await (await request.response)?.text()).toBe("network asset");
-    await Promise.all(request.background);
+    expect(request.background).toHaveLength(0);
     expect(worker.cachePut).toHaveBeenCalledOnce();
     expect(worker.cachePut.mock.calls[0][0]).toBe(request.request);
     expect(await worker.cachePut.mock.calls[0][1].text()).toBe("network asset");
@@ -216,7 +222,7 @@ describe("static asset caching", () => {
     worker.fetch.mockResolvedValue(new Response("missing", { status: 404 }));
     const request = worker.request("/assets/app-Abc123_x.js");
     expect((await request.response)?.status).toBe(404);
-    await Promise.all(request.background);
+    expect(request.background).toHaveLength(0);
     expect(worker.cacheOpen).not.toHaveBeenCalled();
     expect(worker.cachePut).not.toHaveBeenCalled();
   });

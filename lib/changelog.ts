@@ -12,6 +12,17 @@ const commitSource = (sha: string) => `${REPOSITORY_URL}/commit/${sha}`;
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.31.4",
+    date: "2026-09-26",
+    title: "Faster board opening",
+    summary: "Skip repeated database setup and unnecessary asset downloads when opening a game.",
+    changes: [
+      "Use published database migrations directly on hosted requests while retaining the storage continuity check.",
+      "Serve cached build-hashed scripts, styles and fonts without downloading them again on every game open.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.31.4`,
+  },
+  {
     version: "0.31.3",
     date: "2026-09-25",
     title: "Open boards catch up on your turn",

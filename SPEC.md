@@ -1,4 +1,4 @@
-# ChessRiot v0.31.3 specification
+# ChessRiot v0.31.4 specification
 
 ## Open-game move updates (v0.31.3)
 
