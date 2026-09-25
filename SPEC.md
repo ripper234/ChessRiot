@@ -1,4 +1,13 @@
-# ChessRiot v0.31.2 specification
+# ChessRiot v0.31.3 specification
+
+## Open-game move updates (v0.31.3)
+
+- When an opponent turn push arrives, an already open matching game fetches its
+  authoritative position without a notification tap. A pending older read must
+  settle before the push refresh; unrelated game tabs receive no update.
+- Visible game polling remains the fallback at the normal or reduced-data
+  interval. Page resume also checks immediately, including mobile back-forward
+  cache restoration. Showing the board does not dismiss a current turn alert.
 
 ## Alpha releases (v0.31.2)
 

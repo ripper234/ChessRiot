@@ -12,6 +12,17 @@ const commitSource = (sha: string) => `${REPOSITORY_URL}/commit/${sha}`;
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.31.3",
+    date: "2026-09-25",
+    title: "Open boards catch up on your turn",
+    summary: "A move notification refreshes the matching game already open on your screen.",
+    changes: [
+      "Refresh the exact open board from the authoritative game state when an opponent turn push arrives, without opening the notification.",
+      "Read again after an in-flight poll and on mobile page resume; keep normal polling as a fallback.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.31.3`,
+  },
+  {
     version: "0.31.2",
     date: "2026-09-22",
     title: "Fixed-scale mobile play",

@@ -4,7 +4,7 @@ Play at [chessriot.gg](https://chessriot.gg), read the
 [release history](https://chessriot.gg/changelog), or
 [join the WhatsApp community](https://chat.whatsapp.com/FaBgiUgl73vLdeqzcqx0vX).
 
-ChessRiot v0.31.2 is a mobile-first chess game for solo play against Riot Bot
+ChessRiot v0.31.3 is a mobile-first chess game for solo play against Riot Bot
 or asynchronous play with someone you know. Playing requires a Google account;
 every game, friend, and result follows the player across devices.
 
@@ -54,6 +54,8 @@ Use **Send feedback** in the unified Settings menu or
 - Recover safely from temporary session or game-read failures with bounded,
   coalesced retries and immediate reconnect/focus checks. Moves and other game
   mutations are never submitted automatically a second time.
+- An open game catches up as soon as its opponent's turn alert arrives; visible
+  polling and mobile page resume also fetch the authoritative board.
 - Choose one of 12 original skins, including Mythic Beasts, before or during
   play. The skin changes the public shell, setup, menus, board, pieces, music,
   and visual effects before the game starts and stays synchronized across

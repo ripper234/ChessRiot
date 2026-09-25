@@ -33,6 +33,7 @@ import {
   type CoachWarning,
 } from "@/lib/chess-coach";
 import { publishAuthSessionInvalidated } from "@/lib/auth-session-client";
+import { listenForGameTurnPush } from "@/lib/game-push-refresh";
 import {
   fetchJsonWithReadTimeout,
   gamePollingIntervalMs,
@@ -634,17 +635,31 @@ export function GameRoom({ gameId }: { gameId: string }) {
     const refresh = () => {
       if (document.visibilityState === "visible") void loadGame(latestVersion.current);
     };
+    const resume = () => {
+      if (document.visibilityState === "visible") void refreshAfterMutation(latestVersion.current);
+    };
+    const stopPush = "serviceWorker" in navigator
+      ? listenForGameTurnPush(navigator.serviceWorker, gameId,
+        () => latestVersion.current,
+        (version) => {
+          // An older poll may still be in flight when the push arrives.
+          void refreshAfterMutation(version);
+        })
+      : () => undefined;
     const timer = window.setInterval(refresh, pollIntervalMs);
     window.addEventListener("focus", refresh);
     window.addEventListener("online", refresh);
+    window.addEventListener("pageshow", resume);
     document.addEventListener("visibilitychange", refresh);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener("focus", refresh);
       window.removeEventListener("online", refresh);
+      window.removeEventListener("pageshow", resume);
       document.removeEventListener("visibilitychange", refresh);
+      stopPush();
     };
-  }, [game, loadGame, pollIntervalMs]);
+  }, [game, gameId, loadGame, pollIntervalMs, refreshAfterMutation]);
 
   useEffect(() => {
     if (

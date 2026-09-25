@@ -230,6 +230,35 @@ describe("service-worker push display", () => {
     expect(showNotification.mock.calls[0]?.[1]).not.toHaveProperty("renotify");
   });
 
+  it("refreshes the already open game room on a turn push without a notification tap", async () => {
+    const gameId = "11111111-1111-4111-8111-111111111111";
+    const exactGameClient = {
+      ...client,
+      url: `https://dev.chessriot.gg/g/${gameId}#private-seat-key`,
+      postMessage: vi.fn(),
+    };
+    const otherGameClient = {
+      ...client,
+      url: "https://dev.chessriot.gg/g/22222222-2222-4222-8222-222222222222",
+      postMessage: vi.fn(),
+    };
+    matchAll.mockResolvedValueOnce([otherGameClient, exactGameClient]);
+
+    await dispatchPush({ type: "your_turn", gameId, gameVersion: 7 });
+
+    expect(matchAll).toHaveBeenCalledWith({ type: "window", includeUncontrolled: true });
+    expect(exactGameClient.postMessage).toHaveBeenCalledExactlyOnceWith({
+      type: "chessriot:game-updated",
+      gameId,
+      gameVersion: 7,
+    });
+    expect(otherGameClient.postMessage).not.toHaveBeenCalled();
+    expect(showNotification).toHaveBeenCalledWith("ChessRiot", expect.objectContaining({
+      tag: `turn-${gameId}`,
+    }));
+    expect(focus).not.toHaveBeenCalled();
+  });
+
   it("re-alerts a newer turn but not an exact delivery retry", async () => {
     const gameId = "99999999-9999-4999-8999-999999999999";
     await dispatchPush({ type: "your_turn", gameId, gameVersion: 4 });
@@ -472,7 +501,7 @@ describe("service-worker push display", () => {
     });
     expect(reply).toHaveBeenCalledWith({
       type: "chessriot:push-worker-version-response",
-      version: "0.30.1",
+      version: "0.31.3",
     });
   });
 
