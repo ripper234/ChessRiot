@@ -5,6 +5,7 @@ import { APP_VERSION } from "./version";
 import { appEnvironment, observabilityHashSecret } from "./runtime";
 import { readJson } from "./http";
 import { googleSessionAccountFromHeaders } from "./google-auth";
+import { observedRequestTimings } from "./request-timing";
 
 export type EventOutcome = "success" | "rejected" | "failure";
 
@@ -292,10 +293,19 @@ async function requestDetails(request: Request): Promise<RequestDetails> {
       "tutorial.completed",
       "tutorial.skipped",
       "activity.opened",
+      "notification.board_painted",
     ].includes(payload.event)) {
       details.clientEvent = payload.event;
     }
     if (typeof payload.gameId === "string") details.subjectId = payload.gameId;
+    if (payload.event === "notification.board_painted"
+      && Number.isSafeInteger(payload.elapsedMs)
+      && (payload.elapsedMs as number) >= 0
+      && (payload.elapsedMs as number) <= 120_000
+      && ["same-game", "existing-window", "new-window"].includes(payload.mode as string)) {
+      details.metadata.elapsedMs = payload.elapsedMs as number;
+      details.metadata.mode = payload.mode as string;
+    }
     if (typeof payload.code === "string") details.metadata.code = payload.code.slice(0, 80);
     if (payload.feature === "magic_rules") details.metadata.feature = payload.feature;
   } catch {
@@ -406,7 +416,13 @@ export async function observeHttpRequest(
     statusCode: response.status,
     errorCode: responseInfo.errorCode,
     latencyMs: performance.now() - startedAt,
-    metadata: { ...requestInfo.metadata, ...responseInfo.metadata },
+    metadata: {
+      ...requestInfo.metadata,
+      ...responseInfo.metadata,
+      ...(baseEvent === "game.loaded" || url.pathname === "/api/auth/session"
+        ? observedRequestTimings(response)
+        : {}),
+    },
   });
   const botCommitted = response.headers.get("x-chessriot-bot-committed") === "1";
   const botLatency = Number(response.headers.get("x-chessriot-bot-latency-ms"));

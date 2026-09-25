@@ -48,7 +48,9 @@ function makeWorker(clients: ReturnType<typeof makeClient>[] = []) {
   const openWindow = vi.fn<(path: string) => Promise<undefined>>(async () => undefined);
   const cacheMatch = vi.fn<() => Promise<Response | undefined>>(async () => undefined);
   const cachePut = vi.fn<(request: Request, response: Response) => Promise<undefined>>(async () => undefined);
-  const cacheOpen = vi.fn(async () => ({ put: cachePut }));
+  const cacheKeys = vi.fn(async () => [] as Request[]);
+  const cacheDelete = vi.fn(async () => true);
+  const cacheOpen = vi.fn(async () => ({ put: cachePut, keys: cacheKeys, delete: cacheDelete }));
   const fetch = vi.fn<(request: Request) => Promise<Response>>(
     async () => new Response("network asset"),
   );
@@ -60,18 +62,22 @@ function makeWorker(clients: ReturnType<typeof makeClient>[] = []) {
     },
     caches: { match: cacheMatch, open: cacheOpen },
     fetch, URL, Request, Response, Promise, Uint8Array, atob,
-    MessageChannel: TestMessageChannel, setTimeout, clearTimeout,
+    MessageChannel: TestMessageChannel, setTimeout, clearTimeout, Date,
   });
   return {
     matchAll, openWindow, cacheMatch, cachePut, cacheOpen, fetch,
-    click(path = GAME_PATH) {
+    click(path = GAME_PATH, data: Record<string, unknown> = {}) {
       const close = vi.fn();
-      let completion: Promise<unknown> | undefined;
+      const lifetime: Promise<unknown>[] = [];
       listeners.get("notificationclick")!({
-        notification: { data: { path }, close },
-        waitUntil: (promise: Promise<unknown>) => { completion = promise; },
+        notification: { data: { path, ...data }, close },
+        waitUntil: (promise: Promise<unknown>) => { lifetime.push(promise); },
       });
-      if (!completion) throw new Error("Notification click did not extend worker lifetime");
+      if (!lifetime.length) throw new Error("Notification click did not extend worker lifetime");
+      const completion = (async () => {
+        await lifetime[0];
+        await Promise.all(lifetime.slice(1));
+      })();
       return { completion, close };
     },
     request(path: string, method = "GET") {
@@ -92,6 +98,48 @@ beforeEach(() => { vi.useFakeTimers(); });
 afterEach(() => { vi.useRealTimers(); });
 
 describe("notification click navigation", () => {
+  it("records a click-to-board start timestamp and the observed window category without a position", async () => {
+    const clickedAt = 1_800_000_000_000;
+    vi.setSystemTime(clickedAt);
+    const worker = makeWorker();
+    await worker.click(GAME_PATH, { gameVersion: 7 }).completion;
+    expect(worker.cacheOpen).toHaveBeenCalledWith("chessriot-notification-timing-v1");
+    const [path, response] = worker.cachePut.mock.calls[0];
+    expect(path).toBe(`/__chessriot_notification_timing__/${GAME_PATH.slice(3)}`);
+    expect(await response.json()).toEqual({ clickedAt, gameVersion: 7, mode: "new-window" });
+  });
+
+  it("classifies an existing matching board without a new navigation", async () => {
+    const worker = makeWorker([makeClient(GAME_PATH)]);
+    await worker.click().completion;
+    const [, response] = worker.cachePut.mock.calls[0];
+    expect((await response.json() as { mode: string }).mode).toBe("same-game");
+    expect(worker.openWindow).not.toHaveBeenCalled();
+  });
+
+  it("opens a cold window without waiting for timing storage", async () => {
+    const worker = makeWorker();
+    let finishWrite!: () => void;
+    worker.cachePut.mockImplementation(() => new Promise((resolve) => { finishWrite = () => resolve(undefined); }));
+    const click = worker.click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(worker.openWindow).toHaveBeenCalledExactlyOnceWith(GAME_PATH);
+    finishWrite();
+    await click.completion;
+  });
+
+  it("focuses an existing board without waiting for timing storage", async () => {
+    const client = makeClient(GAME_PATH);
+    const worker = makeWorker([client]);
+    let finishWrite!: () => void;
+    worker.cachePut.mockImplementation(() => new Promise((resolve) => { finishWrite = () => resolve(undefined); }));
+    const click = worker.click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(client.focus).toHaveBeenCalledOnce();
+    finishWrite();
+    await click.completion;
+  });
+
   it("focuses a suspended different-game client before requesting a warm route", async () => {
     const client = makeClient();
     let focused = false;

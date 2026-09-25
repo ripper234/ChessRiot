@@ -11,6 +11,8 @@ import { authorizeGameRequest } from "@/lib/game-auth";
 import { playPendingComputerTurn } from "@/lib/computer-turn";
 import { apiError, json } from "@/lib/http";
 import { markMagicWorldPlayed } from "@/lib/magic-worlds";
+import { createRequestTiming } from "@/lib/request-timing";
+import { ensureSchema } from "@/db";
 
 export const dynamic = "force-dynamic";
 
@@ -47,30 +49,36 @@ export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
+  const timing = createRequestTiming();
   const { id } = await context.params;
-  const authorization = await authorizeGameRequest(request, id);
+  await timing.measure("schema", () => ensureSchema());
+  const authorization = await timing.measure("authorize", () => authorizeGameRequest(request, id));
   if (!authorization.ok) {
-    return apiError(
+    return timing.apply(apiError(
       authorization.status,
       authorization.code,
       authorization.message,
-    );
+    ));
   }
   const { color } = authorization;
-  let game: GameRow | null = authorization.game;
-  game = await expireMultiplayerTurn(game);
+  const authorizedGame = authorization.game;
+  let game: GameRow | null = await timing.measure("deadline", () => expireMultiplayerTurn(authorizedGame));
   if (isPendingComputerTurn(game) && (!game.notification_test_device_id || Date.now() >= Date.parse(game.updated_at) + 8_000)) {
     const expectedVersion = game.version;
-    await playPendingComputerTurn(id);
-    game = await waitForComputerTurnResolution(id, expectedVersion);
-    if (!game) return apiError(404, "not_found", "Game not found");
+    game = await timing.measure("bot", async () => {
+      await playPendingComputerTurn(id);
+      return waitForComputerTurnResolution(id, expectedVersion);
+    });
+    if (!game) return timing.apply(apiError(404, "not_found", "Game not found"));
   }
-  if (game.world_code) await markMagicWorldPlayed(id);
+  if (game.world_code) await timing.measure("world", () => markMagicWorldPlayed(id));
 
   const since = new URL(request.url).searchParams.get("sinceVersion");
   if (since !== null && Number(since) === game.version
     && Number(new URL(request.url).searchParams.get("premoveRevision") ?? 0) === readPremove(game, color).revision) {
-    return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
+    return timing.apply(new Response(null, { status: 204, headers: { "cache-control": "no-store" } }));
   }
-  return json({ game: snapshot(game, await readMoves(id), color) });
+  const moves = await timing.measure("moves", () => readMoves(id));
+  const gameSnapshot = timing.measureSync("snapshot", () => snapshot(game, moves, color));
+  return timing.apply(json({ game: gameSnapshot }));
 }

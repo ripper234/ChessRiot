@@ -6,16 +6,24 @@ import {
 import { getAccountProfile, upsertAccount } from "@/lib/accounts";
 import { getFeatureAccessState, MAGIC_RULES_FEATURE } from "@/lib/feature-access";
 import { json } from "@/lib/http";
+import { createRequestTiming } from "@/lib/request-timing";
+import { ensureSchema } from "@/db";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request): Promise<Response> {
-  let account = await googleSessionAccountFromHeaders(request.headers);
-  const deleted = account ? !(await upsertAccount(account)) : false;
+  const timing = createRequestTiming();
+  let account = await timing.measure("cookie", () => googleSessionAccountFromHeaders(request.headers));
+  if (account) await timing.measure("schema", () => ensureSchema());
+  let deleted = false;
+  if (account) {
+    const currentAccount = account;
+    deleted = !(await timing.measure("upsert", () => upsertAccount(currentAccount)));
+  }
   if (deleted) account = null;
-  const profile = account ? await getAccountProfile(account.id) : null;
+  const profile = account ? await timing.measure("profile", () => getAccountProfile(account.id)) : null;
   const magicAccess = profile?.username
-    ? await getFeatureAccessState(profile.id, MAGIC_RULES_FEATURE)
+    ? await timing.measure("feature", () => getFeatureAccessState(profile.id, MAGIC_RULES_FEATURE))
     : { feature: MAGIC_RULES_FEATURE, status: "none" as const, requestedAt: null };
   const magicRules = magicAccess.status === "enabled";
   const response = json({
@@ -35,5 +43,5 @@ export async function GET(request: Request): Promise<Response> {
     },
   });
   if (deleted) response.headers.append("set-cookie", clearGoogleSessionCookie());
-  return response;
+  return timing.apply(response);
 }

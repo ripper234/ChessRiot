@@ -308,6 +308,7 @@ async function verifyGoogleSessionHardening() {
     });
     const afterRenewal = Math.floor(Date.now() / 1_000);
     assert.equal(activity.status, 200);
+    assert.match(activity.headers.get("server-timing") ?? "", /cookie;dur=\d+, schema;dur=\d+, upsert;dur=\d+, profile;dur=\d+/);
     const activitySessionValues = googleSessionValuesFromResponse(activity);
     assert.equal(activitySessionValues.length, 1);
     const renewedPayload = googleSessionPayload(activitySessionValues[0]);
@@ -916,6 +917,7 @@ async function verifyGoogleAccountFlow() {
       },
     });
     assert.equal(ordinaryRead.status, 200);
+    assert.match(ordinaryRead.headers.get("server-timing") ?? "", /schema;dur=\d+, authorize;dur=\d+, deadline;dur=\d+, moves;dur=\d+, snapshot;dur=\d+/);
     assert.equal(
       (await database
         .prepare("SELECT account_id FROM game_memberships WHERE game_id = ? AND color = 'w'")
@@ -2685,6 +2687,7 @@ try {
     headers: { authorization: `Bearer ${guestWhiteToken}` },
   });
   assert.equal(guestWhiteGameResponse.status, 200);
+  assert.match(guestWhiteGameResponse.headers.get("server-timing") ?? "", /schema;dur=\d+, authorize;dur=\d+, deadline;dur=\d+, moves;dur=\d+, snapshot;dur=\d+/);
   const guestWhiteGame = await body(guestWhiteGameResponse);
   const guestMoveRequestId = randomUUID();
   const guestMoveBody = JSON.stringify({
@@ -6855,6 +6858,17 @@ try {
   assert.ok(createMetadata.every((metadata) =>
     !Object.hasOwn(metadata, "initialFen")
     && !Object.hasOwn(metadata, "fen")));
+  const gameLoadTelemetry = await observabilityDatabase
+    .prepare(`SELECT metadata_json FROM observability_events
+      WHERE event_name = 'game.loaded' AND outcome = 'success'`)
+    .all();
+  assert.ok(gameLoadTelemetry.results.some((event) => {
+    const metadata = JSON.parse(event.metadata_json);
+    return Number.isInteger(metadata.schemaMs)
+      && Number.isInteger(metadata.authorizeMs)
+      && Number.isInteger(metadata.movesMs)
+      && Number.isInteger(metadata.snapshotMs);
+  }));
 
   const atomicJoinHost = accountForLabel("Atomic Join Host");
   const atomicJoinWhiteToken = secret();

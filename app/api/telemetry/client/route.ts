@@ -15,6 +15,7 @@ const ALLOWED_EVENTS = new Set([
   "tutorial.completed",
   "tutorial.skipped",
   "activity.opened",
+  "notification.board_painted",
 ]);
 const ERROR_EVENTS = new Set([
   "client.error",
@@ -29,7 +30,11 @@ export async function POST(request: Request) {
     if (!body || typeof body !== "object" || Array.isArray(body)) {
       return new Response(null, { status: 400 });
     }
-    const payload = body as { requestId?: unknown; event?: unknown; code?: unknown; gameId?: unknown };
+    const payload = body as {
+      requestId?: unknown; event?: unknown; code?: unknown; gameId?: unknown;
+      elapsedMs?: unknown; mode?: unknown;
+    };
+    const timingEvent = payload.event === "notification.board_painted";
     if (
       typeof payload.requestId !== "string"
       || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.requestId)
@@ -42,6 +47,14 @@ export async function POST(request: Request) {
       ))
       || (!ERROR_EVENTS.has(payload.event) && payload.code !== undefined)
       || payload.gameId !== undefined
+      || (timingEvent && (
+        !Number.isSafeInteger(payload.elapsedMs)
+        || (payload.elapsedMs as number) < 0
+        || (payload.elapsedMs as number) > 120_000
+        || !["same-game", "existing-window", "new-window"].includes(payload.mode as string)
+        || Object.keys(payload).some((key) => !["requestId", "event", "elapsedMs", "mode"].includes(key))
+      ))
+      || (!timingEvent && (payload.elapsedMs !== undefined || payload.mode !== undefined))
     ) {
       return new Response(null, { status: 400 });
     }

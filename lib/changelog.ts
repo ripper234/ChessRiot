@@ -12,6 +12,17 @@ const commitSource = (sha: string) => `${REPOSITORY_URL}/commit/${sha}`;
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.31.5",
+    date: "2026-09-26",
+    title: "Measure notification board opening",
+    summary: "Time a notification tap through the first visible board and break down game and account requests.",
+    changes: [
+      "Show the last notification-to-board timing on the opened game, labeled by whether the app reused or opened a window.",
+      "Record bounded request-stage and board-opening durations without storing positions or game identifiers in the timing event.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.31.5`,
+  },
+  {
     version: "0.31.4",
     date: "2026-09-26",
     title: "Faster board opening",

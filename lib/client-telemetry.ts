@@ -17,6 +17,18 @@ export type ProductEvent =
   | "tutorial.skipped"
   | "activity.opened";
 
+export type NotificationTimingMode = "same-game" | "existing-window" | "new-window";
+
+export function reportNotificationBoardPaint(elapsedMs: number, mode: NotificationTimingMode): void {
+  if (!Number.isSafeInteger(elapsedMs) || elapsedMs < 0 || elapsedMs > 120_000) return;
+  void fetch("/api/telemetry/client", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ requestId: generateUuid(), event: "notification.board_painted", elapsedMs, mode }),
+    keepalive: true,
+  }).catch(() => undefined);
+}
+
 export function reportClientEvent(
   event: ClientEvent,
   code: string,

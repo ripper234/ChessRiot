@@ -453,4 +453,18 @@ html[data-theme] .game-shell .dark-square {
 .premove-panel p { margin: .4rem 0; }
 .premove-panel button, .premove-panel bdi { margin-inline-end: .8rem; }
 
+.notification-board-timing {
+  display: block;
+  width: fit-content;
+  max-width: calc(100% - 2rem);
+  margin: .5rem auto;
+  padding: .35rem .7rem;
+  border: 1px solid var(--teal-spark);
+  border-radius: .5rem;
+  color: var(--text);
+  background: var(--surface-raised);
+  font: 600 .875rem/1.4 var(--ui);
+  text-align: center;
+}
+
 html[dir="rtl"] .player-card-copy { direction: rtl; text-align: start; }

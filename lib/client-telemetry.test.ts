@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { reportClientEvent, reportProductEvent } from "./client-telemetry";
+import { reportClientEvent, reportNotificationBoardPaint, reportProductEvent } from "./client-telemetry";
 
 describe("client telemetry identifiers", () => {
   afterEach(() => {
@@ -25,5 +25,20 @@ describe("client telemetry identifiers", () => {
         /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
       );
     }
+  });
+
+  it("reports a bounded timing with only a duration and window category", () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    reportNotificationBoardPaint(732, "new-window");
+    reportNotificationBoardPaint(120_001, "same-game");
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const payload = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(payload).toEqual({
+      requestId: expect.any(String),
+      event: "notification.board_painted",
+      elapsedMs: 732,
+      mode: "new-window",
+    });
   });
 });

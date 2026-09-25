@@ -188,13 +188,17 @@ add `includeSubDomains` only when every intended subdomain is HTTPS-only.
 
 ## Notification-to-board performance
 
-Production Worker logs at 2026-09-26 00:38 Israel time showed a first game
-read of 5,151 ms and a concurrent account read of 4,626 ms. Seven subsequent
-unchanged game reads took 1,540–1,682 ms each. These are server wall times,
-not end-to-end tap-to-board measurements; network, navigation and rendering
-add to them. The first board could not render before its authoritative game
-response. Compare the same routes after v0.31.4, especially after a Worker
-cold start, and run the four-turn Android test for the actual user experience.
+At 2026-09-25 21:38 UTC (00:38 Israel time), Production v0.31.3 D1
+observability recorded one initial `game.loaded` HTTP 200 at 4,455 ms and a
+concurrent `/api/auth/session` at 3,992 ms. The corresponding Worker wall times
+were 5,151 ms and 4,626 ms; they include `waitUntil` work and are not response
+latencies. Seven subsequent unchanged game reads had Worker wall times of
+1,540–1,682 ms, but unchanged polling creates no observability event, so their
+response latencies are unknown. None of these measures is an Android
+notification-tap-to-board time. There is no comparable initial-game sample yet
+for v0.31.4, so do not infer an improvement or regression from this baseline.
+Use the fixed numeric `Server-Timing` stages and existing D1 request latency
+after this instrumentation ships, then measure the Android tap-to-board flow.
 
 Hosted migrations are the schema source of truth. `ensureSchema` checks the D1
 and R2 continuity marker once per Worker isolate but does not replay schema
@@ -203,6 +207,21 @@ test databases retain the legacy bootstrap path. Build-hashed static assets
 are cached until their URL changes; unversioned icons and the manifest still
 revalidate. Authenticated game responses and HTML are never stored in the
 service worker cache.
+
+After a turn notification is tapped, the Worker records a local timing receipt
+with its timestamp, game version and observed window category. It is eligible
+for two minutes, at most 40 receipts are retained, and a successful board
+measurement consumes its receipt. It contains no position, name or account
+data and does not block navigation. The game shows the
+last **Notification to first painted board** sample in milliseconds. A pair of
+animation frames makes this a conservative browser-paint estimate, accurate
+to roughly a frame rather than a hardware display scanout measurement.
+**Already on this board**, **Existing app window**, and **New app window**
+describe the Worker clients at click time; an existing window can still need
+a full page navigation if warm routing fails. A deferred
+`notification.board_painted` event stores only elapsed milliseconds and the
+window category for aggregate analysis. The four-turn notification test keeps
+its chessboard collapsed and therefore does not claim a board-paint sample.
 
 ## One Android, four-turn acceptance test
 

@@ -200,3 +200,10 @@ wraps API requests, normalizes routes, skips unchanged polling, and uses
 `waitUntil` for best-effort non-blocking persistence plus structured Worker
 logs. The control Site mints two-minute HMAC grants; the owner's browser reads
 each environment directly, so Production and Development data never mix.
+Game reads and Google session reads add bounded stage durations to their existing
+request event metadata and to the `Server-Timing` response header. Game stages
+include schema readiness, authorization, deadline resolution, move retrieval,
+and snapshot building. Session stages include cookie verification, schema
+readiness, account upsert, profile, and feature access. Timings contain only
+fixed stage names and whole milliseconds. Unchanged game polls retain their
+`Server-Timing` header but create no observability event.

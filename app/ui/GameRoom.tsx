@@ -10,6 +10,12 @@ import { Chess, type Move, type PieceSymbol, type Square } from "chess.js";
 import Link from "next/link";
 import { useOptionalAccountSession } from "./AccountGate";
 import { takeGamePrefetch } from "@/lib/game-prefetch";
+import { reportNotificationBoardPaint } from "@/lib/client-telemetry";
+import {
+  finishNotificationBoardTiming,
+  readNotificationTap,
+  type NotificationBoardTiming,
+} from "@/lib/notification-open-timing";
 import { NotificationTurnTest } from "./NotificationTurnTest";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
@@ -196,6 +202,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   const { locale, dir, t } = useLanguage();
   const accountUsername = useOptionalAccountSession()?.username ?? null;
   const [serverGame, setServerGame] = useState<GameSnapshot | null>(null);
+  const [notificationBoardTiming, setNotificationBoardTiming] = useState<NotificationBoardTiming | null>(null);
   const [optimisticGame, setOptimisticGame] = useState<GameSnapshot | null>(null);
   const game = optimisticGame ?? serverGame;
   const variant = gameVariant(game?.variantId);
@@ -329,6 +336,113 @@ export function GameRoom({ gameId }: { gameId: string }) {
       window.removeEventListener("focus", publishVisibleSnapshot);
       window.removeEventListener("pageshow", publishVisibleSnapshot);
       document.removeEventListener("visibilitychange", publishVisibleSnapshot);
+    };
+  }, [gameId, serverGame]);
+
+  useEffect(() => {
+    // A test game keeps its board inside collapsed details. Its visible test
+    // screen is tracked separately; calling that a board paint would mislead.
+    if (!serverGame || serverGame.notificationTest) return;
+    let cancelled = false;
+    let frameScheduled = false;
+    let finishing = false;
+    let paintedAt: number | null = null;
+    let tap: Awaited<ReturnType<typeof readNotificationTap>> = null;
+    let firstFrame = 0;
+    let secondFrame = 0;
+    let retryTimer: number | null = null;
+    let attempts = 0;
+    let sampleId = 0;
+    let wasVisible = document.visibilityState === "visible" && document.hasFocus();
+    const finish = () => {
+      if (cancelled || finishing || !tap || paintedAt === null || paintedAt < tap.clickedAt) return;
+      finishing = true;
+      const currentSample = sampleId;
+      void finishNotificationBoardTiming(gameId, tap, paintedAt).then((result) => {
+        if (!cancelled && sampleId === currentSample && result) {
+          setNotificationBoardTiming(result);
+          const report = () => reportNotificationBoardPaint(result.elapsedMs, result.mode);
+          if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(report, { timeout: 5_000 });
+          else globalThis.setTimeout(report, 1_500);
+        }
+      });
+    };
+    const captureFrame = () => {
+      if (cancelled || frameScheduled || paintedAt !== null
+        || document.visibilityState !== "visible" || !document.hasFocus()) return;
+      frameScheduled = true;
+      firstFrame = requestAnimationFrame(() => {
+        secondFrame = requestAnimationFrame(() => {
+          frameScheduled = false;
+          if (cancelled || document.visibilityState !== "visible" || !document.hasFocus()
+            || !document.querySelector(".chessboard")?.getClientRects().length) return;
+          // Capture the first visible board frame independently of cache reads.
+          paintedAt = Date.now();
+          finish();
+        });
+      });
+    };
+    const findTap = async () => {
+      if (cancelled || finishing || tap || document.visibilityState !== "visible" || !document.hasFocus()) return;
+      const currentSample = sampleId;
+      const found = await readNotificationTap(gameId, serverGame.version);
+      if (cancelled || sampleId !== currentSample || finishing || tap) return;
+      if (!found) {
+        // The worker writes its small receipt in parallel with navigation.
+        // A few reads cover the race without slowing the notification click.
+        if (attempts < 3 && retryTimer === null) {
+          const delay = [60, 180, 500][attempts++];
+          retryTimer = window.setTimeout(() => {
+            retryTimer = null;
+            void findTap();
+          }, delay);
+        }
+        return;
+      }
+      tap = found;
+      if (paintedAt !== null && paintedAt < found.clickedAt) {
+        paintedAt = null;
+        captureFrame();
+      }
+      finish();
+    };
+    captureFrame();
+    void findTap();
+    const onVisible = (event: Event) => {
+      const visible = document.visibilityState === "visible" && document.hasFocus();
+      if (event.type === "chessriot:notification-open") {
+        sampleId += 1;
+        tap = null;
+        finishing = false;
+      }
+      // An already-open board predates the tap. A newly focused window needs
+      // its first visible frame; redundant focus events keep the first sample.
+      if (event.type === "chessriot:notification-open" || (visible && !wasVisible)) {
+        paintedAt = null;
+        cancelAnimationFrame(firstFrame);
+        cancelAnimationFrame(secondFrame);
+        frameScheduled = false;
+      }
+      wasVisible = visible;
+      attempts = 0;
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+      retryTimer = null;
+      captureFrame();
+      void findTap();
+    };
+    window.addEventListener("focus", onVisible);
+    window.addEventListener("pageshow", onVisible);
+    window.addEventListener("chessriot:notification-open", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(firstFrame);
+      cancelAnimationFrame(secondFrame);
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+      window.removeEventListener("focus", onVisible);
+      window.removeEventListener("pageshow", onVisible);
+      window.removeEventListener("chessriot:notification-open", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [gameId, serverGame]);
 
@@ -1682,6 +1796,14 @@ export function GameRoom({ gameId }: { gameId: string }) {
       <header className="topbar game-topbar">
         <Brand locale={locale} />
       </header>
+      {notificationBoardTiming ? <output className="notification-board-timing">
+        {t("Notification to first painted board: ${p0} ms", { p0: notificationBoardTiming.elapsedMs })}
+        {" · "}{t(notificationBoardTiming.mode === "same-game"
+          ? "Already on this board"
+          : notificationBoardTiming.mode === "existing-window"
+            ? "Existing app window"
+            : "New app window")}
+      </output> : null}
       {game.notificationTest ? <NotificationTurnTest game={game} onRefresh={() => void loadGame()} /> : null}
       <dialog
         className="surrender-confirm-backdrop"

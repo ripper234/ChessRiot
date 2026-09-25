@@ -1,6 +1,8 @@
 const STATIC_CACHE = "chessriot-static-v2";
 const PUSH_CONSENT_CACHE = "chessriot-push-consent-v1";
 const PUSH_CONSENT_PATH = "/__chessriot_push_consent__";
+const NOTIFICATION_TIMING_CACHE = "chessriot-notification-timing-v1";
+const NOTIFICATION_TIMING_LIMIT = 40;
 const PUSH_DIAGNOSTIC_WORKER_VERSION = "0.31.3";
 const PUSH_DIAGNOSTIC_RECEIPT_TYPE = "chessriot:push-diagnostic-receipt";
 const LOCAL_PUSH_DIAGNOSTIC_EVENT_TYPE = "chessriot:local-push-diagnostic-event";
@@ -414,7 +416,25 @@ async function openGameInClient(client, path) {
   });
 }
 
+async function recordNotificationTap(gameId, gameVersion, clickedAt, mode) {
+  try {
+    const cache = await caches.open(NOTIFICATION_TIMING_CACHE);
+    await cache.put(`/__chessriot_notification_timing__/${gameId}`, new Response(JSON.stringify({
+      clickedAt,
+      gameVersion: Number.isSafeInteger(gameVersion) && gameVersion >= 0 ? gameVersion : null,
+      mode,
+    })));
+    const keys = await cache.keys();
+    for (const key of keys.slice(0, Math.max(0, keys.length - NOTIFICATION_TIMING_LIMIT))) {
+      await cache.delete(key);
+    }
+  } catch {
+    // A storage failure must never delay or prevent opening the notification.
+  }
+}
+
 self.addEventListener("notificationclick", (event) => {
+  const clickedAt = Date.now();
   const diagnosticId = event.notification.data?.diagnosticId;
   const localDiagnosticId = event.notification.data?.localDiagnosticId;
   const remoteDiagnostic = typeof diagnosticId === "string" && GAME_ID_PATTERN.test(diagnosticId);
@@ -463,6 +483,9 @@ self.addEventListener("notificationclick", (event) => {
       }
     });
     if (matching) {
+      if (path.startsWith("/g/")) {
+        event.waitUntil(recordNotificationTap(path.slice(3), event.notification.data?.gameVersion, clickedAt, "same-game"));
+      }
       try {
         matching.postMessage({ type: "chessriot:notification-open", path });
         return await matching.focus();
@@ -472,6 +495,9 @@ self.addEventListener("notificationclick", (event) => {
     }
     const existing = clients.find((client) => client.visibilityState === "visible") ?? clients[0];
     if (existing) {
+      if (path.startsWith("/g/")) {
+        event.waitUntil(recordNotificationTap(path.slice(3), event.notification.data?.gameVersion, clickedAt, "existing-window"));
+      }
       try {
         await existing.focus();
         if (await openGameInClient(existing, path)) return existing;
@@ -480,6 +506,9 @@ self.addEventListener("notificationclick", (event) => {
       } catch {
         // Open a new window when Android refuses to navigate an existing client.
       }
+    }
+    if (!existing && path.startsWith("/g/")) {
+      event.waitUntil(recordNotificationTap(path.slice(3), event.notification.data?.gameVersion, clickedAt, "new-window"));
     }
     return self.clients.openWindow(path);
   })());
