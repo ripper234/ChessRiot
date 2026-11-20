@@ -4,6 +4,7 @@ import type { GameSnapshot, PublicMove } from "./game-types";
 import {
   actionEndpointSquares,
   actionSanSequence,
+  boardFocusIndex,
   capturedPiecesByVictimColor,
   CHESS_PIECE_GLYPHS,
   CHESS_PIECE_NAMES,
@@ -17,6 +18,7 @@ import {
   orientedBoardSquares,
   outcomeText,
   pieceCannotAnswerCheckMessage,
+  premoveForBoard,
 } from "./game-presentation";
 
 function move(
@@ -137,6 +139,46 @@ describe("board colors", () => {
     expect(DIFFICULTY_LABELS[3]).toBe("Medium");
     expect(HEBREW_CHESS_PIECE_NAMES.q).toBe("מלכה");
     expect(HEBREW_DIFFICULTY_LABELS[3]).toBe("בינוני");
+  });
+});
+
+describe("keyboard board navigation", () => {
+  it.each(["w", "b"] as const)("stays on the same square at every %s board edge", (color) => {
+    const board = orientedBoardSquares(color);
+    for (let offset = 0; offset < 8; offset++) {
+      const left = offset * 8;
+      const right = left + 7;
+      const bottom = 56 + offset;
+      expect(boardFocusIndex(left, "ArrowLeft")).toBe(left);
+      expect(boardFocusIndex(right, "ArrowRight")).toBe(right);
+      expect(boardFocusIndex(offset, "ArrowUp")).toBe(offset);
+      expect(boardFocusIndex(bottom, "ArrowDown")).toBe(bottom);
+    }
+    const center = board.indexOf("d4");
+    const destinations = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"]
+      .map(key => board[boardFocusIndex(center, key)!]);
+    expect(destinations).toEqual(color === "w"
+      ? ["c4", "e4", "d5", "d3", "a4", "h4"]
+      : ["e4", "c4", "d3", "d5", "h4", "a4"]);
+    expect(boardFocusIndex(center, "Enter")).toBeNull();
+    expect(boardFocusIndex(center, "Tab")).toBeNull();
+  });
+});
+
+describe("premoves on the displayed board", () => {
+  const saved = { revision: 3, status: "queued", move: { from: "c2", to: "c4" } } as const;
+  const draft = { from: "e7", to: "e8", promotion: "n" } as const;
+  const invalid = { revision: 4, status: "invalid", move: null } as const;
+
+  it.each([
+    { state: saved, draft: null, expected: { kind: "saved", move: saved.move } },
+    { state: saved, draft, expected: { kind: "draft", move: draft } },
+    { state: undefined, draft, expected: { kind: "draft", move: draft } },
+    { state: invalid, draft: null, expected: { kind: "invalid", move: null } },
+  ])("hides $expected.kind during replay and restores it on return to live", ({ state, draft, expected }) => {
+    expect(premoveForBoard(state, draft, false)).toEqual(expected);
+    expect(premoveForBoard(state, draft, true)).toBeNull();
+    expect(premoveForBoard(state, draft, false)).toEqual(expected);
   });
 });
 

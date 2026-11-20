@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type {
   AiDifficulty,
@@ -9,6 +9,7 @@ import type {
   GameSnapshot,
   TurnPaceDays,
 } from "@/lib/game-types";
+import { fetchJsonWithReadTimeout } from "@/lib/client-recovery";
 import { readApiJson } from "@/lib/client-http";
 import {
   generateSecret,
@@ -31,13 +32,45 @@ import {
 } from "@/lib/magic-rules";
 import { canonicalUsername, validateUsername } from "@/lib/usernames";
 import { isAiDifficulty, isTurnPaceDays } from "@/lib/validation";
-import { useAccountSession } from "./AccountGate";
+import { type AccountSession, useAccountSession } from "./AccountGate";
 import { Brand } from "./Brand";
 import { GameVariantPicker } from "./GameVariantPicker";
+import { useLanguage } from "./LanguageProvider";
 import { PlayerHandle } from "./PlayerHandle";
 
 interface FriendsPayload {
   friends?: Array<{ username?: unknown }>;
+}
+
+type FriendsList =
+  | { status: "loading" | "failed" }
+  | { status: "ready"; usernames: string[] };
+
+export function resolveChallengeRecipient(selected: string, list: FriendsList) {
+  if (!selected) return { username: "", blockedMessage: "" };
+  if (list.status === "ready") {
+    const canonical = canonicalUsername(selected);
+    const accepted = list.usernames.find((name) => canonicalUsername(name) === canonical);
+    return accepted
+      ? { username: accepted, blockedMessage: "" }
+      : { username: selected, blockedMessage: "This player is not on your friends list." };
+  }
+  return { username: selected, blockedMessage: list.status === "loading"
+    ? "Checking your friends list…"
+    : "Your friends list could not be loaded." };
+}
+
+export function matchesCreatedOpponent(
+  mode: GameMode,
+  username: string,
+  game: Pick<GameSnapshot, "mode" | "players">,
+  inviteUrl?: string,
+) {
+  if (game.mode !== mode) return false;
+  if (mode === "solo") return !inviteUrl;
+  return username
+    ? !inviteUrl && game.players.black?.name === username
+    : Boolean(inviteUrl) && game.players.black === null;
 }
 
 interface AppliedWorld {
@@ -191,14 +224,32 @@ function parseStoredMagicApplyDraft(value: string | null): StoredMagicApplyDraft
 }
 
 export function CreateGame() {
-  const router = useRouter();
+  const query = useSearchParams().toString();
   const account = useAccountSession();
-  const [mode, setMode] = useState<GameMode>("solo");
-  const [variantId, setVariantId] = useState<GameVariantId>("standard");
+  return <GameSetup key={`${account.username}/${query}`} query={query} account={account} />;
+}
+
+function GameSetup({ query, account }: { query: string; account: AccountSession }) {
+  const router = useRouter();
+  const { t } = useLanguage();
+  const search = useMemo(() => new URLSearchParams(query), [query]);
+  const requestedVariant = search.get("variant");
+  const validVariant = requestedVariant && isGameVariantId(requestedVariant) ? requestedVariant : "standard";
+  const requestedOpponent = search.get("opponent") ?? "";
+  const multiplayer = !gameVariant(validVariant).soloOnly
+    && (Boolean(requestedOpponent) || search.get("mode") === "multiplayer");
+  const [mode, setMode] = useState<GameMode>(multiplayer ? "multiplayer" : "solo");
+  const [variantId, setVariantId] = useState<GameVariantId>(validVariant);
   const [difficulty, setDifficulty] = useState<AiDifficulty>(3);
   const [turnPaceDays, setTurnPaceDays] = useState<TurnPaceDays>(3);
-  const [friends, setFriends] = useState<string[]>([]);
-  const [opponentUsername, setOpponentUsername] = useState("");
+  const [friendsList, setFriendsList] = useState<FriendsList>({ status: "loading" });
+  const [friendsAttempt, setFriendsAttempt] = useState(0);
+  const [selectedOpponent, setSelectedOpponent] = useState(multiplayer ? requestedOpponent : "");
+  const { username: opponentUsername, blockedMessage } = resolveChallengeRecipient(
+    mode === "multiplayer" ? selectedOpponent : "", friendsList,
+  );
+  const friends = friendsList.status === "ready" ? friendsList.usernames : [];
+  const validHandle = !opponentUsername || validateUsername(opponentUsername).ok;
   const [magicOn, setMagicOn] = useState(false);
   const [magicPrompt, setMagicPrompt] = useState("");
   const [selectedWorldCode, setSelectedWorldCode] = useState<string | null>(null);
@@ -218,6 +269,7 @@ export function CreateGame() {
   const [magicRequestMessage, setMagicRequestMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const createBlocked = busy || magicApplyBusy || magicReservationLoading || Boolean(blockedMessage);
   const pending = useRef<PendingGameCreate | null>(null);
   const selectedVariant = gameVariant(variantId);
   const magicResult = useMemo(
@@ -227,7 +279,6 @@ export function CreateGame() {
 
   useEffect(() => {
     let cancelled = false;
-    const search = new URL(window.location.href).searchParams;
     const reservationKey = reservationStorageKey(account.username);
     let storedReservation: string | null = null;
     let storedApplyDraft: string | null = null;
@@ -241,58 +292,40 @@ export function CreateGame() {
     const restoredDraft = restored
       ? null
       : parseStoredMagicApplyDraft(storedApplyDraft);
-    const restoredMagicSetup = Boolean(restored || restoredDraft);
-    const requestedVariant = search.get("variant");
-    const requestedMode = search.get("mode");
+    const storedSetup = account.features.magicRules ? restored ?? restoredDraft : null;
     const requestedDifficulty = Number(search.get("difficulty"));
     const requestedPace = Number(search.get("pace"));
-    const requestedOpponent = search.get("opponent");
     const requestedMagic = search.get("magic") ?? search.get("magicPrompt");
     const requestedWorld = search.get("world");
     const requestedFork = search.get("fork");
-    const validVariant = requestedVariant && isGameVariantId(requestedVariant)
-      ? requestedVariant
-      : "standard";
-    if (restored && account.features.magicRules) {
-      pending.current = restored.pending;
-      setMode(restored.mode);
+    if (storedSetup) {
+      if (!requestedOpponent) {
+        setMode(storedSetup.mode);
+        setSelectedOpponent(storedSetup.opponentUsername);
+      }
       setVariantId("standard");
-      setDifficulty(restored.difficulty);
-      setTurnPaceDays(restored.turnPaceDays);
-      setOpponentUsername(restored.opponentUsername);
+      setDifficulty(storedSetup.difficulty);
+      setTurnPaceDays(storedSetup.turnPaceDays);
       setMagicOn(true);
+      pending.current = storedSetup.pending;
+    }
+    if (restored && account.features.magicRules) {
       setSelectedWorldCode(restored.world.code);
       setParentWorldCode(null);
       setAppliedWorld(restored.world);
       setCreditBalance(restored.creditBalance);
       setMagicApplyMessage("Reserved Magic game restored. Start it to use the paid credit.");
     } else if (restoredDraft && account.features.magicRules) {
-      pending.current = restoredDraft.pending;
-      setMode(restoredDraft.mode);
-      setVariantId("standard");
-      setDifficulty(restoredDraft.difficulty);
-      setTurnPaceDays(restoredDraft.turnPaceDays);
-      setOpponentUsername(restoredDraft.opponentUsername);
-      setMagicOn(true);
       setMagicPrompt(restoredDraft.prompt);
       setSelectedWorldCode(restoredDraft.selectedWorldCode);
       setParentWorldCode(restoredDraft.parentWorldCode);
       setMagicApplyRetryPending(true);
       setMagicApplyMessage("Unfinished Apply restored. Retry it to recover the same paid request.");
-    } else if (requestedVariant && isGameVariantId(requestedVariant)) {
-      setVariantId(requestedVariant);
-      if (gameVariant(requestedVariant).soloOnly) setMode("solo");
-      else if (requestedMode === "multiplayer") setMode("multiplayer");
-      else if (requestedMode === "solo") setMode("solo");
-    } else if (requestedMode === "multiplayer" || requestedMode === "solo") {
-      setMode(requestedMode);
-    } else if (requestedOpponent) {
-      setMode("multiplayer");
     }
-    if (!restoredMagicSetup && isAiDifficulty(requestedDifficulty)) setDifficulty(requestedDifficulty);
-    if (!restoredMagicSetup && isTurnPaceDays(requestedPace)) setTurnPaceDays(requestedPace);
+    if (!storedSetup && isAiDifficulty(requestedDifficulty)) setDifficulty(requestedDifficulty);
+    if (!storedSetup && isTurnPaceDays(requestedPace)) setTurnPaceDays(requestedPace);
     if (
-      !restoredMagicSetup
+      !storedSetup
       &&
       account.features.magicRules
       && validVariant === "standard"
@@ -304,11 +337,11 @@ export function CreateGame() {
         setMagicOn(true);
       }
     }
-    if (!restoredMagicSetup && account.features.magicRules && validVariant === "standard" && requestedWorld) {
+    if (!storedSetup && account.features.magicRules && validVariant === "standard" && requestedWorld) {
       setMagicOn(true);
       setSelectedWorldCode(requestedWorld);
       setMagicApplyMessage("Existing World selected. Apply Magic to reserve this game for 1 credit.");
-    } else if (!restoredMagicSetup && account.features.magicRules && validVariant === "standard" && requestedFork) {
+    } else if (!storedSetup && account.features.magicRules && validVariant === "standard" && requestedFork) {
       setMagicOn(true);
       setMagicApplyMessage("Loading the parent World rules…");
       void fetch(`/api/worlds/${encodeURIComponent(requestedFork)}`, {
@@ -342,20 +375,14 @@ export function CreateGame() {
     const explicitMagicSetup = Boolean(requestedMagic || requestedWorld || requestedFork);
     if (
       account.features.magicRules
-      && !restoredMagicSetup
+      && !storedSetup
       && !explicitMagicSetup
       && validVariant === "standard"
     ) {
-      void fetch("/api/worlds/apply", { cache: "no-store", credentials: "same-origin" })
-        .then(async (response) => response.ok
-          ? await response.json() as {
-            reservation?: {
-              gameCreateRequestId?: unknown;
-              world?: AppliedWorld;
-              creditBalance?: unknown;
-            } | null;
-          }
-          : null)
+      void fetchJsonWithReadTimeout<{
+        reservation?: { gameCreateRequestId?: unknown; world?: AppliedWorld; creditBalance?: unknown } | null;
+      }>("/api/worlds/apply", { cache: "no-store", credentials: "same-origin" })
+        .then(({ response, data }) => response.ok ? data : null)
         .then((payload) => {
           if (cancelled || !payload?.reservation?.world) return;
           const requestId = payload.reservation.gameCreateRequestId;
@@ -365,8 +392,6 @@ export function CreateGame() {
             inviteToken: generateSecret(),
             requestId,
           };
-          setMode("solo");
-          setOpponentUsername("");
           setVariantId("standard");
           setMagicOn(true);
           setSelectedWorldCode(payload.reservation.world.code);
@@ -386,25 +411,6 @@ export function CreateGame() {
     } else {
       setMagicReservationLoading(false);
     }
-    void fetch("/api/me/friends", { cache: "no-store", credentials: "same-origin" })
-      .then(async (response) => response.ok ? await response.json() as FriendsPayload : null)
-      .then((payload) => {
-        if (cancelled || !payload) return;
-        const usernames = (payload.friends ?? []).flatMap((friend) =>
-          typeof friend.username === "string" ? [friend.username] : []);
-        setFriends(usernames);
-        if (
-          !restoredMagicSetup
-          && !pending.current
-          && requestedOpponent
-          && usernames.some((username) => canonicalUsername(username) === canonicalUsername(requestedOpponent))
-        ) {
-          setOpponentUsername(usernames.find((username) => canonicalUsername(username) === canonicalUsername(requestedOpponent)) ?? "");
-        }
-      })
-      .catch(() => {
-        // A temporary friends-list failure never blocks Solo or link invitations.
-      });
     void fetch("/api/me/referral", { cache: "no-store", credentials: "same-origin" })
       .then(async (response) => response.ok
         ? await response.json() as { credits?: unknown }
@@ -414,7 +420,26 @@ export function CreateGame() {
       })
       .catch(() => undefined);
     return () => { cancelled = true; };
-  }, [account.features.magicRules, account.username]);
+  }, [account.features.magicRules, account.username, requestedOpponent, search, validVariant]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetchJsonWithReadTimeout<FriendsPayload>("/api/me/friends", {
+      cache: "no-store", credentials: "same-origin", signal: controller.signal,
+    }).then(({ response, data }) => {
+      if (controller.signal.aborted) return;
+      if (!response.ok || !Array.isArray(data?.friends)) {
+        setFriendsList({ status: "failed" });
+        return;
+      }
+      const usernames = data.friends.flatMap((friend) =>
+        typeof friend?.username === "string" ? [friend.username] : []);
+      setFriendsList({ status: "ready", usernames });
+    }).catch(() => {
+      if (!controller.signal.aborted) setFriendsList({ status: "failed" });
+    });
+    return () => controller.abort();
+  }, [friendsAttempt]);
 
   useEffect(() => {
     if (!account.features.magicRules || !appliedWorld || !pending.current) return;
@@ -453,6 +478,7 @@ export function CreateGame() {
   }
 
   async function applyMagic() {
+    if (blockedMessage || magicReservationLoading) return;
     if (!selectedWorldCode && (!magicResult || !magicResult.ok)) {
       setMagicApplyMessage(magicResult && !magicResult.ok
         ? magicResult.message
@@ -609,6 +635,7 @@ export function CreateGame() {
 
   async function createGame(event: FormEvent) {
     event.preventDefault();
+    if (createBlocked) return;
     if (magicOn && !appliedWorld) {
       setError("Apply Magic before starting the game.");
       return;
@@ -640,11 +667,13 @@ export function CreateGame() {
         inviteUrl?: string;
         error?: { message?: unknown };
       };
-      const needsLink = mode === "multiplayer" && !opponentUsername;
-      if (!response.ok || !data.game || (needsLink && !data.inviteUrl)) {
+      if (!response.ok || !data.game) {
         throw new Error(typeof data.error?.message === "string"
           ? data.error.message
           : "Could not create the game");
+      }
+      if (!matchesCreatedOpponent(mode, opponentUsername, data.game, data.inviteUrl)) {
+        throw new Error(t("The returned game does not match your selection. Check your games on Home."));
       }
       try {
         localStorage.setItem(playerKey(data.game.id), pending.current.playerToken);
@@ -686,12 +715,12 @@ export function CreateGame() {
           <Link href="/notification-test" style={{ display: "block", fontSize: 16, marginBottom: 18 }}>Test notifications on this device</Link>
           <GameVariantPicker
             value={variantId}
-            disabled={busy || Boolean(appliedWorld) || magicApplyRetryPending}
+            disabled={busy || magicReservationLoading || Boolean(appliedWorld) || magicApplyRetryPending}
             onChange={(nextVariantId) => {
               setVariantId(nextVariantId);
               if (gameVariant(nextVariantId).soloOnly) {
                 setMode("solo");
-                setOpponentUsername("");
+                setSelectedOpponent("");
               }
               if (nextVariantId !== "standard") setMagicOn(false);
               resetPending();
@@ -708,7 +737,7 @@ export function CreateGame() {
                   checked={mode === "solo"}
                   onChange={() => {
                     setMode("solo");
-                    setOpponentUsername("");
+                    setSelectedOpponent("");
                     resetPending();
                   }}
                 />
@@ -739,26 +768,36 @@ export function CreateGame() {
           </fieldset>
 
           {mode === "multiplayer" ? (
-            <label className="opponent-picker" htmlFor="opponent-username">
-              <span>WHO DO YOU WANT TO CHALLENGE?</span>
+            <div className="opponent-picker">
+              <label htmlFor="opponent-username">{t("WHO DO YOU WANT TO CHALLENGE?")}</label>
               <select
                 id="opponent-username"
                 value={opponentUsername}
+                aria-describedby={blockedMessage ? "challenge-recipient-status" : undefined}
                 disabled={busy}
                 onChange={(event) => {
-                  setOpponentUsername(event.target.value);
+                  setSelectedOpponent(event.target.value);
                   resetPending();
                 }}
               >
-                <option value="">Create a private invitation link</option>
+                <option value="">{t("Create a private invitation link")}</option>
+                {blockedMessage ? <option value={opponentUsername} dir="auto" disabled>
+                  {validHandle ? `@${opponentUsername}` : t("Unavailable player")}
+                </option> : null}
                 {friends.map((username) => (
                   <option dir="auto" value={username} key={username}>@{username}</option>
                 ))}
               </select>
-              <small>{friends.length
+              {blockedMessage ? <>
+                <small id="challenge-recipient-status" role="status">{t(blockedMessage)}</small>
+                {friendsList.status !== "loading" ? <button className="secondary-button" type="button" onClick={() => {
+                  setFriendsList({ status: "loading" });
+                  setFriendsAttempt((attempt) => attempt + 1);
+                }}>{t("Retry friends list")}</button> : null}
+              </> : <small>{friends.length
                 ? "Choose a friend or share a private link. You can leave afterward, or play your opening move before they accept."
-                : <>Add friends from <Link href="/">Home</Link>, or share a private link. You can leave afterward, or play your opening move before they accept.</>}</small>
-            </label>
+                : <>Add friends from <Link href="/">Home</Link>, or share a private link. You can leave afterward, or play your opening move before they accept.</>}</small>}
+            </div>
           ) : null}
 
           {variantId === "standard" ? (
@@ -768,7 +807,7 @@ export function CreateGame() {
                   <input
                     type="checkbox"
                     checked={magicOn}
-                    disabled={busy || Boolean(appliedWorld) || magicApplyRetryPending}
+                    disabled={busy || magicReservationLoading || Boolean(appliedWorld) || magicApplyRetryPending}
                     onChange={(event) => {
                       setMagicOn(event.target.checked);
                       if (!event.target.checked) setMagicApplyMessage("");
@@ -812,6 +851,7 @@ export function CreateGame() {
                       type="button"
                       disabled={
                         busy
+                        || Boolean(blockedMessage)
                         || magicReservationLoading
                         || magicApplyBusy
                         || Boolean(appliedWorld)
@@ -909,10 +949,10 @@ export function CreateGame() {
             </fieldset>
           )}
           {error ? <p className="form-error" role="alert">{error}</p> : null}
-          <button className="primary-button" type="submit" disabled={busy}>
+          <button className="primary-button" type="submit" disabled={createBlocked}>
             {busy ? "STARTING…" : mode === "solo"
               ? "PLAY RIOT BOT  →"
-              : opponentUsername ? `SEND CHALLENGE TO @${opponentUsername}  →` : "CREATE & SHARE INVITATION  →"}
+              : opponentUsername ? <>{t("SEND CHALLENGE TO")}{" "}{validHandle ? <PlayerHandle username={opponentUsername} /> : t("Unavailable player")}{"  →"}</> : t("CREATE & SHARE INVITATION  →")}
           </button>
         </form>
       </section>

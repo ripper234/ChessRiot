@@ -1,4 +1,18 @@
-# ChessRiot v0.31.5 specification
+# ChessRiot v0.31.6 specification
+
+## Returning to a game or friend challenge (v0.31.6)
+
+- Signing in returns the player to History or to the validated setup link
+  they opened. A retry after a matching Google cancellation keeps that destination.
+- A named challenge keeps its recipient visible while the friends list loads.
+  A delayed or failed lookup cannot switch the game to a private invitation.
+- Games, friends and referral details load independently. A failed refresh keeps
+  the last successful data and offers a retry for that section. Show an empty
+  state only when the server has confirmed it.
+- Arrow keys stop at the displayed board edge in either orientation. Replay
+  hides live premove controls and markers. Returning to live play restores them.
+- The Chess Coach counts material gained by promoting during the player's move,
+  the opponent's capture and the player's possible recapture.
 
 ## Open-game move updates (v0.31.3)
 

@@ -8,7 +8,9 @@ import {
   googleClientSecret,
   sessionSigningSecret,
 } from "./runtime";
-import { normalizeDisplayName } from "./validation";
+import { isGameVariantId } from "./game-variants";
+import { validateUsername } from "./usernames";
+import { isGameMode, normalizeDisplayName } from "./validation";
 
 export const GOOGLE_FLOW_COOKIE = "__Host-chessriot-google-flow";
 export const GOOGLE_SESSION_COOKIE = "__Host-chessriot-google-session";
@@ -165,8 +167,24 @@ export function clearGoogleSessionCookie(): string {
   return cookie(GOOGLE_SESSION_COOKIE, "", 0);
 }
 
+function isSetupReturnParam(key: string, value: string): boolean {
+  switch (key) {
+    case "mode": return isGameMode(value);
+    case "variant": return isGameVariantId(value);
+    case "difficulty": return /^[1-5]$/.test(value);
+    case "pace": return /^[135]$/.test(value);
+    case "opponent": {
+      const name = validateUsername(value);
+      return name.ok && name.username === value;
+    }
+    case "world":
+    case "fork": return /^0x[0-9a-f]{40}$/.test(value);
+    default: return false;
+  }
+}
+
 export function safeRelativeReturnPath(value: string | null): string {
-  if (!value || value.length > 512 || /[\u0000-\u001f\u007f\\]/.test(value)) {
+  if (!value || value.length > 2048 || /[\u0000-\u001f\u007f\\]/.test(value)) {
     return "/app";
   }
   try {
@@ -175,14 +193,19 @@ export function safeRelativeReturnPath(value: string | null): string {
     if (parsed.origin !== base) return "/app";
     const privacyCenter = parsed.pathname === "/privacy-center"
       && (!parsed.search || parsed.search === "?delete=1");
-    const publicPath = ["/", "/app", "/privacy", "/terms", "/changelog", "/demo", "/privacy-center", "/worlds"]
+    const simplePath = ["/", "/app", "/history", "/notification-test", "/privacy", "/terms", "/changelog", "/demo", "/privacy-center", "/worlds"]
       .includes(parsed.pathname);
     const worldPath = /^\/worlds\/0x[0-9a-f]{40}$/.test(parsed.pathname);
     const gamePath = /^\/g\/[0-9a-f-]{36}$/i.test(parsed.pathname);
     const invitationPath = /^\/join\/[A-Za-z0-9_-]{32,128}$/.test(parsed.pathname);
     const referralPath = /^\/invite\/[A-Za-z0-9_-]{16}$/.test(parsed.pathname);
     if (privacyCenter && !parsed.hash) return `${parsed.pathname}${parsed.search}`;
-    if (publicPath && !parsed.search && !parsed.hash) return parsed.pathname;
+    if (simplePath && !parsed.search && !parsed.hash) return parsed.pathname;
+    if (parsed.pathname === "/app" && !parsed.hash && parsed.search.length <= 2044
+        && Array.from(parsed.searchParams).every(([key, item]) =>
+          parsed.searchParams.getAll(key).length === 1 && isSetupReturnParam(key, item))) {
+      return `/app${parsed.search}`;
+    }
     if (worldPath && !parsed.search && !parsed.hash) return parsed.pathname;
     if (invitationPath && !parsed.hash) return parsed.pathname;
     if (referralPath && !parsed.hash) return parsed.pathname;

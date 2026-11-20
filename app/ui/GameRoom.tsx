@@ -72,6 +72,7 @@ import { canPlayPendingOpening } from "@/lib/pending-opening";
 import { PendingInvitation } from "./PendingInvitation";
 import {
   actionEndpointSquares,
+  boardFocusIndex,
   capturedPiecesByVictimColor,
   CHESS_PIECE_NAMES,
   DIFFICULTY_LABELS,
@@ -81,6 +82,7 @@ import {
   isDarkSquare,
   orientedBoardSquares,
   pieceCannotAnswerCheckMessage,
+  premoveForBoard,
 } from "@/lib/game-presentation";
 import { classifyGameFinisher, type GameFinisher } from "@/lib/game-finishers";
 import {
@@ -1064,6 +1066,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
   );
   const canPremove = Boolean(game && game.mode === "multiplayer" && game.status === "active"
     && game.turn !== game.you.color && !busy && !viewingHistory);
+  const boardPremove = premoveForBoard(game?.premove, premoveDraft, viewingHistory);
   const botThinking = Boolean(
     openingIntro || (
     game &&
@@ -1081,7 +1084,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
     : [];
 
   async function savePremove(move: { from: string; to: string; promotion?: Promotion } | null) {
-    if (!game || busy) return;
+    if (!game || busy || viewingHistory) return;
     setBusy(true);
     try {
       const response = await fetch(`/api/games/${gameId}/premove`, {
@@ -1107,18 +1110,10 @@ export function GameRoom({ gameId }: { gameId: string }) {
 
   function handleSquareKeyDown(
     event: ReactKeyboardEvent<HTMLButtonElement>,
-    square: Square,
+    index: number,
   ) {
-    const index = squares.indexOf(square);
-    if (index < 0) return;
-    let nextIndex = index;
-    if (event.key === "ArrowLeft") nextIndex = Math.max(0, index - 1);
-    else if (event.key === "ArrowRight") nextIndex = Math.min(63, index + 1);
-    else if (event.key === "ArrowUp") nextIndex = Math.max(0, index - 8);
-    else if (event.key === "ArrowDown") nextIndex = Math.min(63, index + 8);
-    else if (event.key === "Home") nextIndex = Math.floor(index / 8) * 8;
-    else if (event.key === "End") nextIndex = Math.floor(index / 8) * 8 + 7;
-    else return;
+    const nextIndex = boardFocusIndex(index, event.key);
+    if (nextIndex === null) return;
     event.preventDefault();
     focusBoardSquare(squares[nextIndex]);
   }
@@ -1837,19 +1832,19 @@ export function GameRoom({ gameId }: { gameId: string }) {
             >{t("Keep playing")}{" "}</button>
           </section>
       </dialog>
-      {canPremove || game.premove?.move ? <aside className="premove-panel" role="status">
+      {canPremove || boardPremove?.move ? <aside className="premove-panel" role="status">
         <strong>{t("Plan your next move")}</strong>
-        <p>{premoveDraft || game.premove?.move
+        <p>{boardPremove?.move
           ? t("Plays automatically after your opponent moves, only if legal.")
           : t("Select your piece and destination while your opponent thinks. You can plan a recapture onto your own piece.")}</p>
-        {premoveDraft ? <><bdi dir="ltr">{premoveDraft.from} → {premoveDraft.to}{premoveDraft.promotion ? `=${premoveDraft.promotion.toUpperCase()}` : ""}</bdi>
-          <button disabled={busy} onClick={() => void savePremove(premoveDraft)}>{t("Save planned move")}</button>
-          <button onClick={() => setPremoveDraft(null)}>{t("Cancel")}</button></> : game.premove?.move ? <>
-          <bdi dir="ltr">{game.premove.move.from} → {game.premove.move.to}</bdi>
+        {boardPremove?.kind === "draft" ? <><bdi dir="ltr">{boardPremove.move.from} → {boardPremove.move.to}{boardPremove.move.promotion ? `=${boardPremove.move.promotion.toUpperCase()}` : ""}</bdi>
+          <button disabled={busy} onClick={() => void savePremove(boardPremove.move)}>{t("Save planned move")}</button>
+          <button disabled={busy} onClick={() => setPremoveDraft(null)}>{t("Cancel")}</button></> : boardPremove?.kind === "saved" ? <>
+          <bdi dir="ltr">{boardPremove.move.from} → {boardPremove.move.to}</bdi>
           <span>{t("Planned move saved. You can close the app.")}</span>
           <button disabled={busy} onClick={() => void savePremove(null)}>{t("Cancel planned move")}</button>
         </> : null}
-      </aside> : game.status === "active" && game.premove?.status === "invalid" && game.turn === game.you.color ? <p role="status">{t("Your planned move was not legal after your opponent’s move. Choose another move.")}</p> : null}
+      </aside> : game.status === "active" && boardPremove?.kind === "invalid" && game.turn === game.you.color ? <p role="status">{t("Your planned move was not legal after your opponent’s move. Choose another move.")}</p> : null}
       <TestGameDetails enabled={Boolean(game.notificationTest)}>
       <section className="game-layout" dir="ltr">
         <div
@@ -2013,7 +2008,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                 const piece = chess.get(square);
                 const legal = legalMoves.some((move) => move.to === square);
                 const capture = legal && Boolean(piece || legalMoves.some((move) => move.to === square && move.isEnPassant()));
-                const planned = premoveDraft ?? game.premove?.move;
+                const planned = boardPremove?.move;
                 const isPlanned = planned?.from === square || planned?.to === square;
                 const isSelected = selected === square;
                 const isLast = lastMoveEndpoints.includes(square);
@@ -2040,7 +2035,7 @@ export function GameRoom({ gameId }: { gameId: string }) {
                     className={`square ${isDarkSquare(square) ? "dark-square" : "light-square"}${isSelected ? " selected" : ""}${isPlanned ? " premove-square" : ""}${isLast ? " last-move" : ""}${isCheckedKing ? " king-in-check" : ""}${legal ? capture ? " capture-target" : " legal-target" : ""}${isDragOver ? " drag-over" : ""}`}
                     key={square}
                     onFocus={() => setFocusedSquare(square)}
-                    onKeyDown={(event) => handleSquareKeyDown(event, square)}
+                    onKeyDown={(event) => handleSquareKeyDown(event, index)}
                     onClick={() => tapSquare(square)}
                     disabled={busy || botThinking || viewingHistory}
                   >

@@ -152,7 +152,6 @@ test("renders the public home and mandatory account-gated play routes", async ()
   assert.match(playerHomeSource, /window\.addEventListener\("online", refreshVisible\)/);
   assert.match(playerHomeSource, /document\.addEventListener\("visibilitychange", refreshVisible\)/);
   assert.match(playerHomeSource, /fetchJsonWithReadTimeout<SocialPayload>/);
-  assert.match(playerHomeSource, /generation !== refreshGeneration\.current/);
   assert.match(playerHomeSource, /ACTIVITY_CHANGED_EVENT, refreshAfterActivityChange/);
   assert.match(playerHomeSource, /Your friend link/);
   assert.match(playerHomeSource, /This friend link does not join a private game/);

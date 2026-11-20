@@ -113,6 +113,25 @@ describe("Google OAuth", () => {
     );
   });
 
+  it("preserves structured setup links and account pages through a signed flow", async () => {
+    const friend = encodeURIComponent("פרש");
+    for (const path of [
+      "/history", "/notification-test", "/app?mode=solo", `/app?opponent=${friend}`,
+      `/app?mode=multiplayer&opponent=${friend}&variant=pawn-duel&pace=3`,
+      "/app?mode=solo&difficulty=5", `/app?world=0x${"a".repeat(40)}`,
+    ]) {
+      const start = await createGoogleOAuthStart(path, 1_000);
+      await expect(googleFlowFromHeaders(new Headers({ cookie: cookiePair(start!.flowCookie) }), 1_001))
+        .resolves.toMatchObject({ returnTo: path });
+    }
+    for (const path of [
+      "/app?mode=multiplayer&next=other", "/app?mode=solo&mode=multiplayer",
+      "/app?opponent=abc%20def", "/app?opponent=Knight#game",
+      "/app?difficulty=6", "/app?pace=42", "/app?variant=unknown", "/history?unknown=1",
+      "/app?magic=private%20text",
+    ]) expect(safeRelativeReturnPath(path)).toBe("/app");
+  });
+
   it("accepts only signed, fresh OAuth state and safe return paths", async () => {
     expect(safeRelativeReturnPath("https://evil.example/app")).toBe("/app");
     const invite = "I".repeat(43);

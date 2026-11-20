@@ -12,6 +12,20 @@ const commitSource = (sha: string) => `${REPOSITORY_URL}/commit/${sha}`;
 
 export const RELEASES: ReleaseNote[] = [
   {
+    version: "0.31.6",
+    date: "2026-11-20",
+    title: "More reliable friend challenges and clearer board play",
+    summary: "Keep the friend you picked through sign-in and connection problems, and get more accurate advice when a pawn promotes.",
+    changes: [
+      "Open a named challenge or game history after Google sign-in. Verify the recipient before sending a challenge.",
+      "Continue an existing game while friends or invitation details load, and retry a failed section on its own.",
+      "Review earlier positions without changing a saved move. Keyboard arrows stop at the board edge on either side.",
+      "Count promotion gains when the coach evaluates a capture and recapture.",
+      "Update Next.js, sharp and source-map-js to patched releases.",
+    ],
+    githubUrl: `${REPOSITORY_URL}/tree/release/v0.31.6`,
+  },
+  {
     version: "0.31.5",
     date: "2026-09-26",
     title: "Measure notification board opening",

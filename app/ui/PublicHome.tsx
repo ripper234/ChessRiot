@@ -16,8 +16,8 @@ export function PublicHome() {
           <p className="public-eyebrow"><span /> CHESS, BUT ALIVE</p>
           <h1>REAL CHESS.<br /><em>TOTAL PLAY.</em></h1>
           <p>
-            Play Riot Bot or challenge a friend. Every match is saved to your
-            account, while Magic Rules open early for invited testers.
+            Play Riot Bot now, or challenge a friend and take your turns when
+            you have time. Your game is saved after every move.
           </p>
           <Link className="public-play-button" href="/app">
             PLAY CHESS <span aria-hidden="true">→</span>
@@ -32,9 +32,9 @@ export function PublicHome() {
             JOIN THE COMMUNITY ON WHATSAPP <span aria-hidden="true">↗</span>
           </a>
           <ul aria-label="ChessRiot highlights">
-            <li>Solo or multiplayer</li>
-            <li>One-, three-, or five-day turns</li>
-            <li>Magic Rules coming soon</li>
+            <li>5 Riot Bot levels</li>
+            <li>12 board skins</li>
+            <li>Magic Rules by invitation</li>
           </ul>
         </div>
         <div className="public-board-card">

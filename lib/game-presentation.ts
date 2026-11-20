@@ -8,6 +8,7 @@ import type {
   Promotion,
   PublicMove,
 } from "./game-types";
+import type { PremoveIntent } from "./premoves";
 
 export type CapturedPieces = Record<Color, PieceSymbol[]>;
 
@@ -68,6 +69,32 @@ export function orientedBoardSquares(orientation: Color): Square[] {
   return ranks.flatMap((rank) =>
     files.map((file) => `${file}${rank}` as Square),
   );
+}
+
+export function boardFocusIndex(index: number, key: string): number | null {
+  const rowStart = index - index % 8;
+  const rowEnd = rowStart + 7;
+  switch (key) {
+    case "ArrowLeft": return Math.max(rowStart, index - 1);
+    case "ArrowRight": return Math.min(rowEnd, index + 1);
+    case "ArrowUp": return index >= 8 ? index - 8 : index;
+    case "ArrowDown": return index < 56 ? index + 8 : index;
+    case "Home": return rowStart;
+    case "End": return rowEnd;
+    default: return null;
+  }
+}
+
+export function premoveForBoard(
+  saved: GameSnapshot["premove"],
+  draft: PremoveIntent | null,
+  viewingHistory: boolean,
+) {
+  if (viewingHistory) return null;
+  if (draft) return { kind: "draft" as const, move: draft };
+  if (saved?.move) return { kind: "saved" as const, move: saved.move };
+  if (saved?.status === "invalid") return { kind: "invalid" as const, move: null };
+  return null;
 }
 
 export function outcomeText(

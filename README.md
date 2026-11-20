@@ -4,15 +4,14 @@ Play at [chessriot.gg](https://chessriot.gg), read the
 [release history](https://chessriot.gg/changelog), or
 [join the WhatsApp community](https://chat.whatsapp.com/FaBgiUgl73vLdeqzcqx0vX).
 
-ChessRiot v0.31.5 is a mobile-first chess game for solo play against Riot Bot
+ChessRiot v0.31.6 is a mobile-first chess game for solo play against Riot Bot
 or asynchronous play with someone you know. Playing requires a Google account;
 every game, friend, and result follows the player across devices.
 
-The v0.27.7 release makes game entry recoverable when a response body stalls,
-delivers the creator's first-turn push exactly once after acceptance, and keeps
-Activity plus Android notification repair visible on every signed-in route.
-Protected game, invitation, Activity, and Settings states now render native
-Hebrew before first paint without reversing boards, notation, codes, or clocks.
+Open a friend's challenge link, sign in, and see who you are challenging before
+you send it. On the dashboard, current games load independently of friends and
+referral details. During a game, you can review earlier positions without
+disturbing a saved move.
 
 Use **Send feedback** in the unified Settings menu or
 [open a GitHub issue](https://github.com/ripper234/ChessRiot/issues). See

@@ -44,6 +44,41 @@ describe("chess coach", () => {
     )).toBeNull();
   });
 
+  it("recognizes a rook won for a pawn when the promoted queen is captured", () => {
+    expect(analyzeMoveRisk(
+      "rk6/1P6/8/8/8/8/8/4K3 w - - 0 1",
+      { from: "b7", to: "a8", promotion: "q", expectedVersion: 1, piece: "p" },
+    )).toBeNull();
+  });
+
+  it("counts a captured underpromotion as a one-pawn loss", () => {
+    expect(analyzeMoveRisk(
+      "1k6/P7/8/8/8/8/8/4K3 w - - 0 1",
+      { from: "a7", to: "a8", promotion: "n", expectedVersion: 1, piece: "p" },
+    )).toBeNull();
+  });
+
+  it("warns when a pawn promotes while capturing the undefended rook", () => {
+    expect(analyzeMoveRisk(
+      "k7/8/8/8/8/8/K6p/4R1q1 w - - 0 1",
+      { from: "e1", to: "g1", expectedVersion: 1, piece: "r" },
+    )?.explanation).toContain("rook on g1");
+  });
+
+  it("credits the full promoted piece when the bishop can take it back", () => {
+    expect(analyzeMoveRisk(
+      "k7/8/8/8/8/8/K4B1p/4R1q1 w - - 0 1",
+      { from: "e1", to: "g1", expectedVersion: 1, piece: "r" },
+    )).toBeNull();
+  });
+
+  it("credits the best promotion available on the player's recapture", () => {
+    expect(analyzeMoveRisk(
+      "1r5k/1P6/8/8/8/8/Q7/4K3 w - - 0 1",
+      { from: "a2", to: "a8", expectedVersion: 1, piece: "q" },
+    )).toBeNull();
+  });
+
   it("celebrates clear forks and strong material wins", () => {
     expect(analyzeGreatMove(
       "k2q3r/8/8/4N3/8/8/8/4K3 w - - 0 1",

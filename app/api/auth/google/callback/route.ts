@@ -25,19 +25,16 @@ export async function GET(request: Request): Promise<Response> {
   const flow = await googleFlowFromHeaders(request.headers);
   const state = url.searchParams.get("state");
   const code = url.searchParams.get("code");
-  if (
-    !flow
-    || !state
-    || state !== flow.state
-    || !code
-    || url.searchParams.has("error")
-  ) {
+  if (!flow || !state || state !== flow.state) {
     return redirect("/app?auth=google_failed", [clearGoogleFlowCookie()]);
   }
+  const signInFailed = () => redirect(
+    `${flow.returnTo}${flow.returnTo.includes("?") ? "&" : "?"}auth=google_failed`,
+    [clearGoogleFlowCookie()],
+  );
+  if (!code || url.searchParams.has("error")) return signInFailed();
   const account = await exchangeGoogleCode(code, flow);
-  if (!account) {
-    return redirect("/app?auth=google_failed", [clearGoogleFlowCookie()]);
-  }
+  if (!account) return signInFailed();
   const referralCode = /^\/invite\/([A-Za-z0-9_-]{16})$/.exec(flow.returnTo)?.[1] ?? null;
   const persisted = await upsertGoogleCallbackAccount(account, referralCode);
   if (persisted.deleted) {
@@ -47,9 +44,7 @@ export async function GET(request: Request): Promise<Response> {
     ]);
   }
   const session = await googleSessionCookie(account);
-  if (!session) {
-    return redirect("/app?auth=google_failed", [clearGoogleFlowCookie()]);
-  }
+  if (!session) return signInFailed();
   await recordEvent({
     event: "auth.completed",
     outcome: "success",

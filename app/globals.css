@@ -3129,7 +3129,7 @@ html[data-performance="low"] :is(
 .dashboard-challenge-actions button:focus-visible { outline: 3px solid var(--electric-blue); outline-offset: 2px; }
 .dashboard-empty { min-height: 180px; display: grid; place-content: center; justify-items: center; gap: 10px; color: var(--muted); text-align: center; }
 .dashboard-loading { min-height: 180px; display: grid; place-items: center; margin: 0; color: var(--electric-blue); font: 900 10px/1 var(--mono); letter-spacing: .8px; }
-.dashboard-refresh-error { position: fixed; right: 14px; bottom: 14px; z-index: 35; display: flex; align-items: center; gap: 10px; max-width: min(420px, calc(100% - 28px)); padding: 10px 12px; border: 3px solid var(--theme-card-border, var(--stone-dark)); color: var(--text); background: var(--theme-card, var(--surface)); box-shadow: 4px 4px 0 rgba(0,0,0,.35); font: 700 10px/1.35 var(--ui); }
+.dashboard-refresh-error { margin: 10px 0; display: flex; align-items: center; gap: 10px; max-width: 100%; padding: 10px 12px; border: 3px solid var(--theme-card-border, var(--stone-dark)); color: var(--text); background: var(--theme-card, var(--surface)); box-shadow: 4px 4px 0 rgba(0,0,0,.35); font: 700 10px/1.35 var(--ui); }
 .dashboard-refresh-error button { min-height: 34px; padding: 0 10px; border: 2px solid var(--theme-frame-border, var(--stone-dark)); color: #172515; background: var(--chess-gold); cursor: pointer; font: 900 8px/1 var(--mono); }
 .dashboard-empty > span { color: var(--chess-gold); font-size: 44px; }
 .dashboard-empty p { margin: 0; }

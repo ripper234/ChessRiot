@@ -828,14 +828,25 @@ async function verifyGoogleAccountFlow() {
       { credits: 0, invited_players: 0 },
     );
 
-    const failedStart = await dispatch("/api/auth/google/start", { redirect: "manual" });
+    const challengePath = "/app?mode=multiplayer&opponent=ChessFriend";
+    const failedStart = await dispatch(`/api/auth/google/start?return_to=${encodeURIComponent(challengePath)}`, { redirect: "manual" });
     const failedFlow = flowFromStart(failedStart);
+    const cancelledCallback = await dispatch(
+      `/api/auth/google/callback?error=access_denied&state=${failedFlow.payload.state}`,
+      { headers: { cookie: failedFlow.cookie }, redirect: "manual" },
+    );
+    assert.equal(cancelledCallback.headers.get("location"), `${challengePath}&auth=google_failed`);
+    const mismatchedCallback = await dispatch(
+      "/api/auth/google/callback?error=access_denied&state=unrelated",
+      { headers: { cookie: failedFlow.cookie }, redirect: "manual" },
+    );
+    assert.equal(mismatchedCallback.headers.get("location"), "/app?auth=google_failed");
     const failedCallback = await dispatch(
       `/api/auth/google/callback?code=failed-code&state=${failedFlow.payload.state}`,
       { headers: { cookie: failedFlow.cookie }, redirect: "manual" },
     );
     assert.equal(failedCallback.status, 303);
-    assert.equal(failedCallback.headers.get("location"), "/app?auth=google_failed");
+    assert.equal(failedCallback.headers.get("location"), `${challengePath}&auth=google_failed`);
     assert.match(
       failedCallback.headers.get("set-cookie") ?? "",
       /__Host-chessriot-google-flow=;[^,]*Max-Age=0/,

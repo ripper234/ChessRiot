@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useId, useState, useSyncExternalStore } from "react";
 import { fetchJsonWithReadTimeout } from "@/lib/client-recovery";
 import { generateUuid } from "@/lib/client-storage";
 import { gameVariant, normalizeGameVariantId } from "@/lib/game-variants";
@@ -9,6 +9,7 @@ import type { TurnPaceDays } from "@/lib/game-types";
 import { isTurnPaceDays } from "@/lib/validation";
 import { validateUsername } from "@/lib/usernames";
 import { useAccountSession } from "./AccountGate";
+import { useLanguage } from "./LanguageProvider";
 import { Brand } from "./Brand";
 import { ChessPiece } from "./ChessPiece";
 import { ACTIVITY_CHANGED_EVENT } from "./ActivityInbox";
@@ -59,141 +60,168 @@ function gameDetail(game: GameItem): string {
   return game.outcome.winner === game.color ? "Won" : "Lost";
 }
 
-function socialItems(value: unknown): Array<{ id: string; username: string }> {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((item) => {
-    if (!item || typeof item !== "object") return [];
-    const candidate = item as { id?: unknown; username?: unknown };
-    return typeof candidate.id === "string" && typeof candidate.username === "string"
-      ? [{ id: candidate.id, username: candidate.username }]
-      : [];
+function socialItems(items: unknown[]): Array<{ id: string; username: string }> {
+  return items.map((item) => {
+    if (!item || typeof item !== "object" || !("id" in item) || typeof item.id !== "string"
+      || !("username" in item) || typeof item.username !== "string") throw new Error();
+    return { id: item.id, username: item.username };
   });
 }
 
-function friendNames(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((item) => item && typeof item === "object"
-    && typeof (item as { username?: unknown }).username === "string"
-    ? [(item as { username: string }).username]
-    : []);
+function friendNames(items: unknown[]): string[] {
+  return items.map((item) => {
+    if (!item || typeof item !== "object" || !("username" in item) || typeof item.username !== "string") throw new Error();
+    return item.username;
+  });
+}
+
+function createPanel<T>(read: (signal: AbortSignal) => Promise<T>) {
+  const listeners = new Set<() => void>();
+  let snapshot: { data: T | null; error: boolean } = { data: null, error: false };
+  let controller: AbortController | null = null;
+  const publish = (data: T | null, error: boolean) => {
+    snapshot = { data, error };
+    listeners.forEach((listener) => listener());
+  };
+  return {
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => { listeners.delete(listener); };
+    },
+    getSnapshot: () => snapshot,
+    cancel: () => controller?.abort(),
+    async refresh() {
+      controller?.abort();
+      controller = new AbortController();
+      const { signal } = controller;
+      if (snapshot.error) publish(snapshot.data, false);
+      try {
+        const data = await read(signal);
+        if (!signal.aborted) publish(data, false);
+      } catch {
+        if (!signal.aborted) publish(snapshot.data, true);
+      }
+    },
+  };
+}
+
+export function createDashboardPanels() {
+  const panels = {
+    social: createPanel(async (signal) => {
+      const { response, data } = await fetchJsonWithReadTimeout<SocialPayload>("/api/me/friends", {
+        credentials: "same-origin", cache: "no-store", signal,
+      });
+      if (!response.ok || !Array.isArray(data?.friends) || !Array.isArray(data.incoming) || !Array.isArray(data.outgoing)) {
+        throw new Error();
+      }
+      return { friends: friendNames(data.friends), incoming: socialItems(data.incoming), outgoing: socialItems(data.outgoing) };
+    }),
+    games: createPanel(async (signal) => {
+      const { response, data } = await fetchJsonWithReadTimeout<{ games?: unknown }>("/api/me/games?view=watch&limit=8", {
+        credentials: "same-origin", cache: "no-store", signal,
+      });
+      if (!response.ok || !Array.isArray(data?.games)) throw new Error();
+      return parseGames(data.games);
+    }),
+    referral: createPanel(async (signal): Promise<ReferralDetails> => {
+      const { response, data } = await fetchJsonWithReadTimeout<ReferralPayload>("/api/me/referral", {
+        credentials: "same-origin", cache: "no-store", signal,
+      });
+      if (!response.ok || typeof data?.inviteUrl !== "string" || typeof data.credits !== "number"
+        || typeof data.invitedPlayers !== "number" || typeof data.creditsPerSignup !== "number") throw new Error();
+      return {
+        inviteUrl: data.inviteUrl, credits: data.credits,
+        invitedPlayers: data.invitedPlayers, creditsPerSignup: data.creditsPerSignup,
+      };
+    }),
+  };
+  return {
+    ...panels,
+    refresh() {
+      void panels.games.refresh();
+      void panels.social.refresh();
+      void panels.referral.refresh();
+    },
+  };
+}
+
+function parseGames(rows: unknown[]) {
+  return rows.map((row): GameItem => {
+    if (!row || typeof row !== "object") throw new Error();
+    const game = row as Record<string, unknown>;
+    const outcome = game.outcome && typeof game.outcome === "object"
+      ? game.outcome as { winner?: unknown; reason?: unknown }
+      : null;
+    if (
+      typeof game.id !== "string"
+      || (game.mode !== "solo" && game.mode !== "multiplayer")
+      || (game.status !== "waiting" && game.status !== "active" && game.status !== "completed")
+      || (game.color !== "w" && game.color !== "b")
+      || (game.turn !== "w" && game.turn !== "b")
+      || typeof game.updatedAt !== "string"
+    ) throw new Error();
+    return {
+      id: game.id,
+      mode: game.mode,
+      variantId: normalizeGameVariantId(game.variantId),
+      status: game.status,
+      color: game.color,
+      opponent: typeof game.opponent === "string" ? game.opponent : null,
+      turn: game.turn,
+      turnPaceDays: isTurnPaceDays(game.turnPaceDays) ? game.turnPaceDays : null,
+      isMagic: game.isMagic === true,
+      updatedAt: game.updatedAt,
+      outcome: outcome && typeof outcome.reason === "string"
+        && (outcome.winner === "w" || outcome.winner === "b" || outcome.winner === null)
+        ? { winner: outcome.winner, reason: outcome.reason }
+        : null,
+    };
+  });
+}
+
+function PanelRetry({ label, retry }: { label: string; retry: () => Promise<void> }) {
+  const { t } = useLanguage();
+  const description = useId();
+  return <div className="dashboard-refresh-error"><span role="status" id={description}>{label}</span>
+    <button type="button" aria-describedby={description} onClick={() => void retry()}>{t("Try again")}</button></div>;
 }
 
 export function PlayerHome() {
-  const account = useAccountSession();
-  const [friends, setFriends] = useState<string[]>([]);
-  const [incoming, setIncoming] = useState<Array<{ id: string; username: string }>>([]);
-  const [outgoing, setOutgoing] = useState<Array<{ id: string; username: string }>>([]);
-  const [games, setGames] = useState<GameItem[]>([]);
+  const { username } = useAccountSession();
+  return <PlayerDashboard key={username} username={username} />;
+}
+
+export function PlayerDashboard({ username, initialPanels }: {
+  username: string;
+  initialPanels?: ReturnType<typeof createDashboardPanels>;
+}) {
+  const [panels] = useState(() => initialPanels ?? createDashboardPanels());
+  const { t } = useLanguage();
+  const gamesPanel = useSyncExternalStore(panels.games.subscribe, panels.games.getSnapshot, panels.games.getSnapshot);
+  const socialPanel = useSyncExternalStore(panels.social.subscribe, panels.social.getSnapshot, panels.social.getSnapshot);
+  const referralPanel = useSyncExternalStore(panels.referral.subscribe, panels.referral.getSnapshot, panels.referral.getSnapshot);
+  const games = gamesPanel.data;
+  const { friends = [], incoming = [], outgoing = [] } = socialPanel.data ?? {};
+  const referral = referralPanel.data;
   const [friendUsername, setFriendUsername] = useState("");
   const [friendBusy, setFriendBusy] = useState(false);
   const [friendMessage, setFriendMessage] = useState("");
   const [friendError, setFriendError] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
   const [challengeBusy, setChallengeBusy] = useState<string | null>(null);
   const [challengeMessage, setChallengeMessage] = useState("");
   const [challengeError, setChallengeError] = useState(false);
-  const [referral, setReferral] = useState<ReferralDetails | null>(null);
   const [shareMessage, setShareMessage] = useState("");
   const [shareError, setShareError] = useState(false);
   const [safetyTarget, setSafetyTarget] = useState<{ username: string; canRemove: boolean } | null>(null);
-  const refreshGeneration = useRef(0);
 
-  const refresh = useCallback(async () => {
-    const generation = refreshGeneration.current + 1;
-    refreshGeneration.current = generation;
-    setLoading(true);
-    setLoadError("");
-    try {
-      const [socialRead, gamesRead, referralRead] = await Promise.all([
-        fetchJsonWithReadTimeout<SocialPayload>("/api/me/friends", {
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-        fetchJsonWithReadTimeout<{ games?: unknown }>("/api/me/games?view=watch&limit=8", {
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-        fetchJsonWithReadTimeout<ReferralPayload>("/api/me/referral", {
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-      ]);
-      if (generation !== refreshGeneration.current) return;
-      const { response: socialResponse, data: socialPayload } = socialRead;
-      const { response: gamesResponse, data: gamesPayload } = gamesRead;
-      const { response: referralResponse, data: referralPayload } = referralRead;
-      if (!socialResponse.ok && !gamesResponse.ok && !referralResponse.ok) throw new Error();
-      if (socialResponse.ok && socialPayload) {
-        if (generation !== refreshGeneration.current) return;
-        setFriends(friendNames(socialPayload.friends));
-        setIncoming(socialItems(socialPayload.incoming));
-        setOutgoing(socialItems(socialPayload.outgoing));
-      }
-      if (gamesResponse.ok && gamesPayload) {
-        const rows = Array.isArray(gamesPayload.games) ? gamesPayload.games : [];
-        if (generation !== refreshGeneration.current) return;
-        setGames(rows.flatMap((row): GameItem[] => {
-          if (!row || typeof row !== "object") return [];
-          const game = row as Record<string, unknown>;
-          const outcome = game.outcome && typeof game.outcome === "object"
-            ? game.outcome as { winner?: unknown; reason?: unknown }
-            : null;
-          if (
-            typeof game.id !== "string"
-            || (game.mode !== "solo" && game.mode !== "multiplayer")
-            || (game.status !== "waiting" && game.status !== "active" && game.status !== "completed")
-            || (game.color !== "w" && game.color !== "b")
-            || (game.turn !== "w" && game.turn !== "b")
-            || typeof game.updatedAt !== "string"
-          ) return [];
-          return [{
-            id: game.id,
-            mode: game.mode,
-            variantId: normalizeGameVariantId(game.variantId),
-            status: game.status,
-            color: game.color,
-            opponent: typeof game.opponent === "string" ? game.opponent : null,
-            turn: game.turn,
-            turnPaceDays: isTurnPaceDays(game.turnPaceDays) ? game.turnPaceDays : null,
-            isMagic: game.isMagic === true,
-            updatedAt: game.updatedAt,
-            outcome: outcome && typeof outcome.reason === "string"
-              && (outcome.winner === "w" || outcome.winner === "b" || outcome.winner === null)
-              ? { winner: outcome.winner, reason: outcome.reason }
-              : null,
-          }];
-        }));
-      }
-      if (referralResponse.ok && referralPayload) {
-        if (
-          typeof referralPayload.inviteUrl === "string"
-          && typeof referralPayload.credits === "number"
-          && typeof referralPayload.invitedPlayers === "number"
-          && typeof referralPayload.creditsPerSignup === "number"
-        ) {
-          if (generation !== refreshGeneration.current) return;
-          setReferral({
-            inviteUrl: referralPayload.inviteUrl,
-            credits: referralPayload.credits,
-            invitedPlayers: referralPayload.invitedPlayers,
-            creditsPerSignup: referralPayload.creditsPerSignup,
-          });
-        }
-      }
-      if (!socialResponse.ok || !gamesResponse.ok || !referralResponse.ok) {
-        if (generation !== refreshGeneration.current) return;
-        setLoadError("Some account details could not be refreshed.");
-      }
-    } catch {
-      if (generation !== refreshGeneration.current) return;
-      setLoadError("Your games and friends could not be refreshed yet.");
-    } finally {
-      if (generation === refreshGeneration.current) setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    panels.refresh();
+    return () => {
+      panels.games.cancel();
+      panels.social.cancel();
+      panels.referral.cancel();
+    };
+  }, [panels]);
 
   useEffect(() => {
     let lastRefreshAt = 0;
@@ -202,13 +230,13 @@ export function PlayerHome() {
       const now = Date.now();
       if (now - lastRefreshAt < 1_000) return;
       lastRefreshAt = now;
-      void refresh();
+      panels.refresh();
     };
     const interval = window.setInterval(refreshVisible, 60_000);
     window.addEventListener("focus", refreshVisible);
     window.addEventListener("online", refreshVisible);
     const refreshAfterActivityChange = () => {
-      if (document.visibilityState === "visible") void refresh();
+      if (document.visibilityState === "visible") panels.refresh();
     };
     window.addEventListener(ACTIVITY_CHANGED_EVENT, refreshAfterActivityChange);
     document.addEventListener("visibilitychange", refreshVisible);
@@ -219,7 +247,7 @@ export function PlayerHome() {
       window.removeEventListener(ACTIVITY_CHANGED_EVENT, refreshAfterActivityChange);
       document.removeEventListener("visibilitychange", refreshVisible);
     };
-  }, [refresh]);
+  }, [panels]);
 
   async function addFriend(event: FormEvent) {
     event.preventDefault();
@@ -247,7 +275,7 @@ export function PlayerHome() {
       setFriendMessage(payload.state === "already_friends"
         ? "You are friends already."
         : "Friend request sent.");
-      await refresh();
+      await panels.social.refresh();
     } catch (error) {
       setFriendError(true);
       setFriendMessage(error instanceof Error ? error.message : "Friend request could not be sent.");
@@ -269,7 +297,7 @@ export function PlayerHome() {
       if (!response.ok) throw new Error();
       setFriendMessage(action === "accept" ? "Friend added." : "Request declined.");
       setFriendError(false);
-      await refresh();
+      await panels.social.refresh();
     } catch {
       setFriendMessage("That request could not be updated.");
       setFriendError(true);
@@ -289,7 +317,7 @@ export function PlayerHome() {
       });
       if (!response.ok) throw new Error();
       setFriendMessage(`Request to @${username} cancelled.`);
-      await refresh();
+      await panels.social.refresh();
     } catch {
       setFriendMessage("That request could not be cancelled.");
       setFriendError(true);
@@ -320,13 +348,13 @@ export function PlayerHome() {
         return;
       }
       setChallengeMessage("Challenge declined.");
-      await refresh();
+      await panels.games.refresh();
     } catch (error) {
       setChallengeError(true);
       setChallengeMessage(error instanceof Error
         ? error.message
         : "That challenge could not be updated.");
-      await refresh();
+      await panels.games.refresh();
     } finally {
       setChallengeBusy(null);
     }
@@ -338,7 +366,7 @@ export function PlayerHome() {
     setShareError(false);
     const shareData = {
       title: "Join me on ChessRiot",
-      text: `Create a player account and connect with @${account.username} on ChessRiot. This friend link does not join a private game.`,
+      text: `Create a player account and connect with @${username} on ChessRiot. This friend link does not join a private game.`,
       url: referral.inviteUrl,
     };
     try {
@@ -365,7 +393,7 @@ export function PlayerHome() {
     <main className="player-home-shell">
       <header className="topbar player-home-topbar">
         <Brand />
-        <PlayerHandle className="player-handle" username={account.username} />
+        <PlayerHandle className="player-handle" username={username} />
       </header>
       <section className="player-home-hero">
         <div><p>WELCOME BACK</p><h1>Your next move.</h1></div>
@@ -380,7 +408,7 @@ export function PlayerHome() {
       <section className="player-home-grid">
         <div className="dashboard-card matches-card">
           <header><div><small>YOUR GAMES</small><h2>Continue playing</h2></div><Link href="/history">VIEW ALL</Link></header>
-          {loading && !games.length ? <p className="dashboard-loading" role="status">LOADING YOUR GAMES…</p> : games.length ? <div className="dashboard-game-list">{games.map((game) => {
+          {!games && !gamesPanel.error ? <p className="dashboard-loading" role="status">{t("LOADING YOUR GAMES…")}</p> : games?.length ? <div className="dashboard-game-list">{games.map((game) => {
             const incomingChallenge = game.mode === "multiplayer"
               && game.status === "waiting"
               && game.color === "b"
@@ -415,13 +443,14 @@ export function PlayerHome() {
                 {summary}<b aria-hidden="true">→</b>
               </Link>
             );
-          })}</div> : <div className="dashboard-empty"><span>♟</span><p>No active games yet.</p><Link href="/app?mode=multiplayer">CHALLENGE A FRIEND</Link></div>}
+          })}</div> : games ? <div className="dashboard-empty"><span>♟</span><p>{t("No active games yet.")}</p><Link href="/app?mode=multiplayer">CHALLENGE A FRIEND</Link></div> : null}
+          {gamesPanel.error ? <PanelRetry label={t("Could not refresh your games.")} retry={panels.games.refresh} /> : null}
           {challengeMessage ? <p className={challengeError ? "form-error" : "form-success"}
             role={challengeError ? "alert" : "status"}>{challengeMessage}</p> : null}
         </div>
 
         <div className="dashboard-card friends-card">
-          <header><div><small>FRIENDS</small><h2>Challenge your people</h2></div><span>{friends.length}</span></header>
+          <header><div><small>FRIENDS</small><h2>Challenge your people</h2></div>{socialPanel.data ? <span>{friends.length}</span> : null}</header>
           {referral ? <section className="referral-share" lang="en" dir="ltr" translate="no" aria-label="Friend link for inviting a new player">
             <div className="referral-share-heading">
               <div><strong>Your friend link</strong><small>{referral.creditsPerSignup} credits per new player</small></div>
@@ -440,6 +469,8 @@ export function PlayerHome() {
             {shareMessage ? <small className={shareError ? "form-error" : "form-success"}
               role={shareError ? "alert" : "status"}>{shareMessage}</small> : null}
           </section> : null}
+          {referralPanel.error ? <PanelRetry label={t("Could not refresh your friend link.")} retry={panels.referral.refresh} /> : null}
+          {!referral && !referralPanel.error ? <p className="friends-empty" role="status">{t("Loading your friend link…")}</p> : null}
           {incoming.length ? <div className="friend-requests"><strong>REQUESTS</strong>{incoming.map((request) => (
             <div key={request.id}><PlayerHandle username={request.username} /><div>
               <button type="button" disabled={friendBusy} aria-label={`Accept friend request from ${request.username}`} onClick={() => void answerRequest(request.id, "accept")}>ACCEPT</button>
@@ -460,16 +491,17 @@ export function PlayerHome() {
           {friendMessage ? <p id="friend-username-message" className={friendError ? "form-error" : "form-success"} role={friendError ? "alert" : "status"}>{friendMessage}</p> : null}
           {friends.length ? <div className="friend-list">{friends.map((username) => (
             <div key={username}><PlayerHandle username={username} /><div className="friend-row-actions"><Link href={`/app?mode=multiplayer&opponent=${encodeURIComponent(username)}`}>CHALLENGE</Link><button type="button" aria-label={`Safety options for ${username}`} onClick={() => setSafetyTarget({ username, canRemove: true })}>•••</button></div></div>
-          ))}</div> : <p className="friends-empty">Add a friend to challenge them in one tap.</p>}
+          ))}</div> : socialPanel.data ? <p className="friends-empty">{t("Add a friend to challenge them in one tap.")}</p> : null}
+          {!socialPanel.data && !socialPanel.error ? <p className="friends-empty" role="status">{t("Loading your friends…")}</p> : null}
+          {socialPanel.error ? <PanelRetry label={t("Could not refresh your friends.")} retry={panels.social.refresh} /> : null}
           {outgoing.length ? <div className="pending-friends"><strong>PENDING</strong>{outgoing.map((request) => <div key={request.id}><PlayerHandle username={request.username} /><button type="button" disabled={friendBusy} onClick={() => void cancelRequest(request.id, request.username)}>CANCEL</button></div>)}</div> : null}
         </div>
       </section>
-      {loadError ? <div className="dashboard-refresh-error" role="status"><span>{loadError}</span><button type="button" onClick={() => void refresh()}>RETRY</button></div> : null}
       {safetyTarget ? <PlayerSafetyDialog
         username={safetyTarget.username}
         canRemove={safetyTarget.canRemove}
         onClose={() => setSafetyTarget(null)}
-        onChanged={() => void refresh()}
+        onChanged={panels.refresh}
       /> : null}
     </main>
   );

@@ -1,4 +1,4 @@
-import { Chess, type PieceSymbol, type Square } from "chess.js";
+import { Chess, type Move, type PieceSymbol, type Square } from "chess.js";
 import type { MoveIntent } from "./move-confirmation";
 
 export const CHESS_COACH_PREFERENCE_KEY = "chessriot:chess-coach";
@@ -92,6 +92,12 @@ function applyIntent(chess: Chess, intent: MoveIntent) {
   return { chess: current, first, final: moves.at(-1) ?? first, moves };
 }
 
+function materialGain(move: Move): number {
+  const captured = move.captured ? VALUES[move.captured] : 0;
+  const promotionGain = move.promotion ? VALUES[move.promotion] - VALUES.p : 0;
+  return captured + promotionGain;
+}
+
 export function analyzeMoveRisk(
   fen: string,
   intent: MoveIntent,
@@ -104,11 +110,8 @@ export function analyzeMoveRisk(
     const result = applyIntent(chess, intent);
     const after = result.chess;
     if (after.isCheckmate()) return null;
-    const immediateGain = result.moves.reduce(
-      (total, move) => total + (move.captured ? VALUES[move.captured] : 0),
-      0,
-    );
-    const destination = (intent.continuation?.at(-1)?.to ?? intent.second?.to ?? intent.to) as Square;
+    const immediateGain = result.moves.reduce((total, move) => total + materialGain(move), 0);
+    const destination = result.final.to;
     const finalPiece = after.get(destination);
     if (!finalPiece || finalPiece.color !== moving.color) return null;
 
@@ -121,13 +124,13 @@ export function analyzeMoveRisk(
         to: reply.to,
         ...(reply.promotion ? { promotion: reply.promotion } : {}),
       });
-      const canRecapture = replyBoard.moves({ verbose: true })
-        .some((candidate) => candidate.captured && candidate.to === destination);
-      // Compensation is the value of the enemy attacker that can be won back,
-      // not the value of our recapturing piece. Using the latter made a queen
-      // recapture incorrectly erase an otherwise real material loss.
-      const recaptureValue = canRecapture ? VALUES[reply.piece] : 0;
-      const loss = VALUES[finalPiece.type] - immediateGain - recaptureValue;
+      let recaptureGain = 0;
+      for (const recapture of replyBoard.moves({ verbose: true })) {
+        if (recapture.captured && recapture.to === destination) {
+          recaptureGain = Math.max(recaptureGain, materialGain(recapture));
+        }
+      }
+      const loss = materialGain(reply) - immediateGain - recaptureGain;
       if (loss < 2 || (best && best.loss >= loss)) continue;
       best = { loss, attacker: reply.piece };
     }
